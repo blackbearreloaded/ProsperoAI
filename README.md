@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > Work in progress - source code will be published once it's more polished.
 
-ProsperoAI is a native AI chat application for PlayStation 5. It runs supported language models locally on the console, keeping conversations private and available without a cloud AI service.
+ProsperoAI is a native AI chat application for PlayStation 5. It runs supported large language models (LLMs) locally on the console, keeping conversations private and available without a cloud AI service.
 
 This Alpha version is an early preview intended for testing. Models are distributed separately and are not included with the application.
 
