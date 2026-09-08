@@ -169,6 +169,7 @@ struct RuntimeBackend
     char *response;
 };
 
+// clang-format off
 #define MODEL_BACKEND(prefix)                                                                      \
     {                                                                                              \
         prefix##_run_model_chat,                                                                   \
@@ -188,6 +189,7 @@ struct RuntimeBackend
         &prefix##_ps5_compute_prefill_us,                                                          \
         prefix##_ps5_compute_response,                                                             \
     }
+// clang-format on
 
 RuntimeBackend mistral_backend = MODEL_BACKEND(mistral);
 RuntimeBackend qwen35_backend = MODEL_BACKEND(qwen35);
