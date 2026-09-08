@@ -39,6 +39,18 @@ Demo available by clicking the image below.
 > This repository does not include an exploit, proprietary Sony SDK, firmware,
 > system module, key, or model weight.
 
+## Project foundation
+
+> [!IMPORTANT]
+> **Built on the [PS5 Native App Boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate).**
+> ProsperoAI preserves its reproducible native build, packaging, deployment,
+> and release foundation.
+
+> [!IMPORTANT]
+> **GPU compute work is documented in [PS5 GPU Research](https://github.com/blackbearreloaded/ps5-gpu-research).**
+> The companion repository records the native AGC GPU research that made
+> ProsperoAI's local model runtimes possible.
+
 ## Supported curated models
 
 | Model | Purpose | Installed size | Hardware result |
