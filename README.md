@@ -20,7 +20,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
 </p>
 
-![ProsperoAI Workshop with Qwen3.5 selected](docs/images/prosperoai-workshop.png)
+Demo available by clicking the image below.
+
+[![ProsperoAI conversation and saved sessions](docs/images/prosperoai-demo.png)](https://i.imgur.com/vRqZFqn.mp4)
 
 ## Highlights
 

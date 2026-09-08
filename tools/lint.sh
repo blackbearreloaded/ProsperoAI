@@ -59,7 +59,7 @@ if not isinstance(title, str) or not title.strip():
     raise SystemExit("param.json default-language titleName cannot be empty")
 PY
 
-if git grep -n -E 'C:\\Users\\|/home/denis|/mnt/c/Users/denis|\bDenis\b' -- . \
+if git grep -I -n -E 'C:\\Users\\|/home/denis|/mnt/c/Users/denis|\bDenis\b' -- . \
     ':(exclude)tools/lint.sh'; then
     echo "repository contains a local path or personal-name leak" >&2
     exit 2
