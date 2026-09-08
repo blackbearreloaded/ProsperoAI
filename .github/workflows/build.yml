@@ -1,0 +1,128 @@
+# ProsperoAI reproducible application build and release.
+# Copyright (C) 2026 BlackBearReloaded
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate and build release artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+
+      - name: Install native toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-18 clang-format-18 lld-18 make python3-venv tar unzip wget
+
+      - name: Read app identity
+        shell: bash
+        run: |
+          metadata=$(python3 -c 'import json; p=json.load(open("sce_sys/param.json")); print(p["titleId"], p["contentVersion"])')
+          read -r title_id content_version <<< "$metadata"
+          [[ $title_id =~ ^PPSA[0-9]{5}$ ]] || exit 2
+          [[ $content_version =~ ^[0-9]{2}\.[0-9]{3}\.[0-9]{3}$ ]] || exit 2
+          echo "TITLE_ID=$title_id" >> "$GITHUB_ENV"
+          echo "CONTENT_VERSION=$content_version" >> "$GITHUB_ENV"
+
+      - name: Validate source and assets
+        run: make lint
+
+      - name: Reproduce clean-room runtime shim
+        run: make libc
+
+      - name: Verify generated runtime
+        run: cd runtime && sha256sum --check --strict libc.prx.sha256
+
+      - name: Build model-free release
+        run: make ffpfsc
+
+      - name: Verify and archive release
+        shell: bash
+        run: |
+          set -euo pipefail
+          unexpected=$(find "dist/$TITLE_ID/models" -type f ! -name README.txt -print -quit)
+          [[ -z $unexpected ]] || {
+            echo "Release unexpectedly contains model data: $unexpected" >&2
+            exit 2
+          }
+          cd dist
+          python3 -m zipfile -c "$TITLE_ID.zip" "$TITLE_ID"
+          sha256sum "$TITLE_ID.ffpfsc" "$TITLE_ID.zip" > SHA256SUMS
+
+      - name: Upload build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: prosperoai-release-${{ github.sha }}
+          path: |
+            dist/${{ env.TITLE_ID }}.ffpfsc
+            dist/${{ env.TITLE_ID }}.zip
+            dist/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  release:
+    name: GitHub release
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download verified build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh run download "$GITHUB_RUN_ID"
+          --repo "$GITHUB_REPOSITORY"
+          --name "prosperoai-release-$GITHUB_SHA"
+          --dir release
+
+      - name: Verify release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          test "$(find . -type f | wc -l)" -eq 3
+          sha256sum --check --strict SHA256SUMS
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(release/PPSA99004.ffpfsc release/PPSA99004.zip release/SHA256SUMS)
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "ProsperoAI $GITHUB_REF_NAME"
+          fi

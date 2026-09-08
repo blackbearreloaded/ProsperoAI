@@ -1,0 +1,110 @@
+<rml>
+    <head>
+        <title>ProsperoAI</title>
+        <link type="text/rcss" href="styles/app.rcss" />
+        <link type="text/rcss" href="styles/ps5.rcss" />
+    </head>
+    <body>
+        <div id="app-shell">
+            <header id="header">
+                <img id="brand-mark" src="icons/prosperoai.tga" width="56" height="56" alt=""/>
+                <span id="brand-name">ProsperoAI</span>
+                <span id="brand-version">v{{PROSPERO_AI_VERSION}}</span>
+                <button id="tab-conversation" class="top-tab active"><span>Conversation</span></button>
+                <button id="tab-workshop" class="top-tab"><span>Workshop</span></button>
+                <span id="model-pill"><span id="model-spinner">|</span><span id="model-state">SELECTED</span><span id="model-name" class="model-name">Model slot</span></span>
+            </header>
+
+            <main id="conversation-screen">
+                <aside id="session-panel">
+                    <span class="eyebrow">SESSIONS</span>
+                    <span id="session-count">0 saved sessions</span>
+                    <button id="session-new" class="session-entry new-session">
+                        <span class="session-entry-title">+ New session</span>
+                        <span class="session-entry-meta">Start with the selected model</span>
+                    </button>
+                    <button id="session-row-0" class="session-entry hidden"><span id="session-title-0" class="session-entry-title"></span><span id="session-meta-0" class="session-entry-meta"></span></button>
+                    <button id="session-row-1" class="session-entry hidden"><span id="session-title-1" class="session-entry-title"></span><span id="session-meta-1" class="session-entry-meta"></span></button>
+                    <button id="session-row-2" class="session-entry hidden"><span id="session-title-2" class="session-entry-title"></span><span id="session-meta-2" class="session-entry-meta"></span></button>
+                    <button id="session-row-3" class="session-entry hidden"><span id="session-title-3" class="session-entry-title"></span><span id="session-meta-3" class="session-entry-meta"></span></button>
+                    <button id="session-row-4" class="session-entry hidden"><span id="session-title-4" class="session-entry-title"></span><span id="session-meta-4" class="session-entry-meta"></span></button>
+                    <button id="session-row-5" class="session-entry hidden"><span id="session-title-5" class="session-entry-title"></span><span id="session-meta-5" class="session-entry-meta"></span></button>
+                    <button id="session-row-6" class="session-entry hidden"><span id="session-title-6" class="session-entry-title"></span><span id="session-meta-6" class="session-entry-meta"></span></button>
+                    <span id="rail-note" class="rail-note">No models found<br/>Native AGC GPU</span>
+                </aside>
+
+                <section id="chat-panel">
+                    <span class="chat-kicker">CONVERSATION</span>
+                    <span class="chat-title">What would you like to explore?</span>
+                    <span id="status-label">Ready</span>
+                    <span id="context-label">Template build</span>
+
+                    <div id="empty-state">
+                        <span class="empty-rule"></span>
+                        <span id="empty-title" class="empty-title">The room is yours.</span>
+                        <span id="empty-copy" class="empty-copy">Press Cross to open the PS5 keyboard<br/>and begin a private, local conversation.</span>
+                    </div>
+
+                    <div id="message-list">
+                        <span id="message-scroll-end"></span>
+                    </div>
+
+                    <button id="composer" class="focused">
+                        <span id="composer-placeholder" class="composer-placeholder">Ask ProsperoAI anything...</span>
+                        <span class="composer-action"><img src="icons/cross.tga" width="34" height="34" alt=""/><span>WRITE</span></span>
+                    </button>
+                </section>
+            </main>
+
+            <main id="workshop-screen" class="hidden">
+                <span class="workshop-kicker">WORKSHOP</span>
+                <span class="workshop-title">Shape the next answer</span>
+                <span class="workshop-copy">Use D-pad Left/Right to choose a text, image, or audio model. Status confirms when it is ready.</span>
+
+                <button id="setting-model" class="setting-card focused">
+                    <span class="setting-number">01</span>
+                    <span class="setting-label">ACTIVE MODEL</span>
+                    <span id="selected-model-load-state" class="model-load-state">SELECTED</span>
+                    <span id="selected-model-value" class="setting-value">No compatible model</span>
+                    <span id="selected-model-description" class="setting-description">Add prepared models to the models folder.</span>
+                    <span class="setting-control">D-PAD LEFT / RIGHT</span>
+                </button>
+
+                <button id="setting-style" class="setting-card">
+                    <span class="setting-number">02</span>
+                    <span class="setting-label">RESPONSE STYLE</span>
+                    <span id="style-value" class="setting-value">Balanced</span>
+                    <span id="style-description" class="setting-description">Clear, thoughtful answers for everyday questions.</span>
+                    <span class="setting-control">‹  D-PAD  ›</span>
+                </button>
+
+                <button id="setting-tokens" class="setting-card">
+                    <span class="setting-number">03</span>
+                    <span class="setting-label">ANSWER LENGTH</span>
+                    <span id="tokens-value" class="setting-value">128 tokens</span>
+                    <span class="setting-description">Maximum generated tokens. Shorter answers return sooner.</span>
+                    <span class="setting-control">‹  D-PAD  ›</span>
+                </button>
+
+                <aside id="runtime-card">
+                    <span class="runtime-kicker">RUNTIME</span>
+                    <span id="runtime-name" class="runtime-title">Model slot</span>
+                    <span class="runtime-row row-a">Backend <b id="runtime-backend">Runtime hook</b></span>
+                    <span class="runtime-row row-b">UI contract <b id="runtime-contract">Chat messages</b></span>
+                    <span class="runtime-row row-c">Execution <b>GPU resident</b></span>
+                    <span id="runtime-note" class="runtime-note">Compatible models run locally on the PS5 GPU.<br/>Switching replaces the resident weights and<br/>starts a new private conversation.</span>
+                </aside>
+            </main>
+
+            <footer id="controller-footer">
+                <span class="controller-hint hint-primary"><img src="icons/cross.tga" width="38" height="38" alt=""/><span>Open / Write</span></span>
+                <span class="controller-hint hint-back"><img src="icons/circle.tga" width="38" height="38" alt=""/><span>Chat</span></span>
+                <span id="hint-triangle" class="controller-hint hint-clear hidden"><img src="icons/triangle.tga" width="38" height="38" alt=""/><span id="triangle-action">Delete</span></span>
+                <span class="controller-hint hint-reset"><img src="icons/square.tga" width="38" height="38" alt=""/><span>New session</span></span>
+                <span class="controller-hint hint-options"><img src="icons/options.tga" width="38" height="38" alt=""/><span>Conversation / Workshop</span></span>
+                <span class="controller-hint hint-scroll"><span>D-PAD  Sessions · R STICK  Scroll</span></span>
+                <span class="footer-mark">PROSPERO · LOCAL AI</span>
+            </footer>
+        </div>
+    </body>
+</rml>

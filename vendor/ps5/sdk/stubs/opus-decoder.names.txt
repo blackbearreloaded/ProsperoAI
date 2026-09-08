@@ -1,0 +1,6 @@
+sceOpusDecInitialize
+sceOpusDecTerminate
+sceOpusDecGetSize
+sceOpusDecCreateEx
+sceOpusDecDecode
+sceOpusDecDestroy

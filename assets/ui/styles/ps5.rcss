@@ -1,0 +1,318 @@
+/*
+ * The native bitmap font engine exposes Montserrat Medium only at
+ * 20/24/28/32/36/40/48 px. Keep every label on that contract and give
+ * wrapped text an explicit box, matching ProsperoRadio and ProsperoLight.
+ */
+
+body, button {
+    font-size: 20px;
+    font-weight: 500;
+}
+
+#brand-name, .session-title {
+    font-size: 32px;
+}
+
+.chat-title {
+    font-size: 40px;
+}
+
+.empty-title, .workshop-title {
+    font-size: 48px;
+}
+
+.setting-value, .runtime-title {
+    font-size: 36px;
+}
+
+.empty-copy, .message-content, .composer-placeholder {
+    font-size: 24px;
+}
+
+.top-tab, #brand-version, #model-state, .model-name,
+.eyebrow, .chat-kicker, .workshop-kicker, .runtime-kicker,
+.session-copy, .privacy-copy, .rail-note,
+#session-count, .session-entry-title, .session-entry-meta,
+#status-label, #context-label, .message-role, .message-time,
+.composer-action span, .workshop-copy,
+.setting-number, .setting-label, .setting-description, .setting-control, .model-load-state,
+.runtime-row, .runtime-note,
+.controller-hint span, .footer-mark {
+    font-size: 20px;
+}
+
+.top-tab.active, #brand-name, #model-state,
+.eyebrow, .chat-kicker, .workshop-kicker, .runtime-kicker,
+.session-title, .chat-title, #status-label,
+.empty-title, .message-role, .composer-action span,
+.workshop-title, .setting-number, .setting-label, .setting-value,
+.setting-control, .runtime-title, .runtime-row b, .footer-mark {
+    font-weight: 500;
+}
+
+.top-tab span, #brand-version, #model-state, .model-name,
+.eyebrow, .chat-kicker, .workshop-kicker, .runtime-kicker,
+.session-title, .session-copy, .privacy-copy, .rail-note,
+#session-count, .session-entry-title, .session-entry-meta,
+.chat-title, #status-label, #context-label,
+.empty-title, .empty-copy,
+.message-role, .message-time, .message-content,
+.composer-placeholder, .composer-action span,
+.workshop-title, .workshop-copy,
+.setting-number, .setting-label, .setting-value,
+.setting-description, .setting-control,
+.runtime-title, .runtime-row, .runtime-note,
+.controller-hint span, .footer-mark {
+    overflow: visible;
+}
+
+#brand-mark { position: absolute; left: 62px; top: 24px; width: 56px; height: 56px; }
+#brand-name { left: 138px; top: 14px; height: 38px; }
+#brand-version {
+    position: absolute;
+    left: 138px;
+    top: 52px;
+    width: 220px;
+    height: 30px;
+    color: #766e60;
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 30px;
+}
+.top-tab span { height: 32px; }
+#model-pill { width: 460px; }
+#model-spinner {
+    display: none;
+    position: absolute;
+    left: 18px;
+    top: 19px;
+    width: 24px;
+    height: 24px;
+    color: #c95b3f;
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 24px;
+    text-align: center;
+}
+#model-spinner.busy { display: block; }
+#model-state {
+    display: block;
+    left: 46px;
+    top: 33px;
+    width: 396px;
+    height: 24px;
+    color: #537c5a;
+    line-height: 24px;
+    text-align: center;
+}
+#model-state.busy { color: #c95b3f; }
+.model-name {
+    left: 46px;
+    top: 4px;
+    width: 396px;
+    height: 28px;
+    line-height: 27px;
+    text-align: center;
+    white-space: nowrap;
+}
+.eyebrow, .chat-kicker, .workshop-kicker, .runtime-kicker { height: 30px; }
+.session-title { height: 96px; }
+.session-copy { height: 72px; }
+.privacy-copy { height: 112px; }
+.rail-note { height: 60px; }
+
+#session-panel .eyebrow { top: 24px; }
+#session-count {
+    position: absolute;
+    left: 62px;
+    top: 52px;
+    width: 260px;
+    height: 28px;
+    color: #766e60;
+    line-height: 26px;
+}
+.session-entry {
+    position: absolute;
+    left: 34px;
+    width: 312px;
+    height: 70px;
+    border: 1px #cfc2ad;
+    background-color: #eee4d2;
+    overflow: hidden;
+}
+.session-entry.selected {
+    border: 3px #c95b3f;
+    background-color: #fffaf0;
+}
+.session-entry.active { border-left: 6px #537c5a; }
+.session-entry-title {
+    position: absolute;
+    left: 16px;
+    top: 8px;
+    width: 274px;
+    height: 28px;
+    color: #28261f;
+    line-height: 26px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.session-entry-meta {
+    position: absolute;
+    left: 16px;
+    top: 37px;
+    width: 274px;
+    height: 26px;
+    color: #766e60;
+    line-height: 24px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+#session-new { top: 88px; }
+#session-row-0 { top: 166px; }
+#session-row-1 { top: 242px; }
+#session-row-2 { top: 318px; }
+#session-row-3 { top: 394px; }
+#session-row-4 { top: 470px; }
+#session-row-5 { top: 546px; }
+#session-row-6 { top: 622px; }
+#session-panel .rail-note { bottom: 25px; height: 54px; }
+.chat-title { height: 58px; }
+#status-label, #context-label { height: 30px; white-space: nowrap; }
+.empty-title { height: 68px; }
+.empty-copy { height: 96px; }
+.message-role, .message-time { height: 26px; }
+.message-content { height: 26px; overflow: visible; line-height: 26px; }
+.message-line {
+    position: absolute;
+    left: 0px;
+    width: 1325px;
+    height: 26px;
+    line-height: 26px;
+    white-space: nowrap;
+    overflow: visible;
+}
+.generated-image {
+    position: absolute;
+    left: 0px;
+    top: 34px;
+    width: 384px;
+    height: 384px;
+}
+.audio-control {
+    position: absolute;
+    left: 0px;
+    width: 500px;
+    height: 42px;
+    border: 2px #c95b3f;
+    background-color: #fffaf0;
+    color: #a74834;
+}
+.audio-play-icon {
+    position: absolute;
+    left: 14px;
+    top: 6px;
+    width: 28px;
+    height: 28px;
+    font-size: 24px;
+    line-height: 28px;
+    text-align: center;
+}
+.audio-control-label {
+    position: absolute;
+    left: 52px;
+    top: 7px;
+    width: 190px;
+    height: 28px;
+    font-size: 20px;
+    line-height: 28px;
+}
+.audio-control-hint, .audio-wave {
+    position: absolute;
+    right: 16px;
+    top: 7px;
+    width: 180px;
+    height: 28px;
+    font-size: 20px;
+    line-height: 28px;
+    text-align: right;
+}
+.audio-wave { display: none; color: #537c5a; }
+.audio-control.playing { border-color: #537c5a; color: #537c5a; }
+.audio-control.playing .audio-control-hint { display: none; }
+.audio-control.playing .audio-wave { display: block; }
+.composer-placeholder { height: 40px; }
+.composer-action span { height: 32px; }
+.workshop-title { height: 68px; }
+.workshop-copy { height: 38px; }
+.setting-number, .setting-label { height: 30px; }
+.setting-value { height: 52px; }
+.setting-description, .setting-control { height: 64px; }
+.runtime-title { height: 52px; }
+.runtime-note { height: 96px; }
+.controller-hint span { height: 34px; }
+.footer-mark { height: 32px; }
+
+#message-list {
+    position: absolute;
+    left: 74px;
+    top: 158px;
+    width: 1394px;
+    height: 588px;
+    overflow: hidden;
+}
+
+.message {
+    left: 0px;
+    top: 0px;
+    width: 1394px;
+    min-height: 86px;
+}
+
+.message-role { left: 28px; top: 11px; }
+.message-time {
+    position: absolute;
+    right: 28px;
+    top: 11px;
+    width: 160px;
+    color: #847b6c;
+    text-align: right;
+}
+.message-content { left: 28px; top: 39px; line-height: 26px; }
+
+#message-scroll-end {
+    display: block;
+    position: relative;
+    width: 1px;
+    height: 1px;
+}
+
+.composer-placeholder.draft { color: #28261f; }
+
+.setting-card { height: 158px; }
+#setting-model { top: 218px; }
+#setting-style { top: 388px; }
+#setting-tokens { top: 558px; }
+.setting-number, .setting-label { top: 17px; }
+.model-load-state {
+    position: absolute;
+    right: 28px;
+    top: 17px;
+    width: 220px;
+    height: 30px;
+    color: #537c5a;
+    line-height: 28px;
+    text-align: right;
+}
+.model-load-state.busy { color: #c95b3f; }
+.setting-value { top: 48px; height: 44px; font-size: 32px; line-height: 42px; }
+.setting-description { top: 98px; height: 42px; }
+.setting-control { top: 59px; }
+#runtime-card { top: 218px; height: 498px; }
+
+.hint-primary { left: 30px; width: 180px; }
+.hint-back { left: 218px; width: 100px; }
+.hint-clear { left: 326px; width: 130px; }
+.hint-reset { left: 464px; width: 180px; }
+.hint-options { left: 652px; width: 310px; }
+.hint-scroll { left: 980px; width: 470px; }
+.hint-scroll span { left: 0px; }

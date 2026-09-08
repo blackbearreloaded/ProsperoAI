@@ -1,0 +1,6 @@
+sceOpusCeltDecInitialize
+sceOpusCeltDecTerminate
+sceOpusCeltDecGetSize
+sceOpusCeltDecCreateEx
+sceOpusCeltDecDecode
+sceOpusCeltDecDestroy
