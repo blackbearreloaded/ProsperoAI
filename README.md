@@ -24,6 +24,10 @@ Demo available by clicking the image below.
 
 [![ProsperoAI conversation and saved sessions](docs/images/prosperoai-demo.png)](https://i.imgur.com/vRqZFqn.mp4)
 
+> [!WARNING]
+> ProsperoAI is an experimental project for validating generative-AI workloads
+> on the PS5 GPU. It is not production software.
+
 ## Highlights
 
 - Runs supported models locally without an account, cloud API, or conversation upload.
