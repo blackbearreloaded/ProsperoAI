@@ -200,7 +200,7 @@ common_link_object="$build/import-stubs/libSceCommonDialog.o"
 common_link_stub="$build/import-stubs/libSceCommonDialog.so"
 PS5_PAYLOAD_SDK="$sdk_root" sh "$root/tooling/prospero-clang18" \
     -std=c++20 -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fPIC \
-    -c "$native/prosperogpt_import_stub_common_dialog.cpp" -o "$common_link_object"
+    -c "$native/prosperoai_import_stub_common_dialog.cpp" -o "$common_link_object"
 "$sdk_root/bin/prospero-lld" --shared -soname libSceCommonDialog.sprx \
     -o "$common_link_stub" "$common_link_object"
 link_inputs+=("$common_link_stub")

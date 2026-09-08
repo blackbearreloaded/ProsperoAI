@@ -98,7 +98,7 @@ void log_gpu_timing()
 {
     char line[512]{};
     std::snprintf(line, sizeof(line),
-                  "[prosperogpt] gpu_ticks samples=%u prepare=%llu qkv=%llu rope=%llu "
+                  "[prosperoai] gpu_ticks samples=%u prepare=%llu qkv=%llu rope=%llu "
                   "context=%llu attn_quant=%llu output=%llu ff_prepare=%llu "
                   "gate_up=%llu quant=%llu down=%llu logits=%llu\n",
                   ps5_compute_gpu_samples,
@@ -519,7 +519,7 @@ void load_models()
     }
     char line[160];
     std::snprintf(line, sizeof(line),
-                  "[prosperogpt] models_found=%u directory_fd=%d "
+                  "[prosperoai] models_found=%u directory_fd=%d "
                   "directory_bytes=%d path=/app0/models\n",
                   model_count, directory, directory_bytes);
     sceKernelDebugOutText(0, line);
@@ -630,7 +630,7 @@ bool gpt_runtime_select_model(unsigned index)
 #endif
     selected_model = index;
     char line[192];
-    std::snprintf(line, sizeof(line), "[prosperogpt] selected_model=%s purpose=%s\n",
+    std::snprintf(line, sizeof(line), "[prosperoai] selected_model=%s purpose=%s\n",
                   models[index].name, models[index].purpose);
     sceKernelDebugOutText(0, line);
     return true;
@@ -693,7 +693,7 @@ int gpt_runtime_prepare()
 #endif
     char line[384]{};
     std::snprintf(line, sizeof(line),
-                  "[prosperogpt] warmup rc=%08X stage=%u prompt=%u generated=%u "
+                  "[prosperoai] warmup rc=%08X stage=%u prompt=%u generated=%u "
                   "resident=%u load_us=%llu prefill_us=%llu elapsed_us=%llu "
                   "first_token=%u tok_stage=%u tok_detail=%llu\n",
                   static_cast<unsigned>(result), ps5_compute_stage, ps5_compute_prompt_count,
@@ -711,7 +711,7 @@ int gpt_runtime_prepare()
 #if defined(PS5_QWEN_DIAGNOSTIC_PHASES) || defined(PS5_QWEN_CONTEXT_DIAGNOSTIC_PHASES)
     char state_line[384]{};
     std::snprintf(state_line, sizeof(state_line),
-                  "[prosperogpt] qwen_phase_state=%08X,%08X,%08X,%08X,%08X,%08X,"
+                  "[prosperoai] qwen_phase_state=%08X,%08X,%08X,%08X,%08X,%08X,"
                   "%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X\n",
                   ps5_compute_debug_state_bits[0], ps5_compute_debug_state_bits[1],
                   ps5_compute_debug_state_bits[2], ps5_compute_debug_state_bits[3],
@@ -725,14 +725,14 @@ int gpt_runtime_prepare()
 #endif
 #ifdef PS5_QWEN_SMOKE_TEST
     char token_line[256]{};
-    std::snprintf(token_line, sizeof(token_line), "[prosperogpt] qwen_smoke_tokens=%u,%u,%u,%u\n",
+    std::snprintf(token_line, sizeof(token_line), "[prosperoai] qwen_smoke_tokens=%u,%u,%u,%u\n",
                   ps5_compute_generated_count > 0 ? ps5_compute_generated_tokens[0] : UINT32_MAX,
                   ps5_compute_generated_count > 1 ? ps5_compute_generated_tokens[1] : UINT32_MAX,
                   ps5_compute_generated_count > 2 ? ps5_compute_generated_tokens[2] : UINT32_MAX,
                   ps5_compute_generated_count > 3 ? ps5_compute_generated_tokens[3] : UINT32_MAX);
     sceKernelDebugOutText(0, token_line);
     char response_line[4352]{};
-    std::snprintf(response_line, sizeof(response_line), "[prosperogpt] qwen_smoke_response=%s\n",
+    std::snprintf(response_line, sizeof(response_line), "[prosperoai] qwen_smoke_response=%s\n",
                   ps5_compute_response);
     sceKernelDebugOutText(0, response_line);
 #endif
@@ -755,7 +755,7 @@ int gpt_runtime_prepare()
         switch_result = run_model_chat(&message, 1, 32, nullptr);
         char switch_line[4352]{};
         std::snprintf(switch_line, sizeof(switch_line),
-                      "[prosperogpt] architecture_switch model=%s rc=%08X "
+                      "[prosperoai] architecture_switch model=%s rc=%08X "
                       "prompt=%u generated=%u load_us=%llu first_token=%u response=%s\n",
                       models[other].name, static_cast<unsigned>(switch_result),
                       ps5_compute_prompt_count, ps5_compute_generated_count,
@@ -769,7 +769,7 @@ int gpt_runtime_prepare()
         restore_result = run_model_chat(&message, 1, 1, nullptr);
         char restore_line[384]{};
         std::snprintf(restore_line, sizeof(restore_line),
-                      "[prosperogpt] architecture_restore model=%s rc=%08X "
+                      "[prosperoai] architecture_restore model=%s rc=%08X "
                       "prompt=%u generated=%u load_us=%llu first_token=%u\n",
                       models[initial].name, static_cast<unsigned>(restore_result),
                       ps5_compute_prompt_count, ps5_compute_generated_count,
@@ -919,7 +919,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned message
     const int result = run_model_chat(adapted, count, settings.max_output_tokens, progress);
     char line[256]{};
     std::snprintf(line, sizeof(line),
-                  "[prosperogpt] gpu_stats rc=%08X stage=%u prompt=%u generated=%u "
+                  "[prosperoai] gpu_stats rc=%08X stage=%u prompt=%u generated=%u "
                   "resident=%u kv_reused=%u load_us=%llu prefill_us=%llu elapsed_us=%llu\n",
                   static_cast<unsigned>(result), ps5_compute_stage, ps5_compute_prompt_count,
                   ps5_compute_generated_count, ps5_compute_model_reused, ps5_compute_kv_reused,

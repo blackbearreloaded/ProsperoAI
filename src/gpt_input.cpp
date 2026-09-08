@@ -179,7 +179,7 @@ static void process_keyboard_press(const ps5::keyboard::Data &sample, uint16_t u
     {
         queue_push(static_cast<gpt_input_key_t>(scroll), true);
         char line[80];
-        snprintf(line, sizeof(line), "[prosperogpt] keyboard_scroll usage=%04X direction=%s\n",
+        snprintf(line, sizeof(line), "[prosperoai] keyboard_scroll usage=%04X direction=%s\n",
                  usage, scroll == GPT_INPUT_SCROLL_UP ? "up" : "down");
         sceKernelDebugOutText(0, line);
     }
@@ -315,7 +315,7 @@ bool gpt_input_init(void)
         }
     }
     char keyboard_log[64];
-    snprintf(keyboard_log, sizeof(keyboard_log), "[prosperogpt] keyboard_handles=%u\n",
+    snprintf(keyboard_log, sizeof(keyboard_log), "[prosperoai] keyboard_handles=%u\n",
              keyboard_count);
     sceKernelDebugOutText(0, keyboard_log);
     queue_read = queue_write = 0;

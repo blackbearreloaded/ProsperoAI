@@ -1828,7 +1828,7 @@ int run_model_token(void)
         {
             char map_log[256];
             snprintf(map_log, sizeof(map_log),
-                     "[prosperogpt] direct_map alloc_rc=%d map_rc=%d "
+                     "[prosperoai] direct_map alloc_rc=%d map_rc=%d "
                      "direct_size=0x%llx bytes=0x%llx start=0x%llx "
                      "mapping=0x%llx aligned=0x%llx high=%u\n",
                      allocate_rc, map_rc, (unsigned long long)direct_size,
@@ -2588,7 +2588,7 @@ int run_model_token(void)
         state[index] = ((int)(index % 17u) - 8) * 0.03125f;
     flush_cache(state, TOKEN_WIDTH * sizeof(float));
     ps5_compute_stage = 9001;
-    sceKernelDebugOutText(0, "[prosperogpt] logits_diag_begin=1\n");
+    sceKernelDebugOutText(0, "[prosperoai] logits_diag_begin=1\n");
     if (execute_command(&agc, work, layer_words, layer_word_count,
                         layer_marker
 #ifdef PS5_GPU_TIMING
@@ -2596,7 +2596,7 @@ int run_model_token(void)
 #endif
                         ) != 0)
         goto done;
-    sceKernelDebugOutText(0, "[prosperogpt] logits_diag_done=1\n");
+    sceKernelDebugOutText(0, "[prosperoai] logits_diag_done=1\n");
     flush_cache(logits, TOKEN_VOCAB * sizeof(float));
     {
         float best = -3.402823466e+38f;
@@ -2752,7 +2752,7 @@ int run_model_token(void)
             char segment_log[96];
 
             snprintf(segment_log, sizeof(segment_log),
-                     "[prosperogpt] qwen_segment_begin=%u position=%u\n",
+                     "[prosperoai] qwen_segment_begin=%u position=%u\n",
                      index, position);
             sceKernelDebugOutText(0, segment_log);
 #endif
@@ -2815,7 +2815,7 @@ int run_model_token(void)
 #endif
 #ifdef PS5_QWEN_SEGMENT_DIAGNOSTIC
             snprintf(segment_log, sizeof(segment_log),
-                     "[prosperogpt] qwen_segment_done=%u position=%u\n",
+                     "[prosperoai] qwen_segment_done=%u position=%u\n",
                      index, position);
             sceKernelDebugOutText(0, segment_log);
 #endif

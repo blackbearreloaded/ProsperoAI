@@ -67,7 +67,7 @@ extern "C" int ps5_stable_audio_generate(const char *prompt, char *response,
     const int scratch_result = ps5_agc_backend_release_scratch();
     char scratch_log[80];
     std::snprintf(scratch_log, sizeof(scratch_log),
-                  "[prosperogpt] stable_audio_scratch_released=%u rc=%08X\n",
+                  "[prosperoai] stable_audio_scratch_released=%u rc=%08X\n",
                   scratch_result == 0 ? 1U : 0U, static_cast<unsigned>(scratch_result));
     sceKernelDebugOutText(0, scratch_log);
 
@@ -91,6 +91,6 @@ extern "C" int ps5_stable_audio_generate(const char *prompt, char *response,
         return result ? result : 3;
     }
     std::snprintf(response, response_capacity, "Audio generated locally at %s", output);
-    sceKernelDebugOutText(0, "[prosperogpt] stable_audio_complete=1\n");
+    sceKernelDebugOutText(0, "[prosperoai] stable_audio_complete=1\n");
     return 0;
 }

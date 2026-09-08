@@ -1,4 +1,4 @@
-// ProsperoGPT - Native PlayStation 5 local AI chat application.
+// ProsperoAI - Native PlayStation 5 local AI chat application.
 // Copyright (C) 2026 BlackBearReloaded
 // SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -731,7 +731,7 @@ bool RunApp()
     }
     SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "software");
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
-    SDL_Window *window = SDL_CreateWindow("ProsperoGPT", SDL_WINDOWPOS_UNDEFINED,
+    SDL_Window *window = SDL_CreateWindow("ProsperoAI", SDL_WINDOWPOS_UNDEFINED,
                                           SDL_WINDOWPOS_UNDEFINED, 1920, 1080, SDL_WINDOW_SHOWN);
     SDL_Surface *surface = SDL_GetWindowSurface(window);
     SDL_Renderer *renderer = surface ? SDL_CreateSoftwareRenderer(surface) : nullptr;
@@ -754,11 +754,11 @@ bool RunApp()
     if (running)
         running = LoadFonts();
     Rml::Context *context =
-        running ? Rml::CreateContext("prosperogpt", {1920, 1080}, adapted_render_interface)
+        running ? Rml::CreateContext("prosperoai", {1920, 1080}, adapted_render_interface)
                 : nullptr;
     Rml::ElementDocument *document =
         context ? context->LoadDocument("assets/ui/main.rml") : nullptr;
-    ProsperoGptApp app;
+    ProsperoAiApp app;
     bool input_ready = false;
     bool ime_ready = false;
     if (document)
@@ -807,7 +807,7 @@ bool RunApp()
     if (document)
         document->Close();
     if (context)
-        Rml::RemoveContext("prosperogpt");
+        Rml::RemoveContext("prosperoai");
     Rml::Shutdown();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

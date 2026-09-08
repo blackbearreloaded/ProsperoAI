@@ -16,7 +16,7 @@ namespace Rml {
 class ElementDocument;
 }
 
-class ProsperoGptApp {
+class ProsperoAiApp {
 public:
     bool Initialize(Rml::ElementDocument* document);
     void Poll();
@@ -93,5 +93,5 @@ private:
     static void* GenerationWorker(void* user_data);
     static void StreamCallback(const char* text);
     static void ImeResult(const char* text, void* user_data);
-    static ProsperoGptApp* active_;
+    static ProsperoAiApp* active_;
 };

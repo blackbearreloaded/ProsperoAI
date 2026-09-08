@@ -304,9 +304,8 @@ bool ScrollConversation(float delta)
     conversation_scroll_offset = target;
     conversation_auto_follow = target >= maximum;
     char log[112];
-    std::snprintf(log, sizeof(log),
-                  "[prosperogpt] chat_scroll delta=%.0f top=%d max=%d follow=%u\n", delta, target,
-                  maximum, conversation_auto_follow ? 1U : 0U);
+    std::snprintf(log, sizeof(log), "[prosperoai] chat_scroll delta=%.0f top=%d max=%d follow=%u\n",
+                  delta, target, maximum, conversation_auto_follow ? 1U : 0U);
     sceKernelDebugOutText(0, log);
     return moved;
 }
@@ -329,9 +328,9 @@ bool IsOutputLimit(unsigned value)
 
 } // namespace
 
-ProsperoGptApp *ProsperoGptApp::active_ = nullptr;
+ProsperoAiApp *ProsperoAiApp::active_ = nullptr;
 
-bool ProsperoGptApp::Initialize(Rml::ElementDocument *document)
+bool ProsperoAiApp::Initialize(Rml::ElementDocument *document)
 {
     document_ = document;
     if (!document_)
@@ -419,12 +418,12 @@ bool ProsperoGptApp::Initialize(Rml::ElementDocument *document)
     }
 #endif
     RefreshAll();
-    sceKernelDebugOutText(0, "[prosperogpt] ui_ready=1\n");
+    sceKernelDebugOutText(0, "[prosperoai] ui_ready=1\n");
     StartWarmup("Loading the selected model in the background");
     return true;
 }
 
-void ProsperoGptApp::Shutdown()
+void ProsperoAiApp::Shutdown()
 {
     if (generating_)
     {
@@ -448,20 +447,20 @@ void ProsperoGptApp::Shutdown()
     document_ = nullptr;
 }
 
-void ProsperoGptApp::SetStatus(const char *text)
+void ProsperoAiApp::SetStatus(const char *text)
 {
     std::snprintf(status_text_, sizeof(status_text_), "%s", text ? text : "");
     RefreshStatus();
 }
 
-void ProsperoGptApp::StartWarmup(const char *status)
+void ProsperoAiApp::StartWarmup(const char *status)
 {
     if (!gpt_runtime_available())
         return;
     warmup_done.store(false, std::memory_order_relaxed);
     warming = true;
-    if (scePthreadCreate(&warmup_thread, nullptr, WarmupWorker, nullptr,
-                         "prosperogpt-gpu-warmup") != 0)
+    if (scePthreadCreate(&warmup_thread, nullptr, WarmupWorker, nullptr, "prosperoai-gpu-warmup") !=
+        0)
     {
         warming = false;
         SetStatus("Could not start background model load");
@@ -473,7 +472,7 @@ void ProsperoGptApp::StartWarmup(const char *status)
     RefreshSettings();
 }
 
-void ProsperoGptApp::SelectModel(unsigned index)
+void ProsperoAiApp::SelectModel(unsigned index)
 {
     if (generating_ || warming || index == gpt_runtime_selected_model() ||
         !gpt_runtime_select_model(index))
@@ -485,7 +484,7 @@ void ProsperoGptApp::SelectModel(unsigned index)
     StartWarmup("Switching GPU model");
 }
 
-void ProsperoGptApp::AddMessage(const char *role, const char *content)
+void ProsperoAiApp::AddMessage(const char *role, const char *content)
 {
     if (history_count_ == MessageCapacity)
     {
@@ -520,7 +519,7 @@ void ProsperoGptApp::AddMessage(const char *role, const char *content)
     SaveSession();
 }
 
-void ProsperoGptApp::BeginNewSession()
+void ProsperoAiApp::BeginNewSession()
 {
     if (generating_)
         return;
@@ -540,7 +539,7 @@ void ProsperoGptApp::BeginNewSession()
     RefreshConversation();
 }
 
-bool ProsperoGptApp::EnsureSession()
+bool ProsperoAiApp::EnsureSession()
 {
     if (current_session_.id[0])
         return true;
@@ -553,7 +552,7 @@ bool ProsperoGptApp::EnsureSession()
     return session_model_available_;
 }
 
-void ProsperoGptApp::SaveSession()
+void ProsperoAiApp::SaveSession()
 {
     if (!current_session_.id[0])
         return;
@@ -563,13 +562,13 @@ void ProsperoGptApp::SaveSession()
         return;
     }
     char log[192];
-    std::snprintf(log, sizeof(log), "[prosperogpt] session_saved id=%s messages=%u purpose=%s\n",
+    std::snprintf(log, sizeof(log), "[prosperoai] session_saved id=%s messages=%u purpose=%s\n",
                   current_session_.id, history_count_, current_session_.purpose);
     sceKernelDebugOutText(0, log);
     RefreshSessions();
 }
 
-int ProsperoGptApp::FindModel(const char *id) const
+int ProsperoAiApp::FindModel(const char *id) const
 {
     for (unsigned index = 0; index < gpt_runtime_model_count(); ++index)
         if (std::strcmp(gpt_runtime_model_id(index), id) == 0)
@@ -577,7 +576,7 @@ int ProsperoGptApp::FindModel(const char *id) const
     return -1;
 }
 
-void ProsperoGptApp::RefreshSessions()
+void ProsperoAiApp::RefreshSessions()
 {
     session_count_ = prospero_session::scan(sessions_, SessionCapacity);
     const unsigned maximum = session_count_;
@@ -626,7 +625,7 @@ void ProsperoGptApp::RefreshSessions()
     RefreshAudioAction();
 }
 
-void ProsperoGptApp::RefreshAudioAction()
+void ProsperoAiApp::RefreshAudioAction()
 {
     char path[320];
     const bool audio_available = FindLatestAudio(path, sizeof(path));
@@ -644,7 +643,7 @@ void ProsperoGptApp::RefreshAudioAction()
                                   : "Play audio");
 }
 
-void ProsperoGptApp::OpenSelectedSession()
+void ProsperoAiApp::OpenSelectedSession()
 {
     if (generating_ || warming)
         return;
@@ -689,14 +688,14 @@ void ProsperoGptApp::OpenSelectedSession()
     }
     char log[192];
     std::snprintf(log, sizeof(log),
-                  "[prosperogpt] session_opened id=%s messages=%u model=%s installed=%u\n",
+                  "[prosperoai] session_opened id=%s messages=%u model=%s installed=%u\n",
                   current_session_.id, history_count_, current_session_.model_id,
                   session_model_available_ ? 1U : 0U);
     sceKernelDebugOutText(0, log);
     RefreshAll();
 }
 
-void ProsperoGptApp::DeleteSelectedSession()
+void ProsperoAiApp::DeleteSelectedSession()
 {
     if (generating_ || warming || session_selection_ == 0 || session_selection_ > session_count_)
         return;
@@ -718,14 +717,14 @@ void ProsperoGptApp::DeleteSelectedSession()
     if (session_selection_ > 0)
         --session_selection_;
     char log[128];
-    std::snprintf(log, sizeof(log), "[prosperogpt] session_deleted id=%s\n", selected.id);
+    std::snprintf(log, sizeof(log), "[prosperoai] session_deleted id=%s\n", selected.id);
     sceKernelDebugOutText(0, log);
     SetStatus("Session and its media deleted");
     RefreshSessions();
     RefreshConversation();
 }
 
-bool ProsperoGptApp::FindLatestAudio(char *path, std::size_t capacity) const
+bool ProsperoAiApp::FindLatestAudio(char *path, std::size_t capacity) const
 {
     if (!path || capacity == 0)
         return false;
@@ -746,7 +745,7 @@ bool ProsperoGptApp::FindLatestAudio(char *path, std::size_t capacity) const
     return false;
 }
 
-void ProsperoGptApp::PlayLatestAudio()
+void ProsperoAiApp::PlayLatestAudio()
 {
 #if defined(PS5_MEDIA_AUDIO)
     char path[320];
@@ -760,14 +759,14 @@ void ProsperoGptApp::PlayLatestAudio()
     }
     SetStatus(result == 0 ? "Playing saved audio" : "Could not play saved audio");
     char log[448];
-    std::snprintf(log, sizeof(log), "[prosperogpt] audio_replay=%u rc=%08X path=%s\n",
+    std::snprintf(log, sizeof(log), "[prosperoai] audio_replay=%u rc=%08X path=%s\n",
                   result == 0 ? 1U : 0U, static_cast<unsigned>(result), path);
     sceKernelDebugOutText(0, log);
     RefreshConversation();
 #endif
 }
 
-void ProsperoGptApp::OpenKeyboard()
+void ProsperoAiApp::OpenKeyboard()
 {
     if (!gpt_runtime_available())
     {
@@ -783,9 +782,9 @@ void ProsperoGptApp::OpenKeyboard()
         gpt_ime_request(pending_text_, ImeResult, this);
 }
 
-void ProsperoGptApp::ImeResult(const char *text, void *user_data)
+void ProsperoAiApp::ImeResult(const char *text, void *user_data)
 {
-    auto *app = static_cast<ProsperoGptApp *>(user_data);
+    auto *app = static_cast<ProsperoAiApp *>(user_data);
     if (!app || !text)
         return;
     while (*text == ' ' || *text == '\t' || *text == '\r' || *text == '\n')
@@ -798,7 +797,7 @@ void ProsperoGptApp::ImeResult(const char *text, void *user_data)
     app->SetStatus("Preparing the GPU");
 }
 
-void ProsperoGptApp::PublishStream(const char *text)
+void ProsperoAiApp::PublishStream(const char *text)
 {
     while (stream_lock_.test_and_set(std::memory_order_acquire))
     {
@@ -808,7 +807,7 @@ void ProsperoGptApp::PublishStream(const char *text)
     stream_version_.fetch_add(1, std::memory_order_release);
 }
 
-void ProsperoGptApp::CopyStream(char *text, std::size_t capacity)
+void ProsperoAiApp::CopyStream(char *text, std::size_t capacity)
 {
     while (stream_lock_.test_and_set(std::memory_order_acquire))
     {
@@ -817,15 +816,15 @@ void ProsperoGptApp::CopyStream(char *text, std::size_t capacity)
     stream_lock_.clear(std::memory_order_release);
 }
 
-void ProsperoGptApp::StreamCallback(const char *text)
+void ProsperoAiApp::StreamCallback(const char *text)
 {
     if (active_)
         active_->PublishStream(text);
 }
 
-void *ProsperoGptApp::GenerationWorker(void *user_data)
+void *ProsperoAiApp::GenerationWorker(void *user_data)
 {
-    auto *app = static_cast<ProsperoGptApp *>(user_data);
+    auto *app = static_cast<ProsperoAiApp *>(user_data);
     gpt_runtime_message_t messages[MessageCapacity + 1]{};
     messages[0] = {"system", kSystemPrompts[app->style_]};
     const unsigned context_start = app->current_session_.context_start < app->history_count_
@@ -846,7 +845,7 @@ void *ProsperoGptApp::GenerationWorker(void *user_data)
     return nullptr;
 }
 
-bool ProsperoGptApp::StartGeneration()
+bool ProsperoAiApp::StartGeneration()
 {
     if (!session_model_available_)
     {
@@ -865,7 +864,7 @@ bool ProsperoGptApp::StartGeneration()
         result = pthread_attr_setstacksize(&attributes, 8 * 1024 * 1024);
     if (result == 0)
         result = scePthreadCreate(&generation_thread_, &attributes, GenerationWorker, this,
-                                  "prosperogpt-gpu-chat");
+                                  "prosperoai-gpu-chat");
     if (attributes_initialized)
         pthread_attr_destroy(&attributes);
     if (result != 0)
@@ -887,7 +886,7 @@ bool ProsperoGptApp::StartGeneration()
     return true;
 }
 
-void ProsperoGptApp::FinishGeneration()
+void ProsperoAiApp::FinishGeneration()
 {
     if (!generating_ || !generation_done_.load(std::memory_order_acquire))
         return;
@@ -914,7 +913,7 @@ void ProsperoGptApp::FinishGeneration()
             }
             char playback_log[80];
             std::snprintf(playback_log, sizeof(playback_log),
-                          "[prosperogpt] audio_playback=%u rc=%08X\n", playback == 0 ? 1U : 0U,
+                          "[prosperoai] audio_playback=%u rc=%08X\n", playback == 0 ? 1U : 0U,
                           static_cast<unsigned>(playback));
             sceKernelDebugOutText(0, playback_log);
         }
@@ -951,16 +950,16 @@ void ProsperoGptApp::FinishGeneration()
             std::snprintf(status, sizeof(status), "UI template  ·  runtime hook ready");
         SetStatus(status);
         char log[256];
-        std::snprintf(log, sizeof(log), "[prosperogpt] runtime=%s generated=%u elapsed_us=%llu\n",
+        std::snprintf(log, sizeof(log), "[prosperoai] runtime=%s generated=%u elapsed_us=%llu\n",
                       gpt_runtime_backend(), generation_stats_.generated_tokens,
                       static_cast<unsigned long long>(generation_stats_.elapsed_microseconds));
         sceKernelDebugOutText(0, log);
-        sceKernelDebugOutText(0, "[prosperogpt] response=");
+        sceKernelDebugOutText(0, "[prosperoai] response=");
         sceKernelDebugOutText(0, generation_response_);
         sceKernelDebugOutText(0, "\n");
 #if defined(PS5_TEXT_REGRESSION_AUTOTEST)
         if (std::strcmp(gpt_runtime_purpose(), "text-to-text") == 0)
-            sceKernelDebugOutText(0, "[prosperogpt] text_regression_complete=1\n");
+            sceKernelDebugOutText(0, "[prosperoai] text_regression_complete=1\n");
 #endif
     }
     else
@@ -974,7 +973,7 @@ void ProsperoGptApp::FinishGeneration()
             return;
         }
         char log[160];
-        std::snprintf(log, sizeof(log), "[prosperogpt] runtime_failed rc=%08X\n",
+        std::snprintf(log, sizeof(log), "[prosperoai] runtime_failed rc=%08X\n",
                       static_cast<unsigned>(generation_result_));
         sceKernelDebugOutText(0, log);
         SetStatus(generation_response_[0] ? generation_response_
@@ -983,7 +982,7 @@ void ProsperoGptApp::FinishGeneration()
     RefreshConversation();
 #if defined(PS5_MEDIA_IMAGE_AUTOTEST)
     if (generation_result_ == 0 && std::strcmp(gpt_runtime_purpose(), "text-to-image") == 0)
-        sceKernelDebugOutText(0, "[prosperogpt] image_presented=1\n");
+        sceKernelDebugOutText(0, "[prosperoai] image_presented=1\n");
 #endif
 #if defined(PS5_MEDIA_SWITCH_AUTOTEST)
     if (generation_result_ == 0 && !automatic_media_switch_started &&
@@ -1008,12 +1007,12 @@ void ProsperoGptApp::FinishGeneration()
     else if (generation_result_ == 0 && automatic_media_switch_started &&
              std::strcmp(gpt_runtime_purpose(), "text-to-text") == 0)
     {
-        sceKernelDebugOutText(0, "[prosperogpt] media_switch_complete=1\n");
+        sceKernelDebugOutText(0, "[prosperoai] media_switch_complete=1\n");
     }
 #endif
 }
 
-void ProsperoGptApp::ArchiveGeneratedMedia()
+void ProsperoAiApp::ArchiveGeneratedMedia()
 {
     if (!current_session_.id[0])
         return;
@@ -1050,15 +1049,15 @@ void ProsperoGptApp::ArchiveGeneratedMedia()
     if (!prospero_session::archive_media(current_session_.id, history_count_, kind, source_path,
                                          archived, sizeof(archived)))
     {
-        sceKernelDebugOutText(0, "[prosperogpt] session_media_archived=0\n");
+        sceKernelDebugOutText(0, "[prosperoai] session_media_archived=0\n");
         return;
     }
     std::snprintf(generation_response_, sizeof(generation_response_), "%s generated locally.\n%s",
                   std::strcmp(kind, "image") == 0 ? "Image" : "Audio", archived);
-    sceKernelDebugOutText(0, "[prosperogpt] session_media_archived=1\n");
+    sceKernelDebugOutText(0, "[prosperoai] session_media_archived=1\n");
 }
 
-void ProsperoGptApp::Poll()
+void ProsperoAiApp::Poll()
 {
     if (warming && warmup_done.load(std::memory_order_acquire))
     {
@@ -1066,8 +1065,8 @@ void ProsperoGptApp::Poll()
         warming = false;
         runtime_warm = warmup_result == 0;
         SetStatus(runtime_warm ? "Ready  ·  model loaded" : "Background model load failed");
-        sceKernelDebugOutText(0, runtime_warm ? "[prosperogpt] warmup_complete=1\n"
-                                              : "[prosperogpt] warmup_complete=0\n");
+        sceKernelDebugOutText(0, runtime_warm ? "[prosperoai] warmup_complete=1\n"
+                                              : "[prosperoai] warmup_complete=0\n");
         RefreshSettings();
     }
     if (pending_ && !generating_ && !warming)
@@ -1150,7 +1149,7 @@ void ProsperoGptApp::Poll()
     }
 }
 
-void ProsperoGptApp::SetView(View view)
+void ProsperoAiApp::SetView(View view)
 {
     view_ = view;
     SetVisible(document_, "conversation-screen", view_ == View::Conversation);
@@ -1160,7 +1159,7 @@ void ProsperoGptApp::SetView(View view)
     RefreshSettings();
 }
 
-void ProsperoGptApp::ChangeSetting(int direction)
+void ProsperoAiApp::ChangeSetting(int direction)
 {
     if (generating_ || warming)
         return;
@@ -1189,7 +1188,7 @@ void ProsperoGptApp::ChangeSetting(int direction)
     RefreshSettings();
 }
 
-void ProsperoGptApp::HandleInput(const gpt_input_event_t &event)
+void ProsperoAiApp::HandleInput(const gpt_input_event_t &event)
 {
     if (!event.pressed)
         return;
@@ -1337,7 +1336,7 @@ void ProsperoGptApp::HandleInput(const gpt_input_event_t &event)
     }
 }
 
-void ProsperoGptApp::RefreshConversation()
+void ProsperoAiApp::RefreshConversation()
 {
     char partial[sizeof(stream_text_)]{};
     if (generating_)
@@ -1415,7 +1414,7 @@ void ProsperoGptApp::RefreshConversation()
     SetClass(document_, "composer-placeholder", "draft", pending_text_[0] != '\0');
 }
 
-void ProsperoGptApp::BuildMessageRows()
+void ProsperoAiApp::BuildMessageRows()
 {
     Rml::Element *list = Find(document_, "message-list");
     if (!list)
@@ -1437,7 +1436,7 @@ void ProsperoGptApp::BuildMessageRows()
     list->SetInnerRML(markup);
 }
 
-void ProsperoGptApp::RefreshStatus()
+void ProsperoAiApp::RefreshStatus()
 {
     constexpr const char *spinner[] = {"|", "/", "-", "\\"};
     if (warming || generating_)
@@ -1493,7 +1492,7 @@ void ProsperoGptApp::RefreshStatus()
     SetClass(document_, "model-state", "busy", busy);
 }
 
-void ProsperoGptApp::RefreshSettings()
+void ProsperoAiApp::RefreshSettings()
 {
     SetText(document_, "selected-model-value", gpt_runtime_name());
     char installed[160];
@@ -1550,7 +1549,7 @@ void ProsperoGptApp::RefreshSettings()
     SetClass(document_, "setting-tokens", "focused", settings_focus_ == 2);
 }
 
-void ProsperoGptApp::RefreshAll()
+void ProsperoAiApp::RefreshAll()
 {
     const bool missing_session_model = current_session_.id[0] && !session_model_available_;
     const char *display_name =
@@ -1575,7 +1574,7 @@ void ProsperoGptApp::RefreshAll()
     RefreshSettings();
 }
 
-void ProsperoGptApp::LoadSettings()
+void ProsperoAiApp::LoadSettings()
 {
     style_ = 0;
     output_limit_ = 128;
@@ -1601,7 +1600,7 @@ void ProsperoGptApp::LoadSettings()
 #endif
 }
 
-void ProsperoGptApp::SaveSettings() const
+void ProsperoAiApp::SaveSettings() const
 {
     if (std::FILE *file = std::fopen(kSettingsPath, "wb"))
     {

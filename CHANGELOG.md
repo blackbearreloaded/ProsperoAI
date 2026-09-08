@@ -7,6 +7,7 @@
 - Documented curated model installation and measured PS5 performance.
 - Added the linked video demonstration.
 - Kept the 64 most recent saved sessions ordered by activity.
+- Completed application-wide ProsperoAI branding cleanup.
 
 ## v0.1.0-alpha.3
 

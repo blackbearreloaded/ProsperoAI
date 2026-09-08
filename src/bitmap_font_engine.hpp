@@ -1,4 +1,4 @@
-// ProsperoGPT - Native PlayStation 5 local AI chat application.
+// ProsperoAI - Native PlayStation 5 local AI chat application.
 // Copyright (C) 2026 BlackBearReloaded
 // SPDX-License-Identifier: GPL-3.0-or-later
 

@@ -37,7 +37,7 @@ void log_line(const char *format, ...)
 void sd_log(sd_log_level_t level, const char *message, void *)
 {
     if (level >= SD_LOG_WARN)
-        log_line("[prosperogpt:sd] %s", message ? message : "");
+        log_line("[prosperoai:sd] %s", message ? message : "");
 }
 
 void sd_progress(int step, int steps, float, void *)
@@ -114,7 +114,7 @@ void release_context()
     }
     const bool scratch_released = ps5_agc_backend_release_scratch() == 0;
     const bool arena_released = ps5SdReleaseDirectArenaIfEmpty();
-    log_line("[prosperogpt] sd_context_released=1 scratch_released=%d "
+    log_line("[prosperoai] sd_context_released=1 scratch_released=%d "
              "arena_released=%d\n",
              scratch_released, arena_released);
 }
@@ -215,6 +215,6 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
         return 3;
     }
     std::snprintf(response, response_capacity, "Image generated locally.\n%s", display_output);
-    sceKernelDebugOutText(0, "[prosperogpt] sd_complete=1\n");
+    sceKernelDebugOutText(0, "[prosperoai] sd_complete=1\n");
     return 0;
 }
