@@ -18,7 +18,7 @@ zlib_archive="$zlib_directory/zlib-$zlib_version.tar.gz"
 zlib_stamp="$zlib_root/.source-version"
 sdk_url="https://github.com/ps5-payload-dev/sdk/releases/download/v0.42/ps5-payload-sdk.zip"
 sdk_hash="8cfbc7cd5811e719eb4f0c47eea668d3dc7b40bc8ab11c4a5031d40c23ec02da"
-zlib_url="https://zlib.net/fossils/zlib-$zlib_version.tar.gz"
+zlib_url="https://github.com/madler/zlib/releases/download/v$zlib_version/zlib-$zlib_version.tar.gz"
 zlib_hash="bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16"
 skip_sdk=false
 
