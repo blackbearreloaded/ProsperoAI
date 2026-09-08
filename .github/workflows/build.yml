@@ -64,7 +64,7 @@ jobs:
         run: cd runtime && sha256sum --check --strict libc.prx.sha256
 
       - name: Build model-free release
-        run: make ffpfsc
+        run: make app
 
       - name: Verify and archive release
         shell: bash
@@ -77,14 +77,13 @@ jobs:
           }
           cd dist
           python3 -m zipfile -c "$TITLE_ID.zip" "$TITLE_ID"
-          sha256sum "$TITLE_ID.ffpfsc" "$TITLE_ID.zip" > SHA256SUMS
+          sha256sum "$TITLE_ID.zip" > SHA256SUMS
 
       - name: Upload build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: prosperoai-release-${{ github.sha }}
           path: |
-            dist/${{ env.TITLE_ID }}.ffpfsc
             dist/${{ env.TITLE_ID }}.zip
             dist/SHA256SUMS
           if-no-files-found: error
@@ -121,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           cd release
-          test "$(find . -type f | wc -l)" -eq 3
+          test "$(find . -type f | wc -l)" -eq 2
           sha256sum --check --strict SHA256SUMS
 
       - name: Prepare release notes
@@ -140,7 +139,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          assets=(release/PPSA99004.ffpfsc release/PPSA99004.zip release/SHA256SUMS)
+          assets=(release/PPSA99004.zip release/SHA256SUMS)
           if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
             gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "ProsperoAI $GITHUB_REF_NAME" --notes-file release-notes.md

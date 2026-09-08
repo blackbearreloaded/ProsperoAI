@@ -116,10 +116,8 @@ folders at launch and shows their friendly names and purposes in Workshop. If
 no compatible model is installed, the app opens normally and explains where to
 add one.
 
-The folder ZIP is the recommended distribution because models must be inserted
-before the title is mounted. The model-free `.ffpfsc` artifact is also produced
-for loader and UI validation, but using it with models requires an advanced
-unpack/repack workflow.
+Only the folder ZIP is distributed because models must be inserted before the
+title is mounted.
 
 ## Using ProsperoAI
 
@@ -149,18 +147,17 @@ sudo apt install clang-18 clang-format-18 lld-18 make python3 python3-venv \
   tar unzip wget
 
 make check
-make ffpfsc
+make app
 ```
 
 Outputs:
 
 ```text
 dist/PPSA99004/           complete model-free app folder
-dist/PPSA99004.ffpfsc     compressed model-free image
 ```
 
-The build downloads and verifies the public PS5 Payload SDK, zlib, and MkPFS
-inside the ignored `.deps/` directory. It rebuilds the clean-room `libc.prx`
+The build downloads and verifies the public PS5 Payload SDK and zlib inside the
+ignored `.deps/` directory. It rebuilds the clean-room `libc.prx`
 runtime, compiles the native app, signs the executable, validates assets, and
 assembles the release. Model weights are never downloaded by the app build.
 
@@ -171,11 +168,10 @@ pull requests, release tags, and manual dispatch. It:
 
 1. validates source, metadata, and presentation assets;
 2. reproduces and verifies the clean-room runtime shim;
-3. builds `PPSA99004.ffpfsc` and archives the complete folder as
-   `PPSA99004.zip`;
+3. builds and archives the complete model-free folder as `PPSA99004.zip`;
 4. rejects an artifact containing model data;
-5. writes `SHA256SUMS` and uploads all three release files; and
-6. publishes those verified files when the workflow is triggered by a `v*` tag.
+5. writes `SHA256SUMS` and uploads both release files; and
+6. publishes those verified files when the workflow is triggered by a version tag.
 
 ## Project layout
 

@@ -3,7 +3,7 @@
 ## 01.000.000
 
 - Published the complete reproducible ProsperoAI application source.
-- Added model-free GitHub Actions builds for the app-folder ZIP and FFPFSC image.
+- Added model-free GitHub Actions builds for the app-folder ZIP.
 - Documented curated model installation and measured PS5 performance.
 - Added the linked video demonstration.
 - Kept the 64 most recent saved sessions ordered by activity.
