@@ -1,0 +1,15 @@
+{
+  "profile": "prosperoai-your-backend-v1",
+  "model": {
+    "purpose": "text-to-text"
+  },
+  "creator": "YourName",
+  "source": {
+    "repository": "owner/model-repository",
+    "revision": "full-source-commit"
+  },
+  "conversion": {
+    "architecture": "gguf-architecture-name",
+    "runtime_layout": "your-runtime-layout-v1"
+  }
+}

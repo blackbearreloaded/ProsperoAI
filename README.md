@@ -67,6 +67,30 @@ The linked repositories contain the exact directory layout, integrity hashes,
 upstream provenance, licenses, and preparation recipe for each model. Do not
 rename or mix their internal files.
 
+### Prepare text models yourself
+
+The open-source [model preparation tools](model-tools/) convert a supported
+single-file GGUF into ProsperoAI's deterministic `model.ps5lm`,
+`tokenizer.ps5tok`, and `model.json` bundle. Complete recipes for the validated
+Mistral and Qwen models are included in the repository.
+
+```bash
+cd model-tools
+./prepare-model \
+  --provenance recipes/mistral-7b-instruct-v0.3-q4-0.json \
+  /path/to/Mistral-7B-Instruct-v0.3.Q4_0.gguf \
+  --output-dir /path/to/PPSA99004
+```
+
+The recipe verifies the exact upstream revision, byte count, SHA-256, tensor
+layout, tokenizer, and every generated output. See the model-tools guide for
+source-download commands, the Qwen example, recipe creation, supported GGUF
+types, and the steps required when adding a new architecture.
+
+A recipe prepares weights for a backend already implemented by ProsperoAI. It
+cannot add an inference backend, tokenizer algorithm, or quantization format
+that the application does not support.
+
 ### Performance notes
 
 These are measured Alpha results from one PS5 on firmware 6.02, not guaranteed
@@ -184,6 +208,7 @@ include/             Application interfaces
 assets/              RmlUi documents, styles, fonts, and controller icons
 sce_sys/             PS5 title metadata, artwork, icon, and selection music
 models/README.txt    Model-free release placeholder and install guidance
+model-tools/         GGUF converter, validated recipes, and porting guide
 vendor/              Pinned headers and static runtime dependencies
 runtime/             Clean-room libc runtime inputs and integrity record
 tooling/native/      Native ELF/FSELF and runtime build tools

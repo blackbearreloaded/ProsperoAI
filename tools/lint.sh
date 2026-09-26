@@ -15,15 +15,23 @@ bash tools/run_clang_format.sh --check
 while IFS= read -r script; do
     bash -n "$script"
 done < <(find tools -maxdepth 1 -type f -name '*.sh' -print)
+bash -n model-tools/prepare-model
 bash tools/validate-assets.sh
 
 python3 - <<'PY'
 from pathlib import Path
-import json, re, subprocess
+import json, re, subprocess, sys
+for path in Path("model-tools").glob("*.py"):
+    compile(path.read_bytes(), str(path), "exec")
 for name in subprocess.check_output(["git", "ls-files", "*.json"], text=True).splitlines():
     if Path(name).is_file():
         with open(name, encoding="utf-8") as source:
             json.load(source)
+
+sys.path.insert(0, str(Path("model-tools").resolve()))
+from prepare_model import load_recipe
+for path in Path("model-tools/recipes").glob("*.json"):
+    load_recipe(path)
 
 with open("sce_sys/param.json", encoding="utf-8") as source:
     param = json.load(source)
@@ -58,6 +66,8 @@ title = localized.get(language, {}).get("titleName", "")
 if not isinstance(title, str) or not title.strip():
     raise SystemExit("param.json default-language titleName cannot be empty")
 PY
+
+python3 model-tools/test_model_tools.py -q
 
 if git grep -I -n -E 'C:\\Users\\|/home/denis|/mnt/c/Users/denis|\bDenis\b' -- . \
     ':(exclude)tools/lint.sh'; then

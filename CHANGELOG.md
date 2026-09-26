@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Published the deterministic text-model converter, validated Mistral and Qwen
+  recipes, recipe-authoring workflow, and model-tool self-test.
+
 ## 01.000.000
 
 - Published the complete reproducible ProsperoAI application source.

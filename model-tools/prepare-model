@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
+exec python3 "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/prepare_model.py" "$@"
