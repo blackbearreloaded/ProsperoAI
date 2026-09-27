@@ -2,6 +2,8 @@
 
 All repository-owned format tooling is C or C++. Make/Bash and PowerShell are
 thin platform-specific orchestrators. No C# or .NET runtime is required.
+Ninja schedules host and PS5 compilation incrementally, while ccache reuses
+compiler results across clean builds and CI runs.
 
 The root build performs four native stages:
 
@@ -20,5 +22,5 @@ Linux/WSL or `../tools/rebuild-libc.ps1` on Windows to prove both hashes.
 `.deps/native/`; neither is installed globally. The shell and PowerShell
 bootstrappers share the same cache layout.
 
-See [`../docs/NATIVE_TOOLING.md`](../docs/NATIVE_TOOLING.md) for the format
-boundary and low-level commands.
+Set `BUILD_JOBS` to cap parallelism or `USE_CCACHE=0` to build without the
+compiler cache.

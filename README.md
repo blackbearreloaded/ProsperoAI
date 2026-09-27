@@ -169,8 +169,8 @@ Build from Linux, WSL, or an Ubuntu-compatible CI runner:
 
 ```bash
 sudo apt update
-sudo apt install clang-18 clang-format-18 lld-18 make python3 python3-venv \
-  tar unzip wget
+sudo apt install ccache clang-18 clang-format-18 clang-tidy-18 lld-18 make \
+  ninja-build pkg-config python3 python3-venv tar unzip wget
 
 make check
 make app
@@ -180,24 +180,29 @@ Outputs:
 
 ```text
 dist/PPSA99004/           complete model-free app folder
+dist/PPSA99004.zip        archived model-free app folder
 ```
 
 The build downloads and verifies the public PS5 Payload SDK and zlib inside the
 ignored `.deps/` directory. It rebuilds the clean-room `libc.prx`
-runtime, compiles the native app, signs the executable, validates assets, and
-assembles the release. Model weights are never downloaded by the app build.
+runtime, compiles the native app through parallel incremental Ninja builds,
+caches compiler results with ccache, signs the executable, validates assets,
+and assembles the release. Set `USE_CCACHE=0` to disable the cache or
+`BUILD_JOBS=<count>` to limit parallel compilation. Model weights are never
+downloaded by the app build.
 
 ## GitHub Actions
 
 The [Build workflow](.github/workflows/build.yml) runs on pushes to `main`,
 pull requests, release tags, and manual dispatch. It:
 
-1. validates source, metadata, and presentation assets;
-2. reproduces and verifies the clean-room runtime shim;
-3. builds and archives the complete model-free folder as `PPSA99004.zip`;
-4. rejects an artifact containing model data;
-5. writes `SHA256SUMS` and uploads both release files; and
-6. publishes those verified files when the workflow is triggered by a version tag.
+1. restores dependency and ccache data;
+2. validates source, metadata, presentation assets, and the executable writer;
+3. reproduces and verifies the clean-room runtime shim;
+4. builds the complete model-free folder and `PPSA99004.zip` with Ninja;
+5. rejects an artifact containing model data;
+6. writes `SHA256SUMS` and uploads both release files; and
+7. publishes those verified files when triggered by a version tag.
 
 ## Project layout
 

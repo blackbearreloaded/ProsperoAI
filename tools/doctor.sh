@@ -55,6 +55,10 @@ fi
 
 required bash 'build orchestration'
 required make 'primary build entry point'
+required ninja 'incremental parallel compilation'
+if [[ ${USE_CCACHE:-1} != 0 ]]; then
+    required ccache 'compiler result cache'
+fi
 required python3 'metadata, tests, and packaging helpers'
 required_one_of clang 'native host and target compilation' clang-18 clang
 required_one_of clang++ 'C++ host and target compilation' clang++-18 clang++

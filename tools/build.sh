@@ -77,24 +77,16 @@ fself_magic=0x1D3D154F
 bash "$root/tools/validate-assets.sh" "$root/sce_sys"
 
 sdk_root="$root/.deps/native/ps5-payload-sdk"
-zlib_root="$root/.deps/native/zlib/root"
-zlib_archive=$(find "$zlib_root" -type f -name libz.a -print -quit)
-cxx=${CXX:-}
-if [[ -z $cxx ]]; then
-    cxx=$(command -v clang++-18 || command -v clang++)
-fi
-[[ -n $cxx ]] || { echo "Clang++ was not found" >&2; exit 2; }
 
 build="$root/build"
 dist="$root/dist"
 native="$root/tooling/native"
 tool="$build/host/ps5-native-tool"
 mkdir -p "$build/host" "$build/obj" "$dist"
-"$cxx" -std=c++20 -O2 -Wall -Wextra -Werror \
-    -I "$zlib_root/usr/include" \
-    "$native/native_app_builder.cpp" "$native/self_container.cpp" \
-    "$native/elf_object.cpp" "$native/sce_module_writer.cpp" \
-    "$zlib_archive" -o "$tool"
+bash "$root/tools/build-host-tools.sh"
+source "$root/tools/ninja-build.sh"
+ninja_begin "$build/app.ninja"
+target_compiler=$(command -v "${PS5_CLANG:-clang-18}")
 
 mapfile -d '' -t source_paths < <(
     find "$root/src" -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
@@ -156,7 +148,8 @@ for source in "${sources[@]}"; do
     [[ $source =~ ^src/[A-Za-z0-9_./-]+\.(c|cc|cpp)$ && -f $root/$source ]] || {
         echo "invalid source: $source" >&2; exit 2;
     }
-    object="$build/obj/${source//\//_}.o"
+    object="$build/obj/$source.o"
+    mkdir -p "$(dirname "$object")"
     if [[ $source == *.c ]]; then standard=-std=c11; else standard=-std=c++20; fi
     args=("$standard" -O2 -Wall -Wextra -ffunction-sections -fdata-sections)
     [[ $source == *.c ]] || args+=(-fno-exceptions -fno-rtti "${cxx_flags[@]}")
@@ -173,20 +166,24 @@ for source in "${sources[@]}"; do
         args+=("-I$root/$include")
     done
     args+=("${pacbrew_cflags[@]}")
-    PS5_PAYLOAD_SDK="$sdk_root" sh "$root/tooling/prospero-clang18" \
-        "${args[@]}" -c "$root/$source" -o "$object"
+    ninja_inputs=("$root/$source" "$root/tooling/prospero-clang18" "$target_compiler")
+    ninja_edge CC "$object" env PS5_PAYLOAD_SDK="$sdk_root" \
+        PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
+        sh "$root/tooling/prospero-clang18" "${args[@]}" \
+        -MD -MF "$object.d" -c "$root/$source" -o "$object"
     objects+=("$object")
 done
 
-PS5_PAYLOAD_SDK="$sdk_root" sh "$root/tooling/prospero-clang18" \
-    -std=c++20 -O2 -Wall -Wextra -fno-exceptions -fno-rtti \
-    -ffunction-sections -fdata-sections \
-    -c "$native/app_crt.cpp" -o "$build/obj/app_crt.o"
-
-PS5_PAYLOAD_SDK="$sdk_root" sh "$root/tooling/prospero-clang18" \
-    -std=c++20 -O2 -Wall -Wextra -fno-exceptions -fno-rtti \
-    -ffunction-sections -fdata-sections \
-    -c "$native/app_cpp_runtime.cpp" -o "$build/obj/app_cpp_runtime.o"
+for name in app_crt app_cpp_runtime; do
+    object="$build/obj/$name.o"
+    ninja_inputs=("$native/$name.cpp" "$root/tooling/prospero-clang18" "$target_compiler")
+    ninja_edge CXX "$object" env PS5_PAYLOAD_SDK="$sdk_root" \
+        PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
+        sh "$root/tooling/prospero-clang18" \
+        -std=c++20 -O2 -Wall -Wextra -fno-exceptions -fno-rtti \
+        -ffunction-sections -fdata-sections -MD -MF "$object.d" \
+        -c "$native/$name.cpp" -o "$object"
+done
 
 link_inputs=("$build/obj/app_crt.o" "$build/obj/app_cpp_runtime.o" "${objects[@]}")
 for archive in "${archives[@]}"; do
@@ -198,35 +195,76 @@ done
 mkdir -p "$build/import-stubs"
 common_link_object="$build/import-stubs/libSceCommonDialog.o"
 common_link_stub="$build/import-stubs/libSceCommonDialog.so"
-PS5_PAYLOAD_SDK="$sdk_root" sh "$root/tooling/prospero-clang18" \
+ninja_inputs=("$native/prosperoai_import_stub_common_dialog.cpp" \
+    "$root/tooling/prospero-clang18" "$target_compiler")
+ninja_edge CXX "$common_link_object" env PS5_PAYLOAD_SDK="$sdk_root" \
+    PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
+    sh "$root/tooling/prospero-clang18" \
     -std=c++20 -O2 -Wall -Wextra -fno-exceptions -fno-rtti -fPIC \
-    -c "$native/prosperoai_import_stub_common_dialog.cpp" -o "$common_link_object"
-"$sdk_root/bin/prospero-lld" --shared -soname libSceCommonDialog.sprx \
-    -o "$common_link_stub" "$common_link_object"
+    -MD -MF "$common_link_object.d" -c "$native/prosperoai_import_stub_common_dialog.cpp" \
+    -o "$common_link_object"
+ninja_inputs=("$common_link_object" "$sdk_root/bin/prospero-lld")
+ninja_edge STUB "$common_link_stub" "$sdk_root/bin/prospero-lld" --shared \
+    -soname libSceCommonDialog.sprx -o "$common_link_stub" "$common_link_object"
 link_inputs+=("$common_link_stub")
+
 agc_link_object="$build/import-stubs/libSceAgc.o"
-PS5_PAYLOAD_SDK="$sdk_root" sh "$root/tooling/prospero-clang18" \
+agc_link_stub="$sdk_root/target/lib/libSceAgc.so"
+ninja_inputs=("$native/prosperoai_import_stub_agc.c" \
+    "$root/tooling/prospero-clang18" "$target_compiler")
+ninja_edge CC "$agc_link_object" env PS5_PAYLOAD_SDK="$sdk_root" \
+    PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
+    sh "$root/tooling/prospero-clang18" \
     -std=c11 -O2 -Wall -Wextra -fPIC \
-    -c "$native/prosperoai_import_stub_agc.c" -o "$agc_link_object"
-"$sdk_root/bin/prospero-lld" --shared -soname libSceAgc.prx \
-    -o "$sdk_root/target/lib/libSceAgc.so" "$agc_link_object"
+    -MD -MF "$agc_link_object.d" -c "$native/prosperoai_import_stub_agc.c" \
+    -o "$agc_link_object"
+ninja_inputs=("$agc_link_object" "$sdk_root/bin/prospero-lld")
+ninja_edge STUB "$agc_link_stub" "$sdk_root/bin/prospero-lld" --shared \
+    -soname libSceAgc.prx -o "$agc_link_stub" "$agc_link_object"
+
 agc_driver_link_object="$build/import-stubs/libSceAgcDriver.o"
-PS5_PAYLOAD_SDK="$sdk_root" sh "$root/tooling/prospero-clang18" \
+agc_driver_link_stub="$sdk_root/target/lib/libSceAgcDriver.so"
+ninja_inputs=("$native/prosperoai_import_stub_agc_driver.c" \
+    "$root/tooling/prospero-clang18" "$target_compiler")
+ninja_edge CC "$agc_driver_link_object" env PS5_PAYLOAD_SDK="$sdk_root" \
+    PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
+    sh "$root/tooling/prospero-clang18" \
     -std=c11 -O2 -Wall -Wextra -fPIC \
-    -c "$native/prosperoai_import_stub_agc_driver.c" \
+    -MD -MF "$agc_driver_link_object.d" -c "$native/prosperoai_import_stub_agc_driver.c" \
     -o "$agc_driver_link_object"
-"$sdk_root/bin/prospero-lld" --shared -soname libSceAgcDriver.prx \
-    -o "$sdk_root/target/lib/libSceAgcDriver.so" "$agc_driver_link_object"
+ninja_inputs=("$agc_driver_link_object" "$sdk_root/bin/prospero-lld")
+ninja_edge STUB "$agc_driver_link_stub" "$sdk_root/bin/prospero-lld" --shared \
+    -soname libSceAgcDriver.prx -o "$agc_driver_link_stub" "$agc_driver_link_object"
+
 if (( ${#pacbrew_libs[@]} > 0 )); then
     link_inputs+=(--start-group "${pacbrew_libs[@]}" --end-group)
 fi
-"$sdk_root/bin/prospero-lld" -T "$native/ps5-pie.ld" --eh-frame-hdr --wrap=malloc --wrap=calloc --wrap=posix_memalign --wrap=free \
+sdk_stubs=()
+for stub in "$sdk_root"/target/lib/*.so; do
+    [[ $stub == "$agc_link_stub" || $stub == "$agc_driver_link_stub" ]] || sdk_stubs+=("$stub")
+done
+sdk_stubs+=("$agc_link_stub" "$agc_driver_link_stub")
+ninja_inputs=("$native/ps5-pie.ld" "$native/app-symbols.map" "$sdk_root/bin/prospero-lld")
+for input in "${link_inputs[@]}" "${sdk_stubs[@]}"; do
+    [[ $input == -* ]] || ninja_inputs+=("$input")
+done
+if [[ -n ${pacbrew_root:-} ]]; then
+    while IFS= read -r -d '' input; do
+        ninja_inputs+=("$input")
+    done < <(find "$pacbrew_root" -type f \( -name '*.a' -o -name '*.so' \) -print0 | sort -z)
+fi
+ninja_edge LINK "$build/llvm-pie.elf" "$sdk_root/bin/prospero-lld" \
+    -T "$native/ps5-pie.ld" --eh-frame-hdr --wrap=malloc --wrap=calloc \
+    --wrap=posix_memalign --wrap=free \
     --version-script "$native/app-symbols.map" \
     -L "$sdk_root/target/lib" -e _start -o "$build/llvm-pie.elf" "${link_inputs[@]}" \
-    --as-needed "$sdk_root"/target/lib/*.so
-"$tool" link --in "$build/llvm-pie.elf" --out "$build/eboot.elf" \
+    --as-needed "${sdk_stubs[@]}"
+ninja_inputs=("$build/llvm-pie.elf" "$tool" "$common_link_stub" "${sdk_stubs[@]}")
+ninja_edge CONVERT "$build/eboot.elf" "$tool" link \
+    --in "$build/llvm-pie.elf" --out "$build/eboot.elf" \
     --stub-dir "$sdk_root/target/lib" --stub "$common_link_stub" --module-sdk "$module_sdk" \
     --companion-sdk "$companion_sdk" --file-name eboot.elf
+ninja_run
 
 app="$dist/$title_id"
 rm -rf -- "$app"
@@ -278,6 +316,10 @@ PY
 done
 "$tool" self --inspect --file "$app/eboot.bin"
 
+printf '==> [zip] Archiving the application folder\n'
+rm -f -- "$dist/$title_id.zip"
+(cd "$dist" && python3 -m zipfile -c "$title_id.zip" "$title_id")
+
 if [[ $format == ffpkg || $format == all ]]; then
     ufs2tool=$(bash "$root/tools/setup-packaging-dependencies.sh" ffpkg)
     rm -f -- "$dist/$title_id.ffpkg"
@@ -300,5 +342,6 @@ if [[ $format == ffpfsc || $format == all ]]; then
 fi
 
 printf 'Build complete.\nApp folder: %s\n' "$app"
+printf 'Folder ZIP: %s\n' "$dist/$title_id.zip"
 [[ $format != ffpkg && $format != all ]] || printf 'FFPKG:     %s\n' "$dist/$title_id.ffpkg"
 [[ $format != ffpfsc && $format != all ]] || printf 'FFPFSC:    %s\n' "$dist/$title_id.ffpfsc"

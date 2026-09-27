@@ -20,25 +20,11 @@ grep -Fxq "$expected_signed *libc.prx" "$manifest" || {
 }
 
 bash "$root/tools/setup-native-dependencies.sh" --skip-sdk >/dev/null
-zlib_root="$root/.deps/native/zlib/root"
-zlib_archive=$(find "$zlib_root" -type f -name libz.a -print -quit)
-cxx=${CXX:-}
-if [[ -z $cxx ]]; then
-    cxx=$(command -v clang++-18 || command -v clang++)
-fi
-[[ -n $cxx ]] || { echo "Clang++ was not found" >&2; exit 2; }
-
 mkdir -p "$work"
-"$cxx" -std=c++20 -O2 -Wall -Wextra -Werror \
-    "$native/libc_builder.cpp" -o "$work/libc-builder"
-"$cxx" -std=c++20 -O2 -Wall -Wextra -Werror \
-    -I "$zlib_root/usr/include" \
-    "$native/native_app_builder.cpp" "$native/self_container.cpp" \
-    "$native/elf_object.cpp" "$native/sce_module_writer.cpp" \
-    "$zlib_archive" -o "$work/ps5-native-tool"
+bash "$root/tools/build-host-tools.sh"
 
 for copy in a b; do
-    "$work/libc-builder" "$native/runtime/api-surface.txt" \
+    "$root/build/host/libc-builder" "$native/runtime/api-surface.txt" \
         "$native/runtime/imports.txt" "$work/libc-$copy.raw.elf"
 done
 cmp --silent "$work/libc-a.raw.elf" "$work/libc-b.raw.elf"
@@ -49,7 +35,7 @@ raw_hash=$(sha256sum "$work/libc-a.raw.elf" | cut -d ' ' -f 1)
 }
 
 for copy in a b; do
-    "$work/ps5-native-tool" self --sign \
+    "$root/build/host/ps5-native-tool" self --sign \
         --in "$work/libc-$copy.raw.elf" --out "$work/libc-$copy.prx"
 done
 cmp --silent "$work/libc-a.prx" "$work/libc-b.prx"

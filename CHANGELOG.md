@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adopted the foundation's parallel incremental Ninja build and ccache-backed
+  local/CI compilation workflow.
+- Fixed RELRO load-segment alignment for executables whose relocated read-only
+  region does not begin at the GOT, with a host regression test.
 - Published the deterministic text-model converter, validated Mistral and Qwen
   recipes, recipe-authoring workflow, and model-tool self-test.
 

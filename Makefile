@@ -31,13 +31,17 @@ HOST_TEST_CXXFLAGS ?= -std=c++20 -O2 -Wall -Wextra -Wpedantic -Werror \
 	-ffunction-sections -fdata-sections
 HOST_TEST_LDFLAGS ?= -Wl,--gc-sections
 GTEST_ARGS ?=
+BUILD_JOBS ?= $(shell nproc 2>/dev/null || echo 2)
+USE_CCACHE ?= 1
+export BUILD_JOBS USE_CCACHE
+export HOST_CXX HOST_TEST_CXXFLAGS HOST_TEST_LDFLAGS
 export APP_DEFINITIONS APP_CXXFLAGS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
 export PS5_HOST FTP_PORT DEPLOY_FORMAT PS5_FTP_USER PS5_FTP_PASSWORD DEPLOY_DRY_RUN
 export TITLE_ID APP_NAME APP_CATEGORY CONTENT_SUFFIX
 
 RUNTIME := runtime/libc.prx
-RUNTIME_INPUTS := tools/rebuild-libc.sh \
+RUNTIME_INPUTS := tools/rebuild-libc.sh tools/build-host-tools.sh tools/ninja-build.sh \
 	$(wildcard tooling/native/*.cpp tooling/native/*.hpp) \
 	$(wildcard tooling/native/runtime/*.txt)
 APP_DEFINITIONS += SDL_MAIN_HANDLED SDL_STATIC_LIB USING_GENERATED_CONFIG_H RMLUI_STATIC_LIB ITLIB_FLAT_MAP_NO_THROW
@@ -58,12 +62,16 @@ doctor:
 	@printf '%s\n' '==> [doctor] Checking the Linux/WSL host without changing it'
 	@bash tools/doctor.sh
 
-test: assets-check
+test: test-integration
 
 test-deps:
 	@printf '%s\n' '==> [test-deps] No host-only dependencies are required'
 
-test-unit test-integration: assets-check
+test-unit: assets-check
+
+test-integration:
+	@printf '%s\n' '==> [test-integration] Running host tooling integration tests'
+	@python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 deps: test-deps
 	@printf '%s\n' '==> [deps] Fetching declared native dependencies'
@@ -130,7 +138,7 @@ lint:
 	@printf '%s\n' '==> [lint] Running source, metadata, and shell checks'
 	@bash tools/lint.sh
 
-check: lint app
+check: lint test app
 
 clean:
 	@printf '%s\n' '==> [clean] Removing generated build outputs'
@@ -146,7 +154,7 @@ help:
 	  'make                 Generate libc.prx and build the Hello World folder' \
 	  'make init TITLE_ID=PPSA12345 APP_NAME="My App"  Configure app identity' \
 	  'make doctor          Check required and optional Linux/WSL tools' \
-	  'make test            Validate release presentation assets' \
+	  'make test            Run host integration tests' \
 	  'make test-deps       Fetch verified host-only GoogleTest source' \
 	  'make test-unit       Run host-native GoogleTest application tests' \
 	  'make test-integration  Run host tooling integration tests' \
@@ -169,5 +177,6 @@ help:
 	  'PacBrew variables:   PACBREW_PACKAGES, PACBREW_INCLUDE_PATHS, PACBREW_STATIC_ARCHIVES' \
 	  'Deploy variables:    FTP_PORT=2121, DEPLOY_FORMAT=folder|ffpfsc|ffpkg, DEPLOY_DRY_RUN=0|1' \
 	  'Local defaults:      Copy .env.example to the ignored .env file' \
+	  'Build speed:         BUILD_JOBS defaults to all CPUs; USE_CCACHE=0 disables ccache' \
 	  'make clean           Remove build/, dist/, and generated libc.prx' \
 	  'make distclean       Also remove the ignored .deps/ cache'

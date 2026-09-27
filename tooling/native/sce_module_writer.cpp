@@ -402,6 +402,25 @@ Bytes build_version(std::span<const std::string> components, std::uint32_t modul
     return output;
 }
 
+// RELRO begins at its lowest section. lld drops an empty .data.rel.ro, so a
+// program without relocated read-only data starts RELRO at the GOT or an
+// initializer array instead; the anchor must follow whichever section lld kept.
+const Section &relro_origin(const Image &image, std::uint64_t relro_start)
+{
+    const Section *origin = nullptr;
+    for (const Section &input : image.sections)
+    {
+        if (!input.allocated() || !relro_section(input.name) || input.address != relro_start)
+            continue;
+        if (input.name == ".data.rel.ro")
+            return input;
+        if (origin == nullptr)
+            origin = &input;
+    }
+    require(origin != nullptr, "RELRO mapping has no section at its start address");
+    return *origin;
+}
+
 struct Import
 {
     std::string plain;
@@ -838,7 +857,11 @@ Bytes write_executable(const Image &image, std::span<const Stub> stubs, const Op
             continue;
         copy_bytes(output, input.file_offset, input.data);
     }
-    const std::uint64_t relro_file = got.file_offset - (got.address - relro_start);
+    // A mapped LOAD must preserve the address/file-offset residue at the
+    // hardware 16 KiB page size. The GOT is inside RELRO, not necessarily its
+    // beginning: the region starts at .data.rel.ro when that section exists.
+    const Section &relro_source = relro_origin(image, relro_start);
+    const std::uint64_t relro_file = relro_source.file_offset;
     copy_bytes(output, relro_file + process_address - relro_start, process_parameters);
     copy_bytes(output, relro_file + blocks_address - relro_start, blocks.data);
     copy_bytes(output, dynamic_file_at(string_address), dynamic_strings);
@@ -886,6 +909,14 @@ Bytes write_executable(const Image &image, std::span<const Stub> stubs, const Op
         {kProgramNote, 0, dynamic_file_at(note_address), note_address, note.size(), note.size(), 4},
         {kProgramNote, 0, tail_file, 0, tail_note.size(), 0, 4},
     }};
+    for (const ProgramHeader &header : headers)
+    {
+        if (header.type != kProgramLoad || header.flags == 0)
+            continue;
+        require(header.alignment != 0 &&
+                    header.offset % header.alignment == header.address % header.alignment,
+                "mapped LOAD has incongruent file offset and address");
+    }
     for (std::size_t i = 0; i < headers.size(); ++i)
         write_program_header(output, i, headers[i]);
 
