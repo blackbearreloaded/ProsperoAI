@@ -39,3 +39,9 @@ recipe, integrity hashes, and model-specific license:
 PlayStation and PS5 are trademarks of Sony Interactive Entertainment.
 ProsperoAI is independent homebrew software and is not affiliated with or
 endorsed by Sony Interactive Entertainment or the model authors.
+
+## Native tooling
+
+The PS5 ELF converter and FSELF writer in `tooling/native/` are derived from
+[SharpProspero](https://github.com/SvenGDK/SharpProspero), Copyright (C) 2026
+SvenGDK, GPL-3.0, and were translated to C++ and modified by BlackBearReloaded.
