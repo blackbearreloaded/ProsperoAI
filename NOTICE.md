@@ -6,7 +6,8 @@ and uses the public [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk).
 The clean-room application runtime and project-owned source are distributed
 under GPL-3.0-or-later.
 
-The user interface includes RmlUi, SDL2, FreeType, and their retained upstream
+The user interface includes RmlUi, SDL2 (John Törnblom's PS5 port,
+https://github.com/ps5-payload-dev/SDL), FreeType, and their retained upstream
 license material. The model execution paths incorporate code or static build
 artifacts derived from llama.cpp, stable-diffusion.cpp, ggml, espeak-ng,
 Kokoro, and the Stable Audio compatibility work in a8nova/adreno-llms. Those

@@ -232,11 +232,13 @@ tools/               Build, dependency, validation, packaging, and deploy script
 
 ## Credits and license
 
+Built with the [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk) by John Törnblom (ps5-payload-dev).
+
 ProsperoAI builds on the
 [PS5 Native App Boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate)
 and the public [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk).
 Its interface uses [RmlUi](https://github.com/mikke89/RmlUi),
-[SDL2](https://github.com/libsdl-org/SDL/tree/SDL2), and
+[SDL2](https://github.com/libsdl-org/SDL/tree/SDL2) (John Törnblom's [PS5 port](https://github.com/ps5-payload-dev/SDL)), and
 [FreeType](https://freetype.org/). Model runtimes incorporate work from
 [llama.cpp](https://github.com/ggml-org/llama.cpp),
 [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp),
