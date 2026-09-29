@@ -251,6 +251,4 @@ trademarks of Sony Interactive Entertainment. ProsperoAI is an independent
 homebrew project and is not affiliated with or endorsed by Sony or the model
 authors.
 
-This project was developed with assistance from OpenAI Codex. Project
-maintainers reviewed and hardware-validated the resulting code, assets,
-documentation, and model integrations.
+This project was developed with AI assistance from OpenAI and/or Anthropic tools.
