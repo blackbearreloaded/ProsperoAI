@@ -1,4 +1,17 @@
-# Notices
+# Third-party notices
+
+## Credits and acknowledgements
+
+ProsperoAI builds on the
+[PS5 Native App Boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate)
+and the public [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk).
+Its interface uses [RmlUi](https://github.com/mikke89/RmlUi),
+[SDL2](https://github.com/libsdl-org/SDL/tree/SDL2) (John Törnblom's [PS5 port](https://github.com/ps5-payload-dev/SDL)), and
+[FreeType](https://freetype.org/). Model runtimes incorporate work from
+[llama.cpp](https://github.com/ggml-org/llama.cpp),
+[stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp),
+[Stable Audio Open Small](https://huggingface.co/stabilityai/stable-audio-open-small),
+and [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M).
 
 ProsperoAI is built on the
 [PS5 Native App Boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate)
