@@ -74,7 +74,6 @@ def check_runtime_layout(architecture: str, signature: tuple) -> str:
         f"{supported}")
 
 
-
 def align(value: int, alignment: int) -> int:
     return (value + alignment - 1) // alignment * alignment
 
