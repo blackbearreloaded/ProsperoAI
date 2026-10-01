@@ -30,6 +30,51 @@ KIND_Q4_1_F32 = 4
 KIND_Q5_K_F32 = 5
 
 
+# Runtime layouts, keyed by the packed-header dimensions the runtime itself
+# matches on (see the architecture lookup in src/gpt_runtime.cpp). Keying the
+# check on these rather than on the GGUF "general.architecture" string is
+# deliberate: Mistral ships as GGUF architecture "llama", so a string-only gate
+# would reject a model the runtime does support.
+RUNTIME_LAYOUTS = {
+    "mistral-7b-runtime-v1": {
+        "block_count": 32,
+        "embedding_length": 4096,
+        "feed_forward_length": 14336,
+        "head_count": 32,
+        "head_count_kv": 8,
+        "vocab_size": 32768,
+    },
+    "qwen35-9b-runtime-v1": {
+        "block_count": 32,
+        "embedding_length": 4096,
+        "feed_forward_length": 12288,
+        "head_count": 16,
+        "head_count_kv": 4,
+        "vocab_size": 248320,
+    },
+}
+
+
+def check_runtime_layout(architecture: str, signature: tuple) -> str:
+    """Reject models the runtime has no compute backend for.
+
+    The runtime identifies a model from the packed header's dimensions, so this
+    reproduces that match. Failing here turns an opaque load-time
+    "unsupported model" error into an actionable pack-time message.
+    """
+    for layout, spec in sorted(RUNTIME_LAYOUTS.items()):
+        if signature == (spec["block_count"], spec["embedding_length"],
+                         spec["feed_forward_length"], spec["head_count"],
+                         spec["head_count_kv"], spec["vocab_size"]):
+            return layout
+    supported = ", ".join(sorted(RUNTIME_LAYOUTS))
+    raise ValueError(
+        f"no ProsperoAI runtime layout matches architecture {architecture!r} "
+        f"with header dimensions {signature}; supported layouts are: "
+        f"{supported}")
+
+
+
 def align(value: int, alignment: int) -> int:
     return (value + alignment - 1) // alignment * alignment
 
@@ -196,6 +241,18 @@ def pack(model: Path, output_path: Path, report_path: Path,
         if expected_sha256 and model_sha256 != expected_sha256:
             raise ValueError(f"model SHA-256 is {model_sha256}, expected "
                              f"{expected_sha256}")
+        try:
+            runtime_layout = check_runtime_layout(architecture, (
+                int(metadata[model_key + "block_count"]),
+                int(metadata[model_key + "embedding_length"]),
+                int(metadata[model_key + "feed_forward_length"]),
+                int(metadata[model_key + "attention.head_count"]),
+                int(metadata[model_key + "attention.head_count_kv"]),
+                vocab_size))
+        except KeyError as missing:
+            raise ValueError(
+                f"GGUF is missing {missing} needed to identify a runtime "
+                f"layout; it cannot be packed for ProsperoAI") from missing
         output_data_offset = align(HEADER_BYTES + len(tensors) * ENTRY_BYTES,
                                    DATA_ALIGNMENT)
         entries = []
@@ -252,6 +309,7 @@ def pack(model: Path, output_path: Path, report_path: Path,
         report = {
             "model": str(model),
             "architecture": architecture,
+            "runtime_layout": runtime_layout,
             "model_sha256": model_sha256,
             "gguf_version": version,
             "gguf_alignment": alignment,

@@ -82,8 +82,11 @@ def tensor_bytes(tensor):
 
 
 def parse(path: Path,
+          # The architecture's own prefix is kept via the trailing wildcard so
+          # pack_ps5_model can read block_count and friends for any GGUF and
+          # report a useful "no runtime layout" error instead of a KeyError.
           metadata_prefixes=("general.", "llama.", "mistral.", "qwen35.",
-                             "smollm3.")):
+                             "smollm3.", "")):
     handle = path.open("rb")
     data = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)
     reader = Reader(data)
