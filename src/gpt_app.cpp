@@ -816,6 +816,21 @@ void ProsperoAiApp::CopyStream(char *text, std::size_t capacity)
     stream_lock_.clear(std::memory_order_release);
 }
 
+void ProsperoAiApp::PublishExternalStatus(const char *text)
+{
+    while (external_status_lock_.test_and_set(std::memory_order_acquire))
+    {
+    }
+    std::snprintf(external_status_, sizeof(external_status_), "%s", text ? text : "");
+    external_status_lock_.clear(std::memory_order_release);
+}
+
+void ProsperoAiApp::SetExternalStatus(const char *text)
+{
+    if (active_)
+        active_->PublishExternalStatus(text);
+}
+
 void ProsperoAiApp::StreamCallback(const char *text)
 {
     if (active_)
@@ -1147,6 +1162,13 @@ void ProsperoAiApp::Poll()
             RefreshConversation();
         }
     }
+    while (external_status_lock_.test_and_set(std::memory_order_acquire))
+    {
+    }
+    char external_status_copy[96];
+    std::snprintf(external_status_copy, sizeof(external_status_copy), "%s", external_status_);
+    external_status_lock_.clear(std::memory_order_release);
+    SetStatus(external_status_copy);
 }
 
 void ProsperoAiApp::SetView(View view)

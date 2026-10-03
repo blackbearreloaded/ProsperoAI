@@ -23,6 +23,12 @@ public:
     void HandleInput(const gpt_input_event_t& event);
     void Shutdown();
 
+    // Thread-safe status line for background subsystems (e.g. http_server's
+    // network bootstrap) that are not on the RmlUi/main thread. Poll() reads
+    // this every tick and displays it via SetStatus() on the main thread;
+    // callers must not touch RmlUi directly from another thread.
+    static void SetExternalStatus(const char* text);
+
 private:
     static constexpr unsigned MessageCapacity = prospero_session::MessageCapacity;
     static constexpr unsigned SessionCapacity = prospero_session::CatalogCapacity;
@@ -51,6 +57,8 @@ private:
     bool pending_ = false;
     char pending_text_[1024]{};
     char status_text_[96] = "Ready";
+    char external_status_[96] = "Ready";
+    std::atomic_flag external_status_lock_ = ATOMIC_FLAG_INIT;
     char generation_timestamp_[9]{};
     char generation_response_[4096]{};
     gpt_runtime_stats_t generation_stats_{};
@@ -81,6 +89,7 @@ private:
     void FinishGeneration();
     void PublishStream(const char* text);
     void CopyStream(char* text, std::size_t capacity);
+    void PublishExternalStatus(const char* text);
     void RefreshAll();
     void RefreshConversation();
     void RefreshSettings();

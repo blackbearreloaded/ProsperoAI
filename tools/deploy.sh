@@ -60,7 +60,7 @@ if [[ $action == undeploy ]]; then
 
     python3 - "$host" "$port" "$user" "$password" "$title_id" <<'PY'
 from ftplib import FTP, error_perm
-from posixpath import join
+from posixpath import dirname, join
 import sys
 
 host, port, user, password, title_id = sys.argv[1:]
@@ -85,7 +85,22 @@ def validate_name(name):
         raise RuntimeError(f"unsafe FTP entry name: {name!r}")
 
 
+def exists(ftp, path):
+    # This server's DELE error text ("550 Cannot delete file") does not
+    # distinguish "does not exist" from "is a non-empty directory", so
+    # existence is checked by listing the parent directory instead of
+    # parsing the error message.
+    parent = dirname(path) or "/"
+    leaf = path.rsplit("/", 1)[-1]
+    try:
+        return any(name == leaf for name, _ in ftp.mlsd(parent))
+    except error_perm:
+        return False
+
+
 def remove_entry(ftp, path):
+    if not exists(ftp, path):
+        return False
     try:
         # ftpsrv implements DELE with POSIX remove(), which safely unlinks files,
         # symlinks, and empty directories before recursion is considered.
@@ -93,10 +108,7 @@ def remove_entry(ftp, path):
         print(f"Removed: {path}")
         return True
     except error_perm as error:
-        message = str(error)
-        if reply_code(error) == "550" and "No such file or directory" in message:
-            return False
-        if reply_code(error) != "550" or "Directory not empty" not in message:
+        if reply_code(error) != "550":
             raise
 
     for name in list_names(ftp, path):
@@ -209,17 +221,25 @@ def ensure_directory(ftp, path):
                 ftp.cwd(previous)
 
 
-def remove_if_present(ftp, path):
+def exists(ftp, path):
+    # This server's DELE error text ("550 Cannot delete file") does not
+    # distinguish "does not exist" from other failures, so existence is
+    # checked by listing the parent directory instead of the error message.
+    parent = dirname(path) or "/"
+    leaf = path.rsplit("/", 1)[-1]
     try:
-        # ftpsrv returns 226 for a successful DELE. FTP.sendcmd accepts every
-        # valid 2xx completion while ftplib.FTP.delete only permits 200/250.
-        ftp.sendcmd(f"DELE {path}")
-        return True
-    except error_perm as error:
-        text = str(error).lower()
-        if reply_code(error) == "550" and ("no such" in text or "not found" in text):
-            return False
-        raise
+        return any(name == leaf for name, _ in ftp.mlsd(parent))
+    except error_perm:
+        return False
+
+
+def remove_if_present(ftp, path):
+    if not exists(ftp, path):
+        return False
+    # ftpsrv returns 226 for a successful DELE. FTP.sendcmd accepts every
+    # valid 2xx completion while ftplib.FTP.delete only permits 200/250.
+    ftp.sendcmd(f"DELE {path}")
+    return True
 
 
 def upload_atomic(ftp, local, remote):
