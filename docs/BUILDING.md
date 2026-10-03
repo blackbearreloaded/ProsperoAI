@@ -63,6 +63,31 @@ Ubuntu/Debian example:
 sudo apt-get install -y clang-18 lld-18 cmake ninja-build ccache glslc spirv-headers glslang-tools python3-mako
 ```
 
+## Vulkan backend (work in progress)
+
+These steps need no console:
+
+```bash
+make deps             # pinned llama.cpp and Vulkan-Headers next to the SDK
+make llama-vulkan     # host llama-cli with the Vulkan backend, and a PS5 syntax check of ggml-vulkan
+```
+
+`tools/build-llama-vulkan.sh` writes its build to `build/llama-vulkan/`.
+
+Linking the Vulkan driver (RADV for the PS5, from the Mihawk Mesa checkout) needs two more host
+pieces. Debian 12 ships the SPIR-V translator only for LLVM 14/15, so build it for LLVM 18:
+
+```bash
+sudo apt-get install -y llvm-18-dev libclc-18-dev
+git clone --depth 1 --branch llvm_release_180 https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
+cmake -S SPIRV-LLVM-Translator -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm -DCMAKE_INSTALL_PREFIX=$HOME/.local/spirv-llvm-18
+cmake --build build && cmake --install build
+```
+
+RADV also needs Meson 1.4 or newer. Build it with `MESON`, `NINJA` and `PKG_CONFIG_PATH` pointing at
+those tools, as `make prepare` does in ProsperoEden.
+
 ## Deploying to a console
 
 The console needs a homebrew FTP server listening on `FTP_PORT` (the tested setup uses port 2120).
