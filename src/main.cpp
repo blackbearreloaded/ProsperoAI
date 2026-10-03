@@ -16,6 +16,7 @@
 #include "gpt_app.hpp"
 #include "gpt_ime.hpp"
 #include "gpt_input.hpp"
+#include "http_server.hpp"
 
 #include <cstdio>
 #include <cstddef>
@@ -768,7 +769,12 @@ bool RunApp()
         ime_ready = input_ready && gpt_ime_init();
         running = input_ready && ime_ready && app.Initialize(document);
         if (running)
+        {
             sceSystemServiceHideSplashScreen();
+            // Best-effort: the on-console UI runs regardless of whether the
+            // network/API server comes up.
+            prospero_http_server_start(11434);
+        }
     }
     else
     {

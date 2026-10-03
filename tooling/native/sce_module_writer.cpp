@@ -809,7 +809,10 @@ Bytes write_executable(const Image &image, std::span<const Stub> stubs, const Op
     const Bytes note = build_note();
 
     data_end = std::max(data_end, data_start + 8);
-    const std::uint64_t dynamic_base = align_up(data_end, 16);
+    // Must start on a fresh 16 KiB page: sharing the last .bss page lets the
+    // loader back that page with file bytes, so the tail of .bss (e.g. static
+    // init guards) is no longer zero at startup.
+    const std::uint64_t dynamic_base = align_up(data_end, kPage);
     const std::uint64_t string_address = dynamic_base;
     const std::uint64_t symbol_address = align_up(string_address + dynamic_strings.size(), 8);
     const std::uint64_t jump_address = align_up(symbol_address + dynamic_symbols.size(), 8);

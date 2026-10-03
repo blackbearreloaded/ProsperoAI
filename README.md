@@ -26,6 +26,12 @@ Demo available by clicking the image below.
 > ProsperoAI is an experimental project for validating generative-AI workloads
 > on the PS5 GPU. It is not production software.
 
+> [!NOTE]
+> **Work in progress on this branch.** The GPU backend is being migrated from the
+> AGC kernels to llama.cpp's Vulkan backend on RADV, and the network layer is being
+> moved onto the Payload SDK's sockets. The current build is not yet verified to boot
+> on a console. Build steps are in [docs/BUILDING.md](docs/BUILDING.md).
+
 ## Highlights
 
 - Runs supported models locally without an account, cloud API, or conversation upload.
