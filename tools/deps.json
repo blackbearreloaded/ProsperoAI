@@ -1,0 +1,54 @@
+{
+  "about": "Pinned inputs of the ProsperoAI build. `make deps` (tools/deps.py) fetches every missing item and leaves existing checkouts and files untouched. Paths are relative to this repository; ../ means next to it.",
+  "items": [
+    {
+      "name": "payload-sdk",
+      "about": "PS5 Payload SDK v0.42 (toolchain, libSceNet/libSceAgc import stubs, prospero-clang)",
+      "kind": "archive",
+      "url": "https://github.com/ps5-payload-dev/sdk/releases/download/v0.42/ps5-payload-sdk.zip",
+      "sha256": "8cfbc7cd5811e719eb4f0c47eea668d3dc7b40bc8ab11c4a5031d40c23ec02da",
+      "extract": ".deps/native/ps5-payload-sdk",
+      "creates": ".deps/native/ps5-payload-sdk/bin/prospero-clang"
+    },
+    {
+      "name": "llama-cpp",
+      "about": "llama.cpp at the revision the Vulkan backend migration is developed against (ggml-vulkan)",
+      "kind": "git",
+      "url": "https://github.com/ggml-org/llama.cpp.git",
+      "commit": "cb7934c52ca8710994b2ecc19775ebefcfdb8d01",
+      "path": ".deps/llama.cpp"
+    },
+    {
+      "name": "vulkan-headers",
+      "about": "Khronos Vulkan-Headers (newer than the host's packaged 1.3.239; ggml-vulkan needs VK_EXT_layer_settings)",
+      "kind": "git",
+      "url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
+      "commit": "c46850864f4661461b0f6cb9922c058ffea4915e",
+      "path": ".deps/Vulkan-Headers"
+    },
+    {
+      "name": "ps5-vulkan-tools",
+      "about": "Mihawk's PS5_Vulkan: the RADV build and link recipes",
+      "kind": "git",
+      "url": "https://github.com/mihawk-99/PS5_Vulkan.git",
+      "commit": "3f3ee69607013b345d2baa6d6a37c86745649a08",
+      "path": "../mihawk-vulkan-review"
+    },
+    {
+      "name": "ps5-mesa",
+      "about": "Mihawk's PS5 Mesa (RADV) source",
+      "kind": "git",
+      "url": "https://github.com/mihawk-99/PS5_Mesa.git",
+      "commit": "0b2d6d1a61d9bbf89cf8beb88a696144f67c61f8",
+      "path": "../mihawk-mesa-review"
+    },
+    {
+      "name": "ps5-payload-sdk-fork",
+      "about": "Mihawk's PS5 Payload SDK fork used to build RADV",
+      "kind": "git",
+      "url": "https://github.com/mihawk-99/PS5_PayloadSDK.git",
+      "commit": "95c08f27386fc698f6bbe21dde3030140a41d10b",
+      "path": "../mihawk-sdk-review"
+    }
+  ]
+}

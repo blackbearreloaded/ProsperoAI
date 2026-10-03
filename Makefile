@@ -49,7 +49,7 @@ APP_CXXFLAGS += -frtti
 APP_INCLUDE_PATHS += include vendor/ps5/sdl/include vendor/ps5/sdl/include/SDL2 vendor/ps5/rmlui/include
 APP_STATIC_ARCHIVES += vendor/ps5/sdl/lib/libSDL2.a vendor/ps5/rmlui/lib/librmlui.a vendor/ps5/freetype/lib/libfreetype.a vendor/ps5/sdk/lib/libunwind.a vendor/ps5/sdk/lib/libcxx.a vendor/ps5/sdk/lib/libcxxabi.a
 
-.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages deploy undeploy clean distclean help
+.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps deps-status llama-vulkan pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages deploy undeploy clean distclean help
 
 all: app
 build: app
@@ -77,6 +77,13 @@ deps: test-deps
 	@printf '%s\n' '==> [deps] Fetching declared native dependencies'
 	@bash tools/setup-native-dependencies.sh
 	@bash tools/setup-pacbrew-dependencies.sh --environment
+	@python3 -B tools/deps.py fetch
+
+deps-status:
+	@python3 -B tools/deps.py status
+
+llama-vulkan: deps ## Host llama-cli with the Vulkan backend, plus a PS5 syntax check of ggml-vulkan
+	@bash tools/build-llama-vulkan.sh
 
 pacbrew:
 	@printf '%s\n' '==> [pacbrew] Fetching the pinned prebuilt ports sysroot'
@@ -158,7 +165,9 @@ help:
 	  'make test-deps       Fetch verified host-only GoogleTest source' \
 	  'make test-unit       Run host-native GoogleTest application tests' \
 	  'make test-integration  Run host tooling integration tests' \
-	  'make deps            Fetch native dependencies into .deps/' \
+	  'make deps            Fetch native and pinned dependencies (tools/deps.json)' \
+	  'make deps-status     Show each pinned dependency and whether it matches its pin' \
+	  'make llama-vulkan    Build llama.cpp with Vulkan on the host and syntax-check it for the PS5' \
 	  'make pacbrew         Fetch the pinned PacBrew ports sysroot' \
 	  'make pacbrew-list    List PacBrew pkg-config module names' \
 	  'make assets-check    Validate the current presentation assets' \
