@@ -11,7 +11,8 @@
                 <span id="brand-name">ProsperoAI</span>
                 <span id="brand-version">v{{PROSPERO_AI_VERSION}}</span>
                 <button id="tab-conversation" class="top-tab active"><span>Conversation</span></button>
-                <button id="tab-workshop" class="top-tab"><span>Workshop</span></button>
+                <button id="tab-models" class="top-tab"><span>Models</span></button>
+                <button id="tab-settings" class="top-tab"><span>Settings</span></button>
                 <span id="model-pill"><span id="model-spinner">|</span><span id="model-state">SELECTED</span><span id="model-name" class="model-name">Model slot</span></span>
             </header>
 
@@ -56,8 +57,8 @@
                 </section>
             </main>
 
-            <main id="workshop-screen" class="hidden">
-                <span class="workshop-kicker">WORKSHOP</span>
+            <main id="settings-screen" class="hidden">
+                <span class="workshop-kicker">SETTINGS</span>
                 <span class="workshop-title">Shape the next answer</span>
                 <span class="workshop-copy">Use D-pad Left/Right to choose a text, image, or audio model. Status confirms when it is ready.</span>
 
@@ -94,6 +95,22 @@
                     <span class="runtime-row row-c">Execution <b>GPU resident</b></span>
                     <span id="runtime-note" class="runtime-note">Compatible models run locally on the PS5 GPU.<br/>Switching replaces the resident weights and<br/>starts a new private conversation.</span>
                 </aside>
+            </main>
+
+            <main id="models-screen" class="hidden">
+                <span class="workshop-kicker">MODELS</span>
+                <span class="workshop-title">Installed models</span>
+                <span id="models-summary" class="workshop-copy">Scanning PPSA99004/models/</span>
+                <span id="models-list-0" class="model-row focused">No models installed</span>
+                <span id="models-list-1" class="model-row hidden"></span>
+                <span id="models-list-2" class="model-row hidden"></span>
+                <span id="models-list-3" class="model-row hidden"></span>
+                <span id="models-list-4" class="model-row hidden"></span>
+                <span id="models-list-5" class="model-row hidden"></span>
+                <span id="models-list-6" class="model-row hidden"></span>
+                <span id="models-list-7" class="model-row hidden"></span>
+                <span id="models-hint" class="runtime-note">D-pad Up/Down choose a model. Triangle deletes it, Cross confirms.</span>
+                <span id="models-status" class="runtime-note"></span>
             </main>
 
             <footer id="controller-footer">

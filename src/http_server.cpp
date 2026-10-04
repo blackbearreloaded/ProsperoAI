@@ -335,51 +335,168 @@ void send_json(const NetApi &api, int sock, const char *json)
     send_status(api, sock, "200 OK", "application/json", json);
 }
 
-const char kChatPage[] =
-    "<!doctype html><html><head><meta charset=\"utf-8\">"
-    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-    "<title>ProsperoAI</title><style>"
-    "body{margin:0;background:#111;color:#eee;font-family:sans-serif;"
-    "display:flex;flex-direction:column;height:100vh}"
-    "#log{flex:1;overflow-y:auto;padding:12px}"
-    ".msg{margin:8px 0;padding:8px 12px;border-radius:10px;max-width:85%;"
-    "white-space:pre-wrap;word-wrap:break-word}"
-    ".user{background:#2a5;margin-left:auto}"
-    ".assistant{background:#333}"
-    "#bar{display:flex;padding:8px;gap:8px;border-top:1px solid #333}"
-    "#text{flex:1;padding:10px;border-radius:8px;border:none;font-size:16px}"
-    "#send{padding:10px 16px;border-radius:8px;border:none;background:#2a5;"
-    "color:#fff;font-size:16px}"
-    "</style></head><body>"
-    "<div id=\"log\"></div>"
-    "<div id=\"bar\"><input id=\"text\" placeholder=\"Message ProsperoAI\">"
-    "<button id=\"send\">Send</button></div>"
-    "<script>"
-    "const log=document.getElementById('log');"
-    "const text=document.getElementById('text');"
-    "const send=document.getElementById('send');"
-    "const history=[];"
-    "function bubble(role,content){"
-    "const d=document.createElement('div');"
-    "d.className='msg '+role;d.textContent=content;"
-    "log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}"
-    "async function submit(){"
-    "const value=text.value.trim();if(!value)return;"
-    "text.value='';history.push({role:'user',content:value});"
-    "bubble('user',value);"
-    "const reply=bubble('assistant','...');"
-    "try{"
-    "const response=await fetch('/api/chat',{method:'POST',"
-    "body:JSON.stringify({messages:history})});"
-    "const data=await response.json();"
-    "const content=(data.message&&data.message.content)||data.error||'(no response)';"
-    "reply.textContent=content;"
-    "history.push({role:'assistant',content:content});"
-    "}catch(error){reply.textContent='Error: '+error;}}"
-    "send.addEventListener('click',submit);"
-    "text.addEventListener('keydown',function(event){"
-    "if(event.key==='Enter')submit();});"
-    "</script></body></html>";
+const char kChatPage[] = R"HTML(<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ProsperoAI</title>
+<style>
+:root{--bg:#ebe5d8;--panel:#f7f3ea;--ink:#2a2420;--muted:#7a6f63;--accent:#c0462a;--line:#d8cfbf}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:sans-serif;display:flex;flex-direction:column;height:100vh}
+header{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+header b{color:var(--accent);margin-right:12px}
+.tab{padding:8px 14px;border:none;background:none;color:var(--muted);font-size:15px;border-bottom:3px solid transparent}
+.tab.active{color:var(--ink);border-bottom-color:var(--accent)}
+main{flex:1;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;overflow-y:auto;padding:12px;display:none}
+.screen.active{display:block}
+#log{display:flex;flex-direction:column;gap:8px}
+.msg{padding:8px 12px;border-radius:10px;max-width:85%;white-space:pre-wrap;word-wrap:break-word}
+.user{background:var(--accent);color:#fff;align-self:flex-end}
+.assistant{background:var(--panel);border:1px solid var(--line)}
+#bar{display:flex;gap:8px;padding:8px;background:var(--panel);border-top:1px solid var(--line)}
+#text{flex:1;padding:10px;border-radius:8px;border:1px solid var(--line);font-size:16px}
+button.primary{padding:10px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:15px}
+button.ghost{padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:14px}
+.row{display:flex;align-items:center;gap:10px;padding:12px;margin:8px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.row.focused{border-color:var(--accent)}
+.row .name{flex:1;font-weight:600}
+.row .meta{color:var(--muted);font-size:13px}
+.badge{background:var(--accent);color:#fff;border-radius:6px;padding:2px 6px;font-size:12px}
+.field{margin:10px 0}
+.field label{display:block;color:var(--muted);font-size:13px;margin-bottom:4px}
+.field select,.field input{padding:8px;border-radius:8px;border:1px solid var(--line);font-size:15px;width:100%;box-sizing:border-box}
+.status{color:var(--muted);font-size:13px;padding:6px 12px}
+</style></head><body>
+<header><b>ProsperoAI</b>
+<button class="tab active" data-tab="conv">Conversation</button>
+<button class="tab" data-tab="models">Models</button>
+<button class="tab" data-tab="settings">Settings</button></header>
+<main>
+<section id="conv" class="screen active"><div id="log"></div></section>
+<section id="models" class="screen"><div id="model-list"></div><div id="models-status" class="status"></div></section>
+<section id="settings" class="screen">
+<div class="field"><label for="active">Active model</label><select id="active"></select></div>
+<div class="field"><label for="tokens">Output limit (tokens)</label><input id="tokens" type="number" min="16" max="2048" value="64"></div>
+<div class="field"><label for="style">Response style</label><select id="style"><option value="0">Balanced</option><option value="1">Concise</option><option value="2">Detailed</option></select></div>
+<p class="meta">Output limit and style are kept in this browser. The active model is stored on the PS5.</p>
+</section>
+</main>
+<div id="bar"><input id="text" placeholder="Message ProsperoAI"><button id="send" class="primary">Send</button></div>
+<script>
+const $=id=>document.getElementById(id);
+const log=$('log'),text=$('text'),send=$('send'),history=[];
+const saved=JSON.parse(localStorage.getItem('prospero-settings')||'{}');
+if(saved.tokens)$('tokens').value=saved.tokens;
+if(saved.style!==undefined)$('style').value=saved.style;
+function saveSettings(){localStorage.setItem('prospero-settings',JSON.stringify({tokens:$('tokens').value,style:$('style').value}));}
+$('tokens').addEventListener('change',saveSettings);$('style').addEventListener('change',saveSettings);
+function show(tab){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===tab));
+  if(tab==='models'||tab==='settings')loadModels();
+}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>show(b.dataset.tab)));
+function bubble(role,content){const d=document.createElement('div');d.className='msg '+role;d.textContent=content;log.appendChild(d);log.scrollTop=log.scrollHeight;return d;}
+async function submit(){
+  const value=text.value.trim();if(!value)return;
+  text.value='';history.push({role:'user',content:value});bubble('user',value);
+  const reply=bubble('assistant','...');
+  try{
+    const response=await fetch('/api/chat',{method:'POST',body:JSON.stringify({messages:history})});
+    const data=await response.json();
+    const content=(data.message&&data.message.content)||data.error||'(no response)';
+    reply.textContent=content;history.push({role:'assistant',content:content});
+  }catch(error){reply.textContent='Error: '+error;}
+}
+send.addEventListener('click',submit);
+text.addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
+async function loadModels(){
+  const response=await fetch('/api/models');const data=await response.json();
+  const list=$('model-list'),active=$('active');
+  list.innerHTML='';active.innerHTML='';
+  if(!data.models.length){list.textContent='No models installed. Copy model folders to PPSA99004/models/.';}
+  data.models.forEach(m=>{
+    const row=document.createElement('div');row.className='row'+(m.active?' focused':'');
+    row.innerHTML='<div class="name"></div>';
+    row.querySelector('.name').textContent=m.id;
+    const meta=document.createElement('div');meta.className='meta';meta.textContent=m.purpose+(m.active?' · active':'');
+    row.firstChild.appendChild(meta);
+    if(!m.active){const del=document.createElement('button');del.className='ghost';del.textContent='Delete';
+      del.addEventListener('click',()=>removeModel(m.index,m.id));row.appendChild(del);}
+    else{const b=document.createElement('span');b.className='badge';b.textContent='ACTIVE';row.appendChild(b);}
+    list.appendChild(row);
+    const opt=document.createElement('option');opt.value=m.index;opt.textContent=m.id;if(m.active)opt.selected=true;active.appendChild(opt);
+  });
+}
+async function removeModel(index,id){
+  if(!confirm('Delete '+id+'?'))return;
+  const response=await fetch('/api/models/delete',{method:'POST',body:JSON.stringify({index:index})});
+  const data=await response.json();
+  $('models-status').textContent=data.ok?'Deleted '+id:(data.error||'Delete failed');
+  loadModels();
+}
+$('active').addEventListener('change',async e=>{
+  const response=await fetch('/api/models/select',{method:'POST',body:JSON.stringify({index:Number(e.target.value)})});
+  const data=await response.json();$('models-status').textContent=data.ok?'Active model changed':(data.error||'Select failed');
+  loadModels();
+});
+</script></body></html>)HTML";
+
+bool json_find_index(const char *body, unsigned *out)
+{
+    const char *at = json_value_start(body, "index");
+    if (at == nullptr || *at < '0' || *at > '9')
+        return false;
+    *out = static_cast<unsigned>(std::strtoul(at, nullptr, 10));
+    return true;
+}
+
+void handle_get_models(const NetApi &api, int sock)
+{
+    char body[4096];
+    const unsigned selected = gpt_runtime_selected_model();
+    std::snprintf(body, sizeof(body), "{\"selected\":%u,\"models\":[", selected);
+    const unsigned count = gpt_runtime_model_count();
+    for (unsigned i = 0; i < count; ++i)
+    {
+        char entry[256];
+        std::snprintf(entry, sizeof(entry),
+                      "%s{\"index\":%u,\"id\":\"%s\",\"purpose\":\"%s\",\"active\":%s}",
+                      i == 0 ? "" : ",", i, gpt_runtime_model_id(i), gpt_runtime_model_purpose(i),
+                      i == selected ? "true" : "false");
+        std::strncat(body, entry, sizeof(body) - std::strlen(body) - 1);
+    }
+    std::strncat(body, "]}", sizeof(body) - std::strlen(body) - 1);
+    send_json(api, sock, body);
+}
+
+void handle_delete_model(const NetApi &api, int sock, const char *request_body)
+{
+    unsigned index = 0;
+    if (!json_find_index(request_body, &index))
+    {
+        send_status(api, sock, "400 Bad Request", "application/json", "{\"ok\":false,\"error\":\"missing index\"}");
+        return;
+    }
+    if (!gpt_runtime_delete_model(index))
+    {
+        send_status(api, sock, "409 Conflict", "application/json",
+                    "{\"ok\":false,\"error\":\"cannot delete the active or an unknown model\"}");
+        return;
+    }
+    send_json(api, sock, "{\"ok\":true}");
+}
+
+void handle_select_model(const NetApi &api, int sock, const char *request_body)
+{
+    unsigned index = 0;
+    if (!json_find_index(request_body, &index) || !gpt_runtime_select_model(index))
+    {
+        send_status(api, sock, "400 Bad Request", "application/json",
+                    "{\"ok\":false,\"error\":\"unknown model\"}");
+        return;
+    }
+    send_json(api, sock, "{\"ok\":true}");
+}
 
 void handle_get_tags(const NetApi &api, int sock)
 {
@@ -525,6 +642,12 @@ void handle_connection(const NetApi &api, int sock)
         send_status(api, sock, "200 OK", "text/html; charset=utf-8", kChatPage);
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/tags") == 0)
         handle_get_tags(api, sock);
+    else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models") == 0)
+        handle_get_models(api, sock);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/delete") == 0)
+        handle_delete_model(api, sock, body);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/select") == 0)
+        handle_select_model(api, sock, body);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/generate") == 0)
         handle_generate(api, sock, body);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/chat") == 0)

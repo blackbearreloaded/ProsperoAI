@@ -1175,10 +1175,49 @@ void ProsperoAiApp::SetView(View view)
 {
     view_ = view;
     SetVisible(document_, "conversation-screen", view_ == View::Conversation);
-    SetVisible(document_, "workshop-screen", view_ == View::Workshop);
+    SetVisible(document_, "models-screen", view_ == View::Models);
+    SetVisible(document_, "settings-screen", view_ == View::Settings);
     SetClass(document_, "tab-conversation", "active", view_ == View::Conversation);
-    SetClass(document_, "tab-workshop", "active", view_ == View::Workshop);
+    SetClass(document_, "tab-models", "active", view_ == View::Models);
+    SetClass(document_, "tab-settings", "active", view_ == View::Settings);
+    models_delete_armed_ = false;
     RefreshSettings();
+    if (view_ == View::Models)
+        RefreshModels();
+}
+
+void ProsperoAiApp::RefreshModels()
+{
+    constexpr unsigned kModelRows = 8;
+    const unsigned count = gpt_runtime_model_count();
+    if (count == 0)
+        models_selection_ = 0;
+    else if (models_selection_ >= count)
+        models_selection_ = count - 1;
+    for (unsigned row = 0; row < kModelRows; ++row)
+    {
+        char id[24];
+        std::snprintf(id, sizeof(id), "models-list-%u", row);
+        if (row < count)
+        {
+            char line[200];
+            std::snprintf(line, sizeof(line), "%s%s  |  %s%s",
+                          row == models_selection_ ? "> " : "  ", gpt_runtime_model_name(row),
+                          PurposeLabel(gpt_runtime_model_purpose(row)),
+                          row == gpt_runtime_selected_model() ? "  |  ACTIVE" : "");
+            SetText(document_, id, line);
+            SetClass(document_, id, "focused", row == models_selection_);
+            SetVisible(document_, id, true);
+        }
+        else
+            SetVisible(document_, id, row == 0 && count == 0);
+    }
+    if (count == 0)
+        SetText(document_, "models-list-0", "No models installed");
+    char summary[96];
+    std::snprintf(summary, sizeof(summary), "%u installed | PPSA99004/models/", count);
+    SetText(document_, "models-summary", summary);
+    SetText(document_, "models-status", models_delete_armed_ ? "Press Cross to delete the selected model" : "");
 }
 
 void ProsperoAiApp::ChangeSetting(int direction)
@@ -1216,7 +1255,7 @@ void ProsperoAiApp::HandleInput(const gpt_input_event_t &event)
         return;
     if (event.key == GPT_INPUT_OPTIONS)
     {
-        SetView(view_ == View::Conversation ? View::Workshop : View::Conversation);
+        SetView(view_ == View::Conversation ? View::Settings : View::Conversation);
         return;
     }
     if (event.key == GPT_INPUT_L1)
@@ -1226,7 +1265,7 @@ void ProsperoAiApp::HandleInput(const gpt_input_event_t &event)
     }
     if (event.key == GPT_INPUT_R1)
     {
-        SetView(View::Workshop);
+        SetView(View::Models);
         return;
     }
     if (view_ == View::Conversation)
@@ -1328,6 +1367,37 @@ void ProsperoAiApp::HandleInput(const gpt_input_event_t &event)
         }
         else if (event.key == GPT_INPUT_CROSS)
             OpenKeyboard();
+        return;
+    }
+    if (view_ == View::Models)
+    {
+        if (event.key == GPT_INPUT_CIRCLE)
+        {
+            if (models_delete_armed_)
+                models_delete_armed_ = false;
+            else
+                SetView(View::Conversation);
+        }
+        else if (event.key == GPT_INPUT_UP || event.key == GPT_INPUT_DOWN)
+        {
+            const unsigned count = gpt_runtime_model_count();
+            if (count)
+                models_selection_ = event.key == GPT_INPUT_UP
+                                        ? (models_selection_ + count - 1) % count
+                                        : (models_selection_ + 1) % count;
+            models_delete_armed_ = false;
+        }
+        else if (event.key == GPT_INPUT_TRIANGLE)
+            models_delete_armed_ = gpt_runtime_model_count() > 0;
+        else if (event.key == GPT_INPUT_CROSS && models_delete_armed_)
+        {
+            models_delete_armed_ = false;
+            if (gpt_runtime_delete_model(models_selection_))
+                SetStatus("Model deleted");
+            else
+                SetStatus("Cannot delete the active model; choose another first");
+        }
+        RefreshModels();
         return;
     }
     if (event.key == GPT_INPUT_CIRCLE)
