@@ -70,23 +70,36 @@ These steps need no console:
 ```bash
 make deps             # pinned llama.cpp and Vulkan-Headers next to the SDK
 make llama-vulkan     # host llama-cli with the Vulkan backend, and a PS5 syntax check of ggml-vulkan
+make radv             # RADV for the PS5 (see below for the host tools)
 ```
 
 `tools/build-llama-vulkan.sh` writes its build to `build/llama-vulkan/`.
 
-Linking the Vulkan driver (RADV for the PS5, from the Mihawk Mesa checkout) needs two more host
-pieces. Debian 12 ships the SPIR-V translator only for LLVM 14/15, so build it for LLVM 19 (the version RADV links against):
+Building RADV for the PS5 (`make radv`) uses Mihawk's pinned recipe in `../mihawk-vulkan-review`
+and needs these host tools, all built into `~/.local` (no system packages are changed beyond the
+apt packages listed):
 
 ```bash
-sudo apt-get install -y llvm-19-dev libclc-19-dev
-git clone --depth 1 --branch llvm_release_190 https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git
-cmake -S SPIRV-LLVM-Translator -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-    -DLLVM_DIR=/usr/lib/llvm-19/lib/cmake/llvm -DCMAKE_INSTALL_PREFIX=$HOME/.local/spirv-llvm-19
-cmake --build build && cmake --install build
+sudo apt-get install -y llvm-19-dev libclc-19-dev libclang-19-dev libclang-cpp19-dev clang-19 \
+    libllvmspirvlib-19-dev ninja-build ccache
+python3 -m venv ~/.venvs/meson && ~/.venvs/meson/bin/pip install 'meson>=1.4' ninja
 ```
 
-RADV also needs Meson 1.4 or newer. Build it with `MESON`, `NINJA` and `PKG_CONFIG_PATH` pointing at
-those tools, as `make prepare` does in ProsperoEden.
+Three components are built from source because Debian 12 does not ship them at the versions RADV
+requires (LLVMSPIRVLib 19.1, SPIRV-Tools 2024.1+, glslang 12.2+):
+
+- `SPIRV-LLVM-Translator` branch `llvm_release_190` into `~/.local/spirv-llvm-19`
+- `SPIRV-Tools` tag `v2024.4` (with `python3 utils/git-sync-deps`) into `~/.local/spirv-tools-2024`
+- `glslang` tag `12.2.0` (with `python3 update_glslang_sources.py`, then `-DENABLE_GLSLANG_BINARIES=ON`)
+  into `~/.local/glslang-12.2`. Meson reads the first line of `glslangValidator --version`, so
+  `~/.local/glslang-12.2/bin/glslangValidator` is a small wrapper that prints only that line.
+
+The clang static libraries (`clangBasic`, `clangAST`, ...) are built from the LLVM 19.1.7 sources
+(`clang` with `-DLLVM_DIR=/usr/lib/llvm-19/lib/cmake/llvm` and tests off) into `~/.local/clang-19`.
+
+`make radv` checks the pinned Mihawk checkouts, sets the paths above and runs Mihawk's
+`build-radv.sh release`. The output is
+`../mihawk-vulkan-review/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a`.
 
 ## Deploying to a console
 
