@@ -49,11 +49,6 @@ void log_line(const char *text)
     if (std::strncmp(text, "NET:", 4) == 0)
         std::snprintf(last_net_detail, sizeof(last_net_detail), "%s", text);
     ProsperoAiApp::SetExternalStatus(text);
-    std::FILE *file = std::fopen("/download0/prosperoai-net-debug.txt", "a");
-    if (file == nullptr)
-        return;
-    std::fprintf(file, "%s\n", text);
-    std::fclose(file);
 }
 
 void log_result(const char *step, int result)

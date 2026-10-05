@@ -88,6 +88,7 @@ extern "C"
     int sceKernelDebugOutText(int channel, const char *text);
 }
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <sys/dirent.h>
@@ -455,6 +456,24 @@ void sort_models()
         }
 }
 
+// The model list is read by the UI thread and by the HTTP thread. Short list reads and
+// deletes take this lock; select_model does not, because it loads a backend for a long time.
+std::atomic_flag models_lock = ATOMIC_FLAG_INIT;
+
+struct ModelsGuard
+{
+    ModelsGuard()
+    {
+        while (models_lock.test_and_set(std::memory_order_acquire))
+        {
+        }
+    }
+    ~ModelsGuard()
+    {
+        models_lock.clear(std::memory_order_release);
+    }
+};
+
 void load_models()
 {
     if (models_loaded)
@@ -541,24 +560,28 @@ const char *gpt_runtime_name()
 
 unsigned gpt_runtime_model_count()
 {
+    ModelsGuard guard;
     load_models();
     return model_count;
 }
 
 unsigned gpt_runtime_selected_model()
 {
+    ModelsGuard guard;
     load_models();
     return selected_model;
 }
 
 const char *gpt_runtime_model_id(unsigned index)
 {
+    ModelsGuard guard;
     load_models();
     return index < model_count ? models[index].id : "";
 }
 
 bool gpt_runtime_delete_model(unsigned index)
 {
+    ModelsGuard guard;
     load_models();
     if (index >= model_count || index == selected_model)
         return false;
@@ -576,12 +599,14 @@ bool gpt_runtime_delete_model(unsigned index)
 
 const char *gpt_runtime_model_name(unsigned index)
 {
+    ModelsGuard guard;
     load_models();
     return index < model_count ? models[index].name : "No models found";
 }
 
 const char *gpt_runtime_model_purpose(unsigned index)
 {
+    ModelsGuard guard;
     load_models();
     return index < model_count ? models[index].purpose : "unknown";
 }
