@@ -32,7 +32,7 @@
       "kind": "git",
       "url": "https://github.com/mihawk-99/PS5_Vulkan.git",
       "commit": "3f3ee69607013b345d2baa6d6a37c86745649a08",
-      "path": "../mihawk-vulkan-review"
+      "path": ".deps/mihawk-vulkan-review"
     },
     {
       "name": "ps5-mesa",
@@ -40,7 +40,7 @@
       "kind": "git",
       "url": "https://github.com/mihawk-99/PS5_Mesa.git",
       "commit": "0b2d6d1a61d9bbf89cf8beb88a696144f67c61f8",
-      "path": "../mihawk-mesa-review"
+      "path": ".deps/mihawk-mesa-review"
     },
     {
       "name": "ps5-payload-sdk-fork",
@@ -48,7 +48,7 @@
       "kind": "git",
       "url": "https://github.com/mihawk-99/PS5_PayloadSDK.git",
       "commit": "95c08f27386fc698f6bbe21dde3030140a41d10b",
-      "path": "../mihawk-sdk-review"
+      "path": ".deps/mihawk-sdk-review"
     }
   ]
 }

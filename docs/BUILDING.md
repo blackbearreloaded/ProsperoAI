@@ -44,9 +44,9 @@ Inside this repository, in `.deps/`:
 - **Khronos Vulkan-Headers** at the pinned commit (newer than most distributions ship; ggml-vulkan
   needs `VK_EXT_layer_settings`).
 
-Next to this repository (`../`), as git checkouts:
+Inside this repository (`.deps/`), as git checkouts:
 
-- **Mihawk's PS5_Vulkan, PS5_Mesa and PS5_PayloadSDK** (`../mihawk-*-review`): the RADV driver and
+- **Mihawk's PS5_Vulkan, PS5_Mesa and PS5_PayloadSDK** (`.deps/mihawk-*-review`): the RADV driver and
   its build recipe. The same pins are used by ProsperoEden.
 
 The clean-room runtime shim (`runtime/libc.prx`) is generated from `tooling/native/` by `make libc`.
@@ -75,7 +75,7 @@ make radv             # RADV for the PS5 (see below for the host tools)
 
 `tools/build-llama-vulkan.sh` writes its build to `build/llama-vulkan/`.
 
-Building RADV for the PS5 (`make radv`) uses Mihawk's pinned recipe in `../mihawk-vulkan-review`
+Building RADV for the PS5 (`make radv`) uses Mihawk's pinned recipe in `.deps/mihawk-vulkan-review`
 and needs these host tools, all built into `~/.local` (no system packages are changed beyond the
 apt packages listed):
 
@@ -99,7 +99,7 @@ The clang static libraries (`clangBasic`, `clangAST`, ...) are built from the LL
 
 `make radv` checks the pinned Mihawk checkouts, sets the paths above and runs Mihawk's
 `build-radv.sh release`. The output is
-`../mihawk-vulkan-review/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a`.
+`.deps/mihawk-vulkan-review/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a`.
 
 ## Deploying to a console
 

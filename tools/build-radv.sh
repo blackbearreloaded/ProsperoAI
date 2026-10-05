@@ -8,7 +8,7 @@
 set -euo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-refs=$(dirname "$root")
+refs="$root/.deps"
 vulkan="$refs/mihawk-vulkan-review"
 mesa="$refs/mihawk-mesa-review"
 sdk_fork="$refs/mihawk-sdk-review"
