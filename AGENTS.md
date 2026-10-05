@@ -34,6 +34,12 @@ port 2323), process list, launch and screenshots.
   inconsistent. The UI then reports "The data is corrupted". Remove the registration in the
   console UI first, then install the new package.
 - Deleting files from `/data/homebrew` does not remove the registration.
+- Working way to replace a test title without a reboot (confirmed by the user):
+  1. Upload the new package (`ps5ctl.py ftp put NEW.ffpfsc /data/homebrew/NEW.ffpfsc`).
+  2. In the console UI, open the title, press Options and choose Delete.
+  3. Send shadowmountplus again (`ps5ctl.py payload /data/payloads/shadowmountplus.elf`).
+     It rescans `/data/homebrew` and registers the new package.
+  Step 2 is the one that removes the stale record. Shadowmount alone does not.
 - Icons and metadata come from `sce_sys/`. Use this project's `sce_sys`, not another project's.
 
 ## Git and attribution
