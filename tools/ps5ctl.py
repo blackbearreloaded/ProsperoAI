@@ -10,6 +10,9 @@
   ps5ctl.py title rm TITLE_ID [--yes]   delete /data/homebrew/TITLE_ID* entries
   ps5ctl.py klog [--seconds N]          read the klog stream (port 3232) into stdout
   ps5ctl.py shot OUT.jpg                save one frame from an active Remote Play session
+  ps5ctl.py shell CMD [--yes]           run one command in shsrv (port 2323); needs shsrv running
+  ps5ctl.py ps                          list processes through shsrv
+  ps5ctl.py launch TITLE_ID [--yes]     start a title through shsrv (launch)
 
 Hosts and ports come from the environment: PS5_HOST (10.0.0.127), PS5_PAYLOAD_PORT (9021),
 PS5_FTP_PORT (2120), PS5_KLOG_PORT (3232), P5_MANAGER (http://10.0.0.187:3001),
@@ -32,6 +35,8 @@ HOST = os.environ.get("PS5_HOST", "10.0.0.127")
 PAYLOAD_PORT = int(os.environ.get("PS5_PAYLOAD_PORT", "9021"))
 FTP_PORT = int(os.environ.get("PS5_FTP_PORT", "2120"))
 KLOG_PORT = int(os.environ.get("PS5_KLOG_PORT", "3232"))
+SHSRV_PORT = int(os.environ.get("PS5_SHSRV_PORT", "2323"))
+SHSRV_PROMPT = b"/$ "
 MANAGER = os.environ.get("P5_MANAGER", "http://10.0.0.187:3001").rstrip("/")
 SESSION = os.environ.get("P5_SESSION", "")
 HOMEBREW = "/data/homebrew"
@@ -182,6 +187,59 @@ def cmd_shot(args):
     return 0
 
 
+def shsrv(command, timeout=8.0):
+    """Run one command in shsrv and return its output without the banner and prompt.
+
+    shsrv is an interactive shell: the banner and prompt arrive first, then the output of the
+    command, then the prompt again. Output is read until the prompt returns or the timeout ends.
+    """
+    with socket.create_connection((HOST, SHSRV_PORT), timeout=5) as sock:
+        buf = b""
+        end = time.monotonic() + timeout
+        while SHSRV_PROMPT not in buf and time.monotonic() < end:
+            try:
+                buf += sock.recv(4096)
+            except socket.timeout:
+                break
+        buf = b""
+        sock.sendall(command.encode() + b"\n")
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            try:
+                chunk = sock.recv(4096)
+            except socket.timeout:
+                break
+            if not chunk:
+                break
+            buf += chunk
+            if buf.rstrip().endswith(SHSRV_PROMPT.rstrip()):
+                break
+    text = buf.decode(errors="replace").replace("\r\n", "\n")
+    if text.endswith("/$ "):
+        text = text[:-3]
+    return text.rstrip() + "\n"
+
+
+def cmd_shell(args):
+    if not args.cmd:
+        raise SystemExit("empty command")
+    if any(word in args.cmd.split() for word in ("rm", "rmdir", "kill", "launch", "mv", "pkg_install")):
+        require_yes(args)
+    sys.stdout.write(shsrv(args.cmd))
+    return 0
+
+
+def cmd_ps(_args):
+    sys.stdout.write(shsrv("ps"))
+    return 0
+
+
+def cmd_launch(args):
+    require_yes(args)
+    sys.stdout.write(shsrv(f"launch {args.title_id}"))
+    return 0
+
+
 def require_yes(args):
     if not getattr(args, "yes", False):
         raise SystemExit("this deletes data on the console; repeat with --yes to confirm")
@@ -215,9 +273,17 @@ def main(argv=None):
     k.add_argument("--seconds", type=float, default=30)
     s = sub.add_parser("shot")
     s.add_argument("out")
+    sh = sub.add_parser("shell")
+    sh.add_argument("cmd")
+    sh.add_argument("--yes", action="store_true")
+    sub.add_parser("ps")
+    la = sub.add_parser("launch")
+    la.add_argument("title_id")
+    la.add_argument("--yes", action="store_true")
     args = parser.parse_args(argv)
     handlers = {"status": cmd_status, "payload": cmd_payload, "ftp": cmd_ftp,
-                "title": cmd_title, "klog": cmd_klog, "shot": cmd_shot}
+                "title": cmd_title, "klog": cmd_klog, "shot": cmd_shot,
+                "shell": cmd_shell, "ps": cmd_ps, "launch": cmd_launch}
     return handlers[args.command](args)
 
 
