@@ -240,6 +240,67 @@ def cmd_launch(args):
     return 0
 
 
+AGENT_PORT = int(os.environ.get("PS5_AGENT_PORT", "9111"))
+SHADOW_PORT = int(os.environ.get("PS5_SHADOW_PORT", "10101"))
+
+
+def agent_cmd(command):
+    """One command to the resident ps5vkctl control payload (port 9111); returns its one-line reply."""
+    with socket.create_connection((HOST, AGENT_PORT), timeout=30) as sock:
+        sock.sendall(command.encode() + b"\n")
+        out = b""
+        try:
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                out += chunk
+        except socket.timeout:
+            pass
+    return out.decode(errors="replace").strip()
+
+
+def cmd_agent(args):
+    print(agent_cmd(" ".join(args.words)))
+    return 0
+
+
+def cmd_cat(args):
+    ftp = ftp_connect()
+    try:
+        out = []
+        ftp.retrbinary(f"RETR {args.remote}", out.append)
+        sys.stdout.write(b"".join(out).decode(errors="replace")[-args.tail:] if args.tail else b"".join(out).decode(errors="replace"))
+    finally:
+        ftp.quit()
+    return 0
+
+
+def shadow_api(method, route, body=None):
+    """ShadowMountPlus HTTP API (api_bind_address/api_port in /data/shadowmount/config.ini)."""
+    import json
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(f"http://{HOST}:{SHADOW_PORT}/api/v1{route}", data=data, method=method,
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status, r.read().decode(errors="replace")
+    except urllib.error.HTTPError as error:
+        return error.code, error.read().decode(errors="replace")
+
+
+def cmd_shadow(args):
+    if args.action == "info":
+        code, text = shadow_api("POST", "/games/info", {"title_id": args.title_id})
+    elif args.action == "version":
+        code, text = shadow_api("GET", "/version")
+    else:
+        require_yes(args)
+        code, text = shadow_api("POST", "/games/delete", {"title_id": args.title_id, "confirm": True})
+    print(code, text.strip())
+    return 0 if code < 400 else 1
+
+
 def require_yes(args):
     if not getattr(args, "yes", False):
         raise SystemExit("this deletes data on the console; repeat with --yes to confirm")
@@ -280,8 +341,17 @@ def main(argv=None):
     la = sub.add_parser("launch")
     la.add_argument("title_id")
     la.add_argument("--yes", action="store_true")
+    ag = sub.add_parser("agent", help="send one command to the ps5vkctl control payload on port 9111")
+    ag.add_argument("words", nargs="+")
+    ct = sub.add_parser("cat", help="print a file from the console (FTP)")
+    ct.add_argument("remote")
+    ct.add_argument("--tail", type=int, default=0, help="only the last N characters")
+    sh2 = sub.add_parser("shadow", help="ShadowMountPlus API: info, version, delete (needs --yes)")
+    sh2.add_argument("action", choices=["info", "version", "delete"])
+    sh2.add_argument("title_id", nargs="?", default="")
+    sh2.add_argument("--yes", action="store_true")
     args = parser.parse_args(argv)
-    handlers = {"status": cmd_status, "payload": cmd_payload, "ftp": cmd_ftp,
+    handlers = {"agent": cmd_agent, "cat": cmd_cat, "shadow": cmd_shadow, "status": cmd_status, "payload": cmd_payload, "ftp": cmd_ftp,
                 "title": cmd_title, "klog": cmd_klog, "shot": cmd_shot,
                 "shell": cmd_shell, "ps": cmd_ps, "launch": cmd_launch}
     return handlers[args.command](args)

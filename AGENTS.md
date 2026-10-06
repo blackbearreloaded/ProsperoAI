@@ -46,3 +46,26 @@ port 2323), process list, launch and screenshots.
 
 - Commit only on the WIP branch unless the user asks otherwise. Push only when asked.
 - Do not add `Co-Authored-By` or "Generated with Claude Code" lines to commits or PR text.
+
+
+## Debugging a title that does not start (lessons from PPSA99014-19)
+
+Read-only checks first, in this order:
+
+1. `agent status` / `agent procs` (control payload, port 9111): is the title running, and is the payload resident? `agent launch <ID>` returns the call-by-call result.
+2. `shadow info <ID>` (ShadowMountPlus API, port 10101): is the title registered with shadowmount? 404 means it is not.
+3. `cat /data/ps5vkctl.log --tail 2000` (payload log, one line per call) and `cat /data/shadowmount/debug.log --tail 2000` (install log).
+4. `cat /download0/<marker>.txt` for markers the title writes itself. Use `/download0`, not `/data`: a title did not write to `/data`.
+5. klog (`klog --seconds 60`, port 3232) lines with `[PS5VK]` prefix, as Mihawk's title writes them. An empty or banner-only capture means klog is not streaming.
+
+Launch result codes seen on this console (FW 12.70):
+- `0x0000a018`, `0x00008018`, `0x0000e018`, `0x0000c018`: launched; the title may still crash right after.
+- `0x80940031` (Resource temporarily unavailable): title is not ready or not registered (or another app is running). Check `shadow info`.
+- `0x80a40010`: not enough free space. Free space in Settings > Storage, or delete an unfinished `.part` download.
+- Title gone right after launch with `procs` empty and the sentinel toast `crashed before KStuff was paused`: the crash is before `main` (loader, relocations, TLS, init).
+
+Working rules that came out of this:
+- One title ID per test slot; do not create a new ID per attempt (each one leaves a registration record).
+- Replace a package only after deleting the old registration in the UI (Options > Delete) or, for shadowmount-only titles, through `shadow delete <ID> --yes`.
+- Check the minimal case before the feature case: a title that only writes a marker from a constructor separates a link or packaging problem from a Vulkan problem.
+- Compare the link with the one that works (Mihawk: `tools/radv-link.sh`, linker script `tooling/psbc/ps5-pie-unwind.ld`, `-ffunction-sections`, CRT from `tooling/native`); our own link used a different script and no platform wrappers.
