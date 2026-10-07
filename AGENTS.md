@@ -3,6 +3,33 @@
 ProsperoAI is a PS5 homebrew app (title `PPSA99004`) that runs llama.cpp on the console. The
 branch `wip/llama-vulkan-migration` is work in progress and is not verified to boot.
 
+## Read order
+
+Read in this order and stop as soon as you have what you need:
+
+1. This file. Stable: the build commands, console talking points and debugging order below
+   change only when the workflow itself changes.
+2. If the task touches the RADV/Vulkan backend migration: `docs/VK_PLAN.md` (static — gates,
+   invariants, what must be proved) once per session, then `docs/VK_ACTIVE.md` (volatile —
+   current step, blockers, last verified runs) last, right before starting work.
+3. On demand only: `docs/VK_LOG.md` (dated run records — don't read it end to end to answer a
+   status question; VK_ACTIVE.md's summary is enough), `docs/BUILDING.md`, and
+   `.deps/mihawk-vulkan-review/AGENTS.md` plus its `docs/` (the reference project the RADV link
+   recipe and this read-order convention are drawn from).
+
+### Volatility contract
+
+| File | Rule |
+| --- | --- |
+| This file | Stable. Edit when the workflow itself changes. |
+| `docs/VK_PLAN.md` | Static. Edit only when a gate or an invariant changes; never record progress here. |
+| `docs/VK_ACTIVE.md` | Volatile. Rewrite in place; keep it short. |
+| `docs/VK_LOG.md` | Append-only. Add dated entries at the end; never rewrite an existing one. |
+
+Your task is whatever the user's prompt asks. `VK_ACTIVE.md`'s "Next" list is background on
+where things stand, not a queue to work through unprompted — say so if the prompt and that list
+disagree about what to do next.
+
 ## Build and verify
 
 - `make deps`, `make app`, `make ffpfsc` work on the host. Read `docs/BUILDING.md` first.
@@ -49,6 +76,9 @@ port 2323), process list, launch and screenshots.
 
 
 ## Debugging a title that does not start (lessons from PPSA99014-19)
+
+The live status of the RADV investigation (what's ruled out, what's next) is in
+`docs/VK_ACTIVE.md`, not here — this section is the stable, reusable procedure.
 
 Read-only checks first, in this order:
 
