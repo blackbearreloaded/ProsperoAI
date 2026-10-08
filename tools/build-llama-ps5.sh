@@ -6,10 +6,11 @@ export CMAKE_BUILD_PARALLEL_LEVEL=${BUILD_JOBS:-$(nproc)}
 export CCACHE_DIR=${CCACHE_DIR:-$root/build/ccache}
 cache=OFF
 command -v ccache >/dev/null && cache=ON
+python3 "$root/tools/prepare-llama-ps5-io.py"
 mkdir -p "$root/build/llama-vulkan/include-shim/spirv"
 ln -sfn /usr/include/spirv/unified1 "$root/build/llama-vulkan/include-shim/spirv/unified1"
 cmake -S "$root/.deps/llama.cpp" -B "$root/build/llama-ps5" -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE="$root/tools/ps5-llama-toolchain.cmake" -DCMAKE_BUILD_TYPE=Release \
+    -U CMAKE_CXX_FLAGS -DCMAKE_TOOLCHAIN_FILE="$root/tools/ps5-llama-toolchain.cmake" -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_SHARED_LIBS=OFF -DGGML_CCACHE="$cache" -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF \
     -DGGML_VULKAN=ON -DGGML_AVX512=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON \
     -DVulkan_INCLUDE_DIR="$root/.deps/Vulkan-Headers/include" \

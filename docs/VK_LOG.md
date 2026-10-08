@@ -158,3 +158,49 @@ Added Vulkan /v1/models and /v1/chat/completions, SSE text deltas, usage/finish 
 PS5 PPSA99023: /v1/models/auth, non-streaming completion, SSE usage/DONE and required lookup(query=Vulkan) followed by tool result and final answer verified. OpenCode 1.1.36 direct streaming returned API_OK. Automatic read-tool choice on Mistral 7B hallucinated file contents; do not claim reliable coding-agent behavior. API tests used context_size.txt=16384, separate from the 4096-token benchmark. Temporary test key stored only outside Git. Results: /tmp/prospero-openai-console-results.json and /tmp/prospero-opencode-test/. Existing AGC build retained for media; image/audio/speech Vulkan migration planned. User requested akandr/bc250 reference as related Linux APU background, not PS5 evidence.
 
 Additional client check: OpenCode read roundtrip succeeded via a diagnostic proxy explicitly setting tool_choice=required on the first request. OpenCode executed read(filePath=/tmp/prospero-opencode-test/fixture.txt), received the real file result and answered PROSPERO_TOOL_OK. This does not change the automatic-choice limitation above. Diagnostic proxy stopped after testing.
+
+## 2026-10-09 (model loading investigation)
+
+- AGC uses queued model I/O; llama.cpp eager loading uses 1 MiB upload chunks.
+  Added PS5-only parallel positional reads and an 8 MiB upload chunk (four buffers,
+  32 MiB ring). mmap remains disabled. Reproducible guarded dependency hooks are
+  in `tools/prepare-llama-ps5-io.py`, enabled only by the PS5 toolchain.
+- Host offset/multi-window/short-read checks passed, including ASan/UBSan with
+  leak detection disabled because the sandbox ptrace environment prevents LSan.
+  PS5 llama archives, benchmark link/sign and package verification passed.
+- Important measurement correction: llama.cpp updates `t_load_us` at the first
+  evaluation, using elapsed time since startup. Earlier ~60 s reported load is
+  not an isolated disk-read measurement. Added explicit phase timings.
+- User approved removing PPSA99019, installing the benchmark and closing
+  PPSA99023 (PID 95) to launch it. First shadow delete stopped with EBUSY (16);
+  retry after closing PPSA99023 completed, source absent before upload.
+- Benchmark PPSA99019 launched `0x00006018`, PID 97. Report is accessible at
+  `/mnt/sandbox/PPSA99019_000/download0/prospero-load-benchmark.txt`, not a global
+  FTP `/download0`. Device init 7.53 ms; model load failed because the title
+  sandbox cannot access another title's `/data/homebrew/...` model path.
+  This run provides no model-loading speed result. Preparing a self-contained
+  Mistral package to correct the test setup. Original PPSA99004 untouched.
+
+## 2026-10-09 — loading fixes verified and legacy app deployed
+
+Parallel PS5 eager reads plus WARN/ERROR-only backend logging reduce raw-folder
+Mistral loading substantially. Three fresh optimized process first loads:
+2.92159/2.84294/2.83605 s (median2.84294 s), versus isolated serial+verbose
+57.03557 s median. Full-log context 8.091 s becomes ~29 ms. All serial/parallel
+greedy checks matched token29493, result0. Compressed ffpfsc stays ~47 s.
+
+Official unmodified AGC release independently rechecked on three launches:
+load_us1614361/1526112/1487587, median1.526112 s, successful generation.
+Backend formats and timing boundaries differ; fresh processes do not prove
+uncached SSD. See VK_LOAD_BENCHMARK_2026-10-09.md for protocol and evidence.
+
+Legacy app rebuilt from parent8e1daee using corrected runtime/current llama
+archives; ELF foundation matches working app. Explicitly authorized deployment
+to PPSA99023 completed. Full-app model ready2908.83 ms at installed context16384;
+generated25 tokens and remains running. Original assets restored and temporary
+auto_chat/load config files removed. Exact original backup retained. PPSA99004
+untouched, no reboot. Native OpenGL/RADV linking remains unresolved.
+
+User requested standing task-scoped console authorization in AGENTS.md;
+repeated relevant test deployments/launches/cleanup no longer ask each step.
+Separate permission remains for reboot, unrelated data and main PPSA99004.

@@ -22,6 +22,7 @@ struct ModelFile { std::string id, path; };
 std::vector<ModelFile> files;
 std::mutex runtime_mutex;
 bool scanned, initialized, context_full;
+bool verbose_logging;
 unsigned selected;
 llama_model *model;
 llama_context *context;
@@ -30,6 +31,13 @@ void log_message(ggml_log_level, const char *text, void *) {
     char line[2048];
     std::snprintf(line, sizeof(line), "[ProsperoAI/Vulkan] %s", text);
     sceKernelDebugOutText(0, line);
+}
+void backend_log_message(ggml_log_level level, const char *text, void *data) {
+    // Kernel debug output is synchronous. llama.cpp emits thousands of debug
+    // messages while loading vocabulary/tensors and reserving graphs; keep that
+    // diagnostic work out of normal startup, while retaining warnings/errors.
+    if (verbose_logging || level == GGML_LOG_LEVEL_WARN || level == GGML_LOG_LEVEL_ERROR)
+        log_message(level, text, data);
 }
 void scan(const std::string &root, int depth) {
     DIR *dir = opendir(root.c_str());
@@ -78,14 +86,17 @@ bool prepare() {
     scan_models();
     if (files.empty()) return false;
     if (context) return true;
+    const int64_t load_start = ggml_time_us();
     if (!initialized) {
-        llama_log_set(log_message, nullptr);
-        ggml_log_set(log_message, nullptr);
+        verbose_logging = access("/app0/vulkan_verbose_logging.txt", F_OK) == 0;
+        llama_log_set(backend_log_message, nullptr);
+        ggml_log_set(backend_log_message, nullptr);
         setenv("GGML_NO_BACKTRACE", "1", 1);
         llama_backend_init();
         initialized = true;
     }
     ggml_backend_dev_t devices[] = {ggml_backend_dev_by_name("Vulkan0"), nullptr};
+    const int64_t device_ready = ggml_time_us();
     if (!devices[0]) return false;
     size_t free_bytes = 0, total_bytes = 0;
     ggml_backend_dev_memory(devices[0], &free_bytes, &total_bytes);
@@ -99,6 +110,7 @@ bool prepare() {
     mp.load_mode = LLAMA_LOAD_MODE_NONE;
     model = llama_model_load_from_file(files[selected].path.c_str(), mp);
     if (!model) return false;
+    const int64_t weights_ready = ggml_time_us();
     auto cp = llama_context_default_params();
     unsigned requested_context = 4096;
     if (FILE *config = std::fopen("/app0/context_size.txt", "r")) {
@@ -117,6 +129,14 @@ bool prepare() {
     cp.op_offload = true;
     context = llama_init_from_model(model, cp);
     if (!context) { release_model(); return false; }
+    char timing_line[256];
+    std::snprintf(timing_line, sizeof(timing_line),
+                  "model ready: device=%.2f ms weights=%.2f ms context=%.2f ms total=%.2f ms\n",
+                  (device_ready - load_start) / 1000.0,
+                  (weights_ready - device_ready) / 1000.0,
+                  (ggml_time_us() - weights_ready) / 1000.0,
+                  (ggml_time_us() - load_start) / 1000.0);
+    log_message(GGML_LOG_LEVEL_INFO, timing_line, nullptr);
     return true;
 }
 }

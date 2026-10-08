@@ -35,8 +35,12 @@ disagree about what to do next.
 - `make deps`, `make app`, `make ffpfsc` work on the host. Read `docs/BUILDING.md` first.
 - A build that links is not a build that runs. Check the NEEDED list (`readelf -d`) and the
   program headers against a working build before deploying.
-- Never send a payload or install a title to the console without the user's explicit approval
-  for that step. Approval for one step does not cover the next.
+- A user request to implement, debug or benchmark on the console authorizes the necessary
+  test deployments, payloads, launches, closing/replacing the relevant test titles and
+  cleanup of files created for that task. Continue through repeated test iterations
+  without asking for approval at each step; report the result and console state.
+- Ask separately before rebooting, deleting unrelated data, or changing the main title
+  `PPSA99004`. Sandbox/network execution approvals are still enforced by the environment.
 
 ## Talking to the console
 
@@ -51,8 +55,9 @@ port 2323), process list, launch and screenshots.
   Set the real address only in your own shell environment, never in a tracked file.
 - Screenshot before every confirming press (Cross) in the UI. Keep a screenshot in
   `~/radv_title/` or the scratchpad, and read it before pressing.
-- `kill`, `rm`, `launch` and `title rm` are destructive. Use `--yes` only after the user has
-  confirmed the specific target.
+- Scope `kill`, `rm`, `launch`, `title rm` and `--yes` to the test titles and temporary
+  files relevant to the authorized task. Verify the target before acting. Unrelated
+  titles or user data require separate approval.
 - shsrv's `kill` does not accept signal options. A process in state `STOP` did not die from
   `SIGCONT` plus `SIGKILL` sent by a payload, so closing it through the UI or a reboot may be
   needed.

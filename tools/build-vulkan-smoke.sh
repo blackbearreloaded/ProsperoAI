@@ -11,7 +11,13 @@ app_test=${PROSPERO_VULKAN_APP:-0}
 [[ $app_test == 0 ]] || model_test=1
 [[ $model_test == 0 ]] || work="$root/build/llama-vulkan-title"
 [[ $app_test == 0 ]] || work="$root/build/prospero-vulkan"
-app="$work/PPSA99023"
+title=PPSA99023
+if [[ ${LOAD_BENCHMARK:-0} == 1 ]]; then
+    [[ $model_test == 1 && $app_test == 0 ]] || { echo "LOAD_BENCHMARK requires LLAMA_SMOKE=1" >&2; exit 2; }
+    title=PPSA99019
+    work="$root/build/vulkan-load-benchmark"
+fi
+app="$work/$title"
 tool="$root/build/host/ps5-native-tool"
 mkdir -p "$work/obj" "$work/stubs" "$app/sce_sys" "$app/sce_module"
 cc() { PS5_PAYLOAD_SDK="$sdk" USE_CCACHE=0 sh "$root/tooling/prospero-clang18" "$@"; }
@@ -21,9 +27,11 @@ if [[ $model_test == 0 ]]; then
         -I "$root/.deps/Vulkan-Headers/include" -c "$root/tools/vulkan-smoke.c" -o "$work/obj/smoke.o"
 else
     if [[ $app_test == 0 ]]; then
+        test_source=llama-vulkan-smoke
+        [[ ${LOAD_BENCHMARK:-0} != 1 ]] || test_source=llama-vulkan-load-benchmark
         cc -std=c++17 -O2 -fexceptions -fcxx-exceptions -ffunction-sections -fdata-sections \
             -I "$root/.deps/llama.cpp/include" -I "$root/.deps/llama.cpp/ggml/include" \
-            -c "$root/tools/llama-vulkan-smoke.cpp" -o "$work/obj/smoke.o"
+            -c "$root/tools/$test_source.cpp" -o "$work/obj/smoke.o"
         app_objects=("$work/obj/smoke.o")
     else
         export CCACHE_DIR=${CCACHE_DIR:-$root/build/ccache}
@@ -58,6 +66,10 @@ else
     --defsym=execlp=prospero_execlp --defsym=posix_madvise=prospero_posix_madvise)
     mkdir -p "$app/models"
     cp -p -u "${MODEL_GGUF:-$root/build/vulkan-models/stories260K.gguf}" "$app/models/"
+    if [[ ${LOAD_BENCHMARK:-0} == 1 ]]; then
+        model_name=$(basename -- "${MODEL_GGUF:-$root/build/vulkan-models/stories260K.gguf}")
+        printf '/app0/models/%s\n' "$model_name" > "$app/load_model_path.txt"
+    fi
 fi
 for source in app_crt app_cpp_runtime; do
     cc -std=c++20 -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections \
@@ -109,10 +121,10 @@ extra_stubs=()
     --module-sdk 0x02000009 --companion-sdk 0x08050001 --file-name eboot.elf
 "$tool" self --sign --in "$work/eboot.elf" --out "$app/eboot.bin" --magic 0x1D3D154F
 cp "$root/sce_sys/"{icon0.png,pic0.dds,pic1.dds,snd0.at9} "$app/sce_sys/"
-python3 - "$root/sce_sys/param.json" "$app/sce_sys/param.json" <<'PY'
+python3 - "$root/sce_sys/param.json" "$app/sce_sys/param.json" "$title" <<'PY'
 import json,sys
 p=json.load(open(sys.argv[1]))
-p.update(titleId='PPSA99023',conceptId='99023',contentId='UP9000-PPSA99023_00-PROSPEROVKSMOKE1X')
+p.update(titleId=sys.argv[3],conceptId=sys.argv[3][4:],contentId=f'UP9000-{sys.argv[3]}_00-PROSPEROVKSMOKE1X')
 for v in p['localizedParameters'].values():
     if isinstance(v,dict): v['titleName']='ProsperoAI Vulkan Test'
 with open(sys.argv[2],'w') as f: json.dump(p,f,indent=2)
@@ -123,7 +135,7 @@ if [[ ${VULKAN_PACKAGE:-1} == 0 ]]; then
     exit 0
 fi
 mkpfs=$(bash "$root/tools/setup-packaging-dependencies.sh" ffpfsc)
-package="$work/PPSA99023.$$.ffpfsc"
+package="$work/$title.$$.ffpfsc"
 "$mkpfs" pack folder --no-adjust-output-file-extension --version PS5 --verify "$app" "$package"
-mv "$package" "$work/PPSA99023.ffpfsc"
-echo "Vulkan smoke package: $work/PPSA99023.ffpfsc"
+mv "$package" "$work/$title.ffpfsc"
+echo "Vulkan smoke package: $work/$title.ffpfsc"

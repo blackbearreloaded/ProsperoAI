@@ -114,7 +114,7 @@ undeploy first if that happens.
 
 ## Status
 
-The Vulkan folder title and network API have been verified on PS5 FW 12.70. Mistral 7B Q4_0 reaches a median 69.72 decode tokens/s versus 47.96 for the official upstream AGC release. Vulkan cold model loading still takes about 60 seconds. See [current status](VK_ACTIVE.md) and the [benchmark report](VK_BENCHMARK_2026-10-08.md) for protocol and limitations.
+The Vulkan folder title and network API have been verified on PS5 FW 12.70. Mistral 7B Q4_0 reaches a median 69.72 decode tokens/s versus 47.96 for the official upstream AGC release. The optimized isolated loader prepares a raw folder GGUF in a median 2.84 seconds across three fresh process launches; AGC was rechecked at 1.53 seconds. Compressed ffpfsc model reads remain much slower. See [loading measurements](VK_LOAD_BENCHMARK_2026-10-09.md). See [current status](VK_ACTIVE.md) and the [benchmark report](VK_BENCHMARK_2026-10-08.md) for protocol and limitations.
 
 ## PS5 llama.cpp Vulkan test build
 
@@ -127,7 +127,7 @@ make llama-vulkan-title # tiny GGUF Vulkan/CPU token validation
 make app-vulkan         # complete UI/HTTP app in test slot PPSA99023
 ```
 
-Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. The Vulkan app discovers raw GGUF files under `/app0/models` and `/data/homebrew/prosperoai/models`; its Models screen can browse a public Hugging Face repository and download a verified GGUF to the latter directory. Downloads are limited to 7 GiB to leave room for Vulkan weights and context memory; that limit does not guarantee every model/context combination fits. The original AGC backend still uses prepared model folders. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Obtain explicit console-step authorization and remove stale test registration before replacing a registered image. Never overwrite PPSA99004 for testing.
+Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. The Vulkan app discovers raw GGUF files under `/app0/models` and `/data/homebrew/prosperoai/models`; its Models screen can browse a public Hugging Face repository and download a verified GGUF to the latter directory. Downloads are limited to 7 GiB to leave room for Vulkan weights and context memory; that limit does not guarantee every model/context combination fits. The original AGC backend still uses prepared model folders. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Console testing is authorized by the user’s task request as described in `AGENTS.md`; remove stale test registration before replacing a registered image. Never overwrite PPSA99004 for testing.
 
 Build jobs default to available CPUs (four on this host). Compiler cache defaults to `build/ccache`, including host tools. Incremental PS5 llama library build measured about 1.6 seconds with no changes; model copies and multi-gigabyte image compression still take time. Host iGPU is not used for compilation.
 
@@ -135,4 +135,21 @@ For development, `make app-vulkan-folder` skips image compression. Upload the fo
 
 ## OpenAI API and OpenCode
 
+To build the isolated model-loading benchmark in the existing test slot `PPSA99019`:
+
+```bash
+make llama-ps5
+LLAMA_SMOKE=1 LOAD_BENCHMARK=1 MODEL_GGUF=/absolute/path/model.gguf bash tools/build-vulkan-smoke.sh
+```
+
+It measures three alternating serial/parallel pairs, separating weight loading, context
+creation and first evaluation, and compares the first greedy token. The Vulkan device
+and process are shared across rounds; these are repeated loads, not independent cold
+launches. The GGUF must be packaged in `/app0/models` because the title sandbox cannot
+read another title's model directory. Read the report through FTP at
+`/mnt/sandbox/PPSA99019_000/download0/prospero-load-benchmark.txt` while the test is running.
+Installation and repeated launches within a console-testing task are covered by the authorization rules in `AGENTS.md`.
+
 The Vulkan build also exposes `/v1/models` and `/v1/chat/completions`, including SSE and portable function calls. See [OpenCode configuration](OPENCODE.md) for bearer keys, context sizing and protocol limits. Image, audio and speech remain on the existing AGC build; their Vulkan migration is planned.
+
+Default Vulkan backend logging forwards WARN/ERROR. Create `/app0/vulkan_verbose_logging.txt` only for detailed diagnosis; synchronous full debug output materially slows loading. For first-load-only benchmark runs, add `/app0/load_parallel_only.txt` (three optimized loads per launch).

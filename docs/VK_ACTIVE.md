@@ -1,6 +1,6 @@
 # Active work
 
-Updated: 2026-10-08. Plan: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
+Updated: 2026-10-09. Plan: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
 
 ## Status after the midnight-ui merge (current)
 
@@ -58,7 +58,7 @@ this form, but the RADV/Vulkan findings still hold)
 - Full ProsperoAI Vulkan UI/HTTP app runs from folder `/data/homebrew/PPSA99023`; pid 192 confirmed after final benchmark. Original PPSA99004 untouched. Temporary auto_chat.txt removed after testing.
 - RADV NAVI21 device discovery succeeds, Vulkan 1.4.354. Pinned llama.cpp cb7934c52ca8710994b2ecc19775ebefcfdb8d01 cross-build works; Mistral offloads all 33 layers.
 - Exact recipe-pinned Mistral 7B Instruct v0.3 Q4_0: original official upstream AGC release 01.000.000 median 47.96 tok/s; Vulkan median 69.72 tok/s (+45.4%). Three fresh launches each, same system/user text, greedy, 128 generated tokens, context capacity 4096. AGC template has 62 input tokens, llama.cpp 61. Rate counts 127 decode steps after prefill.
-- Important current limitation: Vulkan reported load time ~59.9 s; AGC folder model load 1.43–1.93 s. Do not describe Vulkan as faster for cold startup.
+- Historical reported Vulkan load time ~59.9 s is superseded by the isolated loading measurements below; llama perf load time includes waiting until first evaluation. AGC still loads faster.
 - RADV reports 11712 MiB total heap, 11573.98 MiB free before loading. Mistral main Vulkan buffers at context 4096: 3850.02 MiB weights + 512 MiB KV + 52.01 MiB compute (~4.31 GiB), excluding driver/UI overhead. Reported capacity is not a maximum-allocation stress test.
 - Build defaults: four jobs and project-local ccache. No-change llama library build 1.593 s; Vulkan folder compile/link/sign 3.776 s. `make app-vulkan-folder` skips compression.
 
@@ -107,6 +107,34 @@ still changing. For whoever ports the Models downloader once midnight-ui lands:
   (already used for model preparation) and `ui::ToastStack` for completion/failure notices —
   follow that pattern instead of introducing new UI primitives.
 
+## Loading optimization verified (2026-10-09)
+
+- PS5-only four parallel 2 MiB positional reads and four 8 MiB upload buffers;
+  mmap stays disabled. Reproducible dependency hooks, host byte/cursor/fallback
+  tests and PS5 library builds pass.
+- Default backend logging now forwards WARN/ERROR only: synchronous debug output
+  had added ~8.09 s to context creation; filtered creation takes ~29 ms.
+  `/app0/vulkan_verbose_logging.txt` opts back into full logging.
+- Isolated Vulkan benchmark on the raw folder Mistral GGUF, context 4096:
+  first loads in three fresh processes 2.922 / 2.843 / 2.836 s (median 2.843 s).
+  All greedy-token checks passed (token 29493). Fresh processes do not prove an
+  uncached SSD. Prior serial+verbose weights/context median was 57.036 s.
+- Official unmodified AGC release rechecked in the same test slot: model-load
+  1.614 / 1.526 / 1.488 s (median 1.526 s), successful generation each time.
+  AGC uses prepared model files; Vulkan uses GGUF. These are model preparation
+  measurements, not total UI launch or identical cross-backend prompt tests.
+- Compressed ffpfsc model reads remained ~47 s even with parallel reads;
+  the verified speedup applies to an uncompressed folder GGUF.
+- Legacy RmlUi app rebuilt from parent 8e1daee with the corrected runtime and
+  current llama archives; NEEDED list, entry 0x120 and 14 program headers match
+  the working app. Native OpenGL/Vulkan linking remains a separate blocker.
+- User-authorized optimized legacy app deployed to PPSA99023 and remains running.
+  Full UI warmup: device 4.16 ms, weights 2831.79 ms, context 72.87 ms,
+  total 2908.83 ms (installed configuration retains context 16384). Generated
+  25 tokens successfully. Original assets restored; temporary auto_chat and load
+  benchmark configs removed. Exact original binary/asset backup retained locally.
+- See [loading report](VK_LOAD_BENCHMARK_2026-10-09.md).
+
 ## Cold-load time: mmap tried and reverted
 
 `src/gpt_runtime_vulkan.cpp` sets `mp.load_mode = LLAMA_LOAD_MODE_NONE`, which disables mmap and
@@ -119,9 +147,8 @@ switch took effect (`load_mode = mmap` in the log), but tensor loading stalled p
 layer 31 of 33 and stayed stalled — no progress across repeated klog checks spanning minutes —
 while the kernel logged repeated `FMEM allocation timeout`/`LOW FMEM` warnings. This reads as
 mmap causing memory pressure on this console's RADV/FMEM path, not a speedup. Reverted back to
-`LLAMA_LOAD_MODE_NONE`. The ~60 s eager-load cost stands as a known limitation; a real fix needs
-a different approach (e.g. pipelined per-tensor read/upload, or investigating the FMEM pressure
-itself) rather than a one-line mmap toggle.
+`LLAMA_LOAD_MODE_NONE`. The subsequent parallel-read and logging fixes reduced eager preparation to ~2.84 s
+without mmap; see the loading report.
 
 ## Evidence
 
