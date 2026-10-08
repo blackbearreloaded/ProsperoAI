@@ -71,9 +71,45 @@ ProsperoAI's AGC build.
   cleanup immediate (`CrashReportSequencerReporter`'s `needsToReport=False` suggests this
   "Developer" console build auto-discards reports it would otherwise keep for a submission flow).
 
+## Tried and ruled out (2026-10-08, later still)
+
+Found Mihawk's **PS5_VulkanTemplate** on his GitHub (`gh api users/mihawk-99/repos`) — a complete,
+console-proven RADV title foundation with its own `AGENTS.md`, not just the smoke test from
+`mihawk-vulkan-review`. Fetched `AGENTS.md`, `ps5/src/platform.c` and `platform.h` (not the full
+repo — it's large; see VK_PLAN.md invariants on what to pull from it on demand).
+
+- **Found the documented rule we were breaking:** "A title never calls `exit()` and never returns
+  from `_start`... The CRT calls `catchReturnFromMain` after main returns; the shell closes the
+  title asynchronously, so it must wait and never return" (`platform.c`). Our test programs
+  (`vk_std.c`, and Mihawk's own `radv_smoke.c`) just `return` from `main`. **Fixed** `vk_std.c` to
+  call `sceSystemServiceLoadExec("exit", NULL)` then spin forever instead of returning
+  (`libSceSystemService.prx` confirmed in NEEDED after relink). Repackaged as `PPSA99023`.
+  **Result: identical crash** — `ProcessTerm()` right after launch, no marker, no klog line, not
+  even `radv_marker("main: entered")`, the very first line of `main`. This rules out
+  return-from-main as *our* crash's cause (it's a real rule, just not what's killing us — we
+  never get far enough into `main` to hit it).
+- **Found the likely actual environment mismatch:** `AGENTS.md` names the required homebrew
+  environment as "an enabler (**etaHEN**), ShadowMountPlus, ftpsrv, klogsrv, an ELF loader, and
+  PS5_Vulkan's control payload". This console's `/data` has `.kstuff_noautomount` — it runs
+  **KStuff**, not etaHEN. (Matches everything seen all along: the sentinel toasts are phrased
+  around KStuff — "crashed before KStuff was paused... KStuff is not the cause" — implying
+  KStuff's own monitoring is active and routinely suspected.) KStuff and etaHEN are different
+  jailbreak/kernel-patch frameworks with different payload APIs; a title whose crash only shows up
+  with specific NEEDED system modules (`libSceAgc`, `libSceAgcDriver`, `libSceSystemService`
+  together) could plausibly hit a KStuff-specific gap that etaHEN's patches cover. **Not proven**
+  — no direct evidence of *which* kernel patch or hook is missing, only that the documented
+  prerequisite (etaHEN) isn't what this console runs. Switching the console's jailbreak framework
+  is a console-level change with real risk and is not something to do without the user explicitly
+  choosing it.
+
 ## Next, in order
 
-1. Find a way to keep the coredump instead of racing to read it: a console/debug setting that
+1. **Decide on the KStuff/etaHEN question with the user** before any more build-side guessing:
+   either install etaHEN alongside (or instead of) KStuff on this console to test the hypothesis
+   directly, or look specifically for what a RADV-linked title needs from the kernel patch side
+   that KStuff might not provide (requires lower-level jailbreak knowledge than this project has
+   needed so far).
+2. Find a way to keep the coredump instead of racing to read it: a console/debug setting that
    changes `CrashReportSequencerReporter`'s "Developer" auto-discard behavior, or a way to make
    the race winnable (local-network tool faster than Python `ftplib`, or a payload that copies the
    dump out from *inside* the console the instant it appears, with no network round-trip at all).

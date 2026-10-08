@@ -64,3 +64,22 @@ questions belong in [VK_ACTIVE.md](VK_ACTIVE.md), not here.
 - Found `PPSA99169` (PS5 RetroArch) has a non-empty `radv-shader-cache/`, meaning a RADV-linked
   title has actually rendered something on this exact console — RADV support itself is not the
   blocker; something specific to the minimal smoke title's startup is.
+
+## 2026-10-08 (later still)
+
+- Found Mihawk's `PS5_VulkanTemplate` on GitHub (`gh api users/mihawk-99/repos` — a full repo
+  listing, not a guess), a complete console-proven RADV title foundation, separate from the
+  `mihawk-vulkan-review` probe repo already checked out. Fetched just `AGENTS.md`,
+  `ps5/src/platform.c` and `platform.h` via the GitHub contents API (a full `git clone` was tried
+  first and killed/timed out twice — the repo is large; not needed for this).
+- Its documented rule: a title must never return from `main`/`_start` (the CRT's
+  `catchReturnFromMain` calls `sceSystemServiceLoadExec("exit", NULL)` then spins forever instead;
+  returning or calling `exit()` both make the console report a crash over a run that worked).
+  Patched `vk_std.c` to do the same, confirmed `libSceSystemService.prx` in NEEDED after relink,
+  repackaged as `PPSA99023`. Result: identical `ProcessTerm()` crash, with not even the first
+  `radv_marker("main: entered")` line appearing anywhere. Rules out return-from-main as our
+  specific cause — we never get far enough into `main` for it to apply.
+- `/data/.kstuff_noautomount` confirms this console runs **KStuff**; Mihawk's `AGENTS.md` names
+  **etaHEN** as the required enabler. This is now the leading hypothesis for the environment
+  mismatch, unproven. Flagged for the user rather than acted on, since changing the console's
+  jailbreak framework is a console-level decision, not a build-side one.
