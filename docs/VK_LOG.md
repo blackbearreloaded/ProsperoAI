@@ -96,3 +96,47 @@ questions belong in [VK_ACTIVE.md](VK_ACTIVE.md), not here.
   (`PPSA99023`) while it was running. Identical crash. The launch necessarily killed Lapy first
   (one foreground app at a time), so this doesn't fully rule out Lapy mattering if it could run
   truly in the background, only that launching it immediately before doesn't help.
+
+## 2026-10-08 — RADV and llama.cpp run on console; full app warmup fixed
+
+Reference RADV linking, platform heap wrappers, SDK libc++18 and emulated TLS produced a working PPSA99023 smoke. Device discovery: RADV NAVI21, Vulkan 1.4.354. Old shell-exit logs prove earlier blanket pre-main crash interpretation incorrect: tests called sceSystemServiceLoadExec("exit", NULL), then the system failed executing "exit". A bounded console coredump watcher copied no dumps for that run.
+
+Cross-built pinned llama.cpp CPU and Vulkan static libraries. Explicit Vulkan0 selection is required because this PS5 device is classified as integrated. stories260K.gguf offloaded 6/6 layers; 32 greedy tokens matched pure CPU exactly. Inclusive timing: Vulkan 0.325 s (98.43 tok/s), CPU 0.055 s (580.89 tok/s). Tiny-model launch/dispatch overhead dominates; these are validation figures, not AGC benchmark numbers. Evidence: /tmp/prospero-llama-console2-klog.txt.
+
+Full app UI/HTTP then discovered the GGUF after stat-based scanning. The warmup thread crashed with SIGSEGV at ggml_vk_get_device because it used the default stack; assigning 8 MiB like the generation worker fixed it. Full warmup_complete=1 and HTTP text generation verified. Evidence: /tmp/prospero-vulkan-app2-klog.txt and app3-klog.txt. Driver-reported free Vulkan memory was 11573 MiB; allocation ceiling not tested.
+
+Builds use four jobs and project-local ccache. No-change llama PS5 build measured 1.593 s. Mistral source SHA-256 verified against checked-in recipe (19c3cf872246d48e7a9784d6def7a694a6c9056cfbeb98f7061d43cd0a7c8b7f). AGC conversion and Vulkan packaging started. HTTP generation token-limit/timing support and benchmark strict token accounting added; large-model comparison remains pending.
+
+### Mistral Vulkan measurement, same day
+
+Full app Mistral load succeeded, 33/33 layers on Vulkan0. Reported memory: total 12280922112 bytes (11712 MiB), free 12136202240 bytes before load. Model GPU buffer 3850.02 MiB; KV cache 256 MiB at n_ctx=2048; compute buffer 51.01 MiB. Main buffers total about 4.06 GiB, excluding driver/UI overhead. Screenshot: /tmp/prospero-mistral-loading.jpg.
+
+Three identical API prompts, greedy sampling, 128 generated tokens each: decode 70.36, 71.39, 71.55 tok/s, median 71.39; prompt token count 29. Wall throughput 59.77, 66.78, 66.91 tok/s. Result: build/benchmark-vulkan-mistral.json. A separate 32-token request confirmed coherent output and exact token limit. AGC comparison pending.
+
+Shadow delete is asynchronous and can fail with EBUSY (status=16) if called immediately after agent kill, before sandbox/image teardown. Wait for runtime release, retry deletion, then confirm both shadow info 404 and source file absence before uploading. The delete API actually removes the image source as well; do not upload while it is still running.
+
+### AGC API correction for comparison
+
+AGC app booted and discovered Mistral, but /api/generate failed before inference because gpt_runtime_generate rejected message_count < 2 while the API supplies one user message. Changed guard to require at least one message; adaptation already accepts one user message. Rebuilt AGC app and reverified package; new upload pending. Host tooling integration tests: 2 passed. Benchmark timing arithmetic tested using a mocked server response: 128 tokens / 2 seconds = 64 tok/s.
+
+### Upstream AGC and folder deployment verified
+
+User pointed out that RetroArch runs from a folder and that AGC should be the original upstream build. Confirmed RetroArch PPSA99169 source_type=folder. Downloaded official blackbearreloaded/ProsperoAI release 01.000.000 ZIP, verified published SHA-256 19c2bacebf6fb1587b32d458fb5af2fb472d9f3844085993b0f1a30669dc0c69. Copied its unmodified eboot.bin/libraries/assets to test slot PPSA99023, only changing param.json title/concept/content ID. Added recipe-verified AGC Mistral model and built-in auto_chat.txt prompt; no inference-code changes or HTTP additions to this baseline.
+
+Folder launch initially refused 0x80aa001a with errno=13. FTP SITE CHMOD 755 on eboot.bin and libc.prx fixed it; upstream title boots and generates coherent text. Three fresh-launch runs with default system prompt, 62 input tokens, 128 generated tokens and 4096 context capacity: decode 47.96, 47.92, 48.02 tok/s, median 47.96. Numerator is 127 decode steps, excluding the first token supplied by prefill, matching the upstream UI formula. build/benchmark-upstream-agc-mistral.json, /tmp/prospero-upstream-agc{2,3,4}-klog.txt and /tmp/prospero-upstream-agc-result.jpg preserve evidence. Load was 1.43–1.93 seconds from folder.
+
+Earlier WIP API requests were sent while background loading was incomplete and failed at stage 2; a later captured warmup succeeded. Those failures are not evidence that upstream AGC is broken. Do not use their failed result JSON as a performance baseline. Temporary diagnostics in the AGC inference backend were reverted; baseline uses release binary.
+
+Added app-vulkan-folder target and FTP put-dir/size/chmod commands. Folder upload applies 755 to executable/modules. Updating the stopped folder now needs only changed files; no multi-gigabyte repackaging. Vulkan being aligned to the same system prompt, 62 input tokens and 4096 context capacity before final comparison.
+
+### Final comparison and console state
+
+Vulkan aligned to context capacity 4096 and same default UI system/user text as upstream. Three fresh-launch decode results: 69.73, 69.72, 69.72 tok/s, median 69.72, versus upstream AGC 47.96. Same source Q4_0 model, 128 generated tokens. Prompt encoding differs by one token (AGC 62, llama.cpp 61); decode numerator is 127 after first prefill token. Vulkan +45.4% for this short-context decode test. Vulkan prefill ~0.343 s; reported load ~59.9 s vs upstream folder load 1.43–1.93 s. Main GPU buffers at context4096: 3850.02 + 512 + 52.01 MiB (~4.31 GiB). Full report: docs/VK_BENCHMARK_2026-10-08.md; JSON: build/benchmark-comparison-mistral.json.
+
+Final console state: Vulkan folder /data/homebrew/PPSA99023, pid192 running. Temporary auto_chat.txt removed, so ordinary launches do not automatically benchmark. Original PPSA99004 untouched. No-change Vulkan folder build measured 3.776 s. Host integration tests 2 passed, shell syntax and Python compilation passed, benchmark arithmetic validated with mocked response including first-token accounting, git diff --check clean. No commit or push.
+
+Final network verification: http://10.0.0.127:11434/ returned HTTP 200; /api/tags exposes loaded Mistral GGUF. Final screenshot confirms llama.cpp Vulkan / RADV, model loaded, HTTP server listening.
+
+## 2026-10-08 — PR scope cleanup
+
+Removed the Models/Settings tab redesign, model-delete UI/API and shared deletion helper from the branch diff at the user’s request. Restored the original Conversation/Workshop console layout and pre-redesign web chat. Retained HTTP networking, generation timing and the 8 MiB warmup stack fix. The rebuilt Vulkan folder compiles, links and signs; Python tooling tests pass. Hardware performance figures above apply to the previously tested binary; the UI-restoration rebuild has not been redeployed.

@@ -36,7 +36,6 @@ const char* gpt_runtime_model_id(unsigned index);
 const char* gpt_runtime_model_name(unsigned index);
 const char* gpt_runtime_model_purpose(unsigned index);
 bool gpt_runtime_select_model(unsigned index);
-bool gpt_runtime_delete_model(unsigned index);
 int gpt_runtime_generate(const gpt_runtime_message_t* messages,
                          unsigned message_count,
                          const gpt_runtime_settings_t& settings, char* output,

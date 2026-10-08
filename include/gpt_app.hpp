@@ -35,7 +35,7 @@ private:
     static constexpr unsigned VisibleSessionCount = 7;
     using Message = prospero_session::Message;
 
-    enum class View { Conversation, Models, Settings };
+    enum class View { Conversation, Workshop };
 
     Rml::ElementDocument* document_ = nullptr;
     Message history_[MessageCapacity]{};
@@ -46,8 +46,6 @@ private:
     unsigned session_selection_ = 0;
     unsigned session_window_ = 0;
     bool session_rail_focused_ = false;
-    unsigned models_selection_ = 0;
-    bool models_delete_armed_ = false;
     bool session_model_available_ = true;
     unsigned output_limit_ = 64;
     unsigned style_ = 0;
@@ -95,7 +93,6 @@ private:
     void RefreshAll();
     void RefreshConversation();
     void RefreshSettings();
-    void RefreshModels();
     void RefreshStatus();
     void SetView(View view);
     void ChangeSetting(int direction);

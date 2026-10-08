@@ -5,8 +5,8 @@
   tools/bench_backend.py --name agc --url http://10.0.0.127:11434 --model qwen35-9b
   tools/bench_backend.py --name llama --url http://10.0.0.127:8080 --model qwen35-9b
 
-Each run sends the same prompt with a fixed number of output tokens and records wall time,
-generated tokens and tokens per second. Results go to a JSON file so the two backends can
+Each run sends the same prompt with a fixed output limit and records server-reported
+generated tokens, decode time and wall time. Results go to a JSON file so the two backends can
 be compared later with --compare. Only the standard library is used.
 """
 import argparse
@@ -34,11 +34,21 @@ def generate(url, model, prompt, tokens, timeout):
     with urllib.request.urlopen(request, timeout=timeout) as response:
         data = json.load(response)
     elapsed = time.monotonic() - started
-    generated = data.get("eval_count") or len(data.get("response", "").split())
+    if data.get("error"):
+        raise RuntimeError(data["error"])
+    if "eval_count" not in data or "eval_duration" not in data:
+        raise RuntimeError("server did not report token count and decode duration")
+    generated = data["eval_count"]
+    decode_seconds = data["eval_duration"] / 1e9
+    # The first generated token comes from prefill; only subsequent tokens decode.
+    decode_tokens = max(generated - 1, 0)
     return {
         "seconds": round(elapsed, 3),
         "generated_tokens": generated,
-        "tokens_per_second": round(generated / elapsed, 2) if elapsed > 0 and generated else 0.0,
+        "decode_seconds": round(decode_seconds, 6),
+        "decode_tokens": decode_tokens,
+        "tokens_per_second": round(decode_tokens / decode_seconds, 2) if decode_seconds > 0 else 0.0,
+        "wall_tokens_per_second": round(generated / elapsed, 2) if elapsed > 0 else 0.0,
         "prompt_tokens": data.get("prompt_eval_count"),
     }
 
@@ -65,7 +75,7 @@ def run(args):
     }
     pathlib.Path(args.out).write_text(json.dumps(summary, indent=2))
     print(f"wrote {args.out}")
-    return 0
+    return 1 if summary["failures"] else 0
 
 
 def compare(paths):

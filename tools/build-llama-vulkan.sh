@@ -14,6 +14,8 @@ headers="$root/.deps/Vulkan-Headers/include"
 sdk="$root/.deps/native/ps5-payload-sdk"
 build="$root/build/llama-vulkan"
 spirv_shim="$build/include-shim"
+export CMAKE_BUILD_PARALLEL_LEVEL=${BUILD_JOBS:-$(nproc)}
+export CCACHE_DIR=${CCACHE_DIR:-$root/build/ccache}
 
 for command in cmake ninja glslc; do
     command -v "$command" >/dev/null || {
@@ -30,7 +32,7 @@ cmake -S "$llama" -B "$build/host" -G Ninja \
     -DVulkan_INCLUDE_DIR="$headers" \
     -DLLAMA_CURL=OFF \
     -DCMAKE_BUILD_TYPE=Release
-cmake --build "$build/host" --target llama-cli
+cmake --build "$build/host" --target llama-cli --parallel "$CMAKE_BUILD_PARALLEL_LEVEL"
 
 # ggml-vulkan includes <spirv/unified1/spirv.hpp> from the SPIRV-Headers package.
 # Expose only that folder to the PS5 compile, so the host glibc headers stay out.

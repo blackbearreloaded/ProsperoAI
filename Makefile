@@ -34,6 +34,8 @@ GTEST_ARGS ?=
 BUILD_JOBS ?= $(shell nproc 2>/dev/null || echo 2)
 USE_CCACHE ?= 1
 export BUILD_JOBS USE_CCACHE
+CCACHE_DIR ?= $(CURDIR)/build/ccache
+export CCACHE_DIR
 export HOST_CXX HOST_TEST_CXXFLAGS HOST_TEST_LDFLAGS
 export APP_DEFINITIONS APP_CXXFLAGS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
@@ -87,6 +89,22 @@ radv: deps ## Build RADV for the PS5 (libvulkan_radeon.ps5.a) from the pinned Mi
 
 llama-vulkan: deps ## Host llama-cli with the Vulkan backend, plus a PS5 syntax check of ggml-vulkan
 	@bash tools/build-llama-vulkan.sh
+
+.PHONY: llama-ps5 vulkan-smoke llama-vulkan-title app-vulkan app-vulkan-folder
+llama-ps5: deps ## Cross-build static llama.cpp and Vulkan libraries for PS5
+	@bash tools/build-llama-ps5.sh
+
+vulkan-smoke: ## Package PS5 Vulkan startup/device-discovery test (PPSA99023)
+	@bash tools/build-vulkan-smoke.sh
+
+llama-vulkan-title: llama-ps5 ## Package model inference test (requires build/vulkan-models/stories260K.gguf)
+	@LLAMA_SMOKE=1 bash tools/build-vulkan-smoke.sh
+
+app-vulkan: llama-ps5 ## Build ProsperoAI UI/API with llama.cpp Vulkan in safe test slot PPSA99023
+	@PROSPERO_VULKAN_APP=1 bash tools/build-vulkan-smoke.sh
+
+app-vulkan-folder: llama-ps5 ## Build the Vulkan app folder without image compression
+	@PROSPERO_VULKAN_APP=1 VULKAN_PACKAGE=0 bash tools/build-vulkan-smoke.sh
 
 pacbrew:
 	@printf '%s\n' '==> [pacbrew] Fetching the pinned prebuilt ports sysroot'

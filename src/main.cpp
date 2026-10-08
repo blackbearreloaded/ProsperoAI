@@ -30,16 +30,19 @@
 #include <vector>
 
 extern "C" int sceKernelUsleep(std::uint32_t microseconds);
+extern "C" int sceKernelDebugOutText(int, const char *);
 extern "C" int ps5_agc_backend_reserve(void);
 extern "C" int sceSystemServiceHideSplashScreen(void);
 extern "C" void *mmap(void *address, std::size_t length, int protection, int flags, int descriptor,
                       long offset);
 extern "C" int munmap(void *address, std::size_t length);
 extern "C" void *__dso_handle = nullptr;
+#ifndef PS5_LLAMA_VULKAN
 extern "C" char __eh_frame_hdr_start[1] = {};
 extern "C" char __eh_frame_hdr_end[1] = {};
 extern "C" char __eh_frame_start[1] = {};
 extern "C" char __eh_frame_end[1] = {};
+#endif
 
 namespace
 {
@@ -146,6 +149,13 @@ void *ReallocTracked(void *allocation, std::size_t size)
 
 } // namespace
 
+#ifdef PS5_LLAMA_VULKAN
+#define pthread_once prospero_pthread_once
+#define strtof prospero_strtof
+#define fseek prospero_fseek
+#define ftell prospero_ftell
+#define strcasestr prospero_strcasestr
+#endif
 extern "C" int pthread_once(pthread_once_t *once_control, void (*init_routine)(void))
 {
     constexpr int running = 2;
@@ -718,8 +728,10 @@ void PresentColor(SDL_Renderer *renderer, SDL_Window *window, Uint8 red, Uint8 g
 
 bool RunApp()
 {
+#ifndef PS5_LLAMA_VULKAN
     if (ps5_agc_backend_reserve() != 0)
         return false;
+#endif
     if (SDL_SetMemoryFunctions(AllocateTracked, CallocTracked, ReallocTracked, FreeTracked) != 0)
     {
         return false;
@@ -825,6 +837,9 @@ bool RunApp()
 
 int main()
 {
+#ifdef PS5_LLAMA_VULKAN
+    sceKernelDebugOutText(0, "[ProsperoAI/Vulkan] starting UI\n");
+#endif
     RunApp();
     KeepProcessAlive();
 }

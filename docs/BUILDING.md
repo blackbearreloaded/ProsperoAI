@@ -8,9 +8,7 @@ make deps        # fetch missing dependencies at their pinned revisions
 make app         # build dist/PPSA99004 (eboot.bin + sce_sys + models/)
 ```
 
-> **Work in progress.** This branch is a migration in progress. The GPU backend and the
-> network layer are being changed, and the current build is **not verified to boot on a
-> console**. See [Status](#status).
+> **Work in progress.** The Vulkan folder build and HTTP generation are verified on PS5 FW 12.70. See [benchmark results](VK_BENCHMARK_2026-10-08.md) and [current status](VK_ACTIVE.md).
 
 ## Make targets
 
@@ -116,16 +114,21 @@ undeploy first if that happens.
 
 ## Status
 
-What works and what does not, as of this branch:
+The Vulkan folder title and network API have been verified on PS5 FW 12.70. Mistral 7B Q4_0 reaches a median 69.72 decode tokens/s versus 47.96 for the official upstream AGC release. Vulkan cold model loading still takes about 60 seconds. See [current status](VK_ACTIVE.md) and the [benchmark report](VK_BENCHMARK_2026-10-08.md) for protocol and limitations.
 
-- **Works (host):** `make deps`, `make deps-status`, `make app` (links, signs `eboot.bin`), `make ffpfsc`.
-- **Verified on console (earlier builds):** the original app, and the package-image install path.
-- **Not verified on console:** the network layer (`src/http_server.cpp` now calls `sceNet*`
-  directly through the SDK import stubs instead of resolving them with `sceKernelDlsym`).
-- **Known problems:** the modified runtime shim (`runtime/libc.prx`, `tooling/native/`) has not
-  booted on the console. Adding libSceNet to the shim's NEEDED list was the first suspect; it is
-  kept here because the migration may remove the shim dependency entirely.
-- **Known crash:** `scePthreadDetach()` crashes the title on this runtime; the HTTP server does not
-  detach its threads for that reason.
-- **Planned:** replace the AGC inference backend with llama.cpp's Vulkan backend running on the
-  RADV driver from the Mihawk Mesa checkout. Nothing of that is wired into the build yet.
+## PS5 llama.cpp Vulkan test build
+
+The WIP console build uses the reviewed RADV archive and SDK under `.deps/mihawk-vulkan-review/`. Build the host tools and host shader generator first, then:
+
+```bash
+make llama-ps5           # static llama.cpp CPU/Vulkan libraries
+make vulkan-smoke       # instance and physical-device discovery
+make llama-vulkan-title # tiny GGUF Vulkan/CPU token validation
+make app-vulkan         # complete UI/HTTP app in test slot PPSA99023
+```
+
+Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. The app discovers raw GGUF files under `/app0/models`; the original AGC backend still uses prepared model folders. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Obtain explicit console-step authorization and remove stale test registration before replacing a registered image. Never overwrite PPSA99004 for testing.
+
+Build jobs default to available CPUs (four on this host). Compiler cache defaults to `build/ccache`, including host tools. Incremental PS5 llama library build measured about 1.6 seconds with no changes; model copies and multi-gigabyte image compression still take time. Host iGPU is not used for compilation.
+
+For development, `make app-vulkan-folder` skips image compression. Upload the folder with `python3 tools/ps5ctl.py ftp put-dir build/prospero-vulkan/PPSA99023 /data/homebrew/PPSA99023`, then rescan with ShadowMount. The FTP helper sets executable permissions on eboot.bin and PRX modules. An earlier folder launch refusal (0x80aa001a, errno 13) was fixed by SITE CHMOD 755 on these files. Once registered and stopped, update only changed files; immutable model files need not be uploaded again. Keep the same title metadata and do not replace an image while its mount is still live.

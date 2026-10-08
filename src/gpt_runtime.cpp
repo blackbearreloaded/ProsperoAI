@@ -1,7 +1,6 @@
 // ProsperoAI adapter for the native PS5 AGC model backends.
 
 #include "gpt_runtime.hpp"
-#include "remove_tree.hpp"
 #include "model_metadata.hpp"
 
 #if defined(PS5_MEDIA_AUDIO) && !defined(PS5_DUAL_BACKEND)
@@ -579,23 +578,7 @@ const char *gpt_runtime_model_id(unsigned index)
     return index < model_count ? models[index].id : "";
 }
 
-bool gpt_runtime_delete_model(unsigned index)
-{
-    ModelsGuard guard;
-    load_models();
-    if (index >= model_count || index == selected_model)
-        return false;
-    char root[160];
-    std::snprintf(root, sizeof(root), "/app0/models/%s", models[index].id);
-    if (!prospero_remove_tree(root))
-        return false;
-    for (unsigned i = index; i + 1 < model_count; ++i)
-        models[i] = models[i + 1];
-    --model_count;
-    if (index < selected_model)
-        --selected_model;
-    return true;
-}
+
 
 const char *gpt_runtime_model_name(unsigned index)
 {
@@ -831,7 +814,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned message
                          std::size_t output_capacity, gpt_runtime_stats_t *stats,
                          gpt_runtime_progress_fn progress)
 {
-    if (!messages || message_count < 2 || !output || !output_capacity)
+    if (!messages || message_count < 1 || !output || !output_capacity)
         return 1;
     load_models();
     if (!model_count)

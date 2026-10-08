@@ -29,8 +29,8 @@ Demo available by clicking the image below.
 > [!NOTE]
 > **Work in progress on this branch.** The GPU backend is being migrated from the
 > AGC kernels to llama.cpp's Vulkan backend on RADV, and the network layer is being
-> moved onto the Payload SDK's sockets. The current build is not yet verified to boot
-> on a console. Build steps are in [docs/BUILDING.md](docs/BUILDING.md).
+> moved onto the Payload SDK's sockets. The Vulkan folder build has been verified on PS5 FW 12.70;
+> see [benchmark results](docs/VK_BENCHMARK_2026-10-08.md). Build steps are in [docs/BUILDING.md](docs/BUILDING.md).
 
 ## Highlights
 

@@ -26,6 +26,7 @@ import argparse
 import ftplib
 import io
 import os
+import pathlib
 import socket
 import sys
 import time
@@ -61,7 +62,7 @@ def cmd_status(_args):
         ftp = ftp_connect()
         print(f"ftp port {FTP_PORT}: open, homebrew has {len(ftp.nlst(HOMEBREW))} entries")
         ftp.quit()
-    except (ftplib.all_errors, OSError) as error:
+    except ftplib.all_errors as error:
         print(f"ftp port {FTP_PORT}: {error}")
         ok = False
     try:
@@ -102,10 +103,37 @@ def cmd_ftp(args):
         if args.action == "ls":
             for line in ftp.nlst(args.remote or HOMEBREW):
                 print(line)
+        elif args.action == "size":
+            ftp.voidcmd("TYPE I")
+            print(ftp.size(args.remote))
+        elif args.action == "chmod":
+            print(ftp.sendcmd(f"SITE CHMOD {args.mode} {args.remote}"))
         elif args.action == "put":
             with open(args.local, "rb") as fh:
-                ftp.storbinary(f"STOR {args.remote}", fh)
+                ftp.storbinary(f"STOR {args.remote}", fh, blocksize=256 * 1024)
             print(f"uploaded {args.local} -> {args.remote}")
+        elif args.action == "put-dir":
+            root = pathlib.Path(args.local)
+            if not root.is_dir():
+                raise ValueError(f"not a directory: {root}")
+            def ensure_directory(remote):
+                current = ""
+                for component in remote.strip("/").split("/"):
+                    current += "/" + component
+                    try:
+                        ftp.mkd(current)
+                    except ftplib.error_perm:
+                        ftp.cwd(current)
+            files = sorted((p for p in root.rglob("*") if p.is_file()),
+                           key=lambda p: (p.name == "param.json", p.name == "eboot.bin", str(p)))
+            for path in files:
+                remote = args.remote.rstrip("/") + "/" + path.relative_to(root).as_posix()
+                ensure_directory(remote.rsplit("/", 1)[0])
+                with path.open("rb") as source:
+                    ftp.storbinary(f"STOR {remote}", source, blocksize=256 * 1024)
+                if path.name == "eboot.bin" or path.suffix == ".prx":
+                    ftp.sendcmd(f"SITE CHMOD 755 {remote}")
+                print(f"uploaded {path.relative_to(root)}", flush=True)
         elif args.action == "rm":
             require_yes(args)
             if args.dir:
@@ -170,10 +198,11 @@ def cmd_klog(args):
 
 
 def cmd_shot(args):
-    if not SESSION:
+    session = args.session
+    if not session:
         print("set P5_SESSION to an active Remote Play session id", file=sys.stderr)
         return 2
-    with urllib.request.urlopen(f"{MANAGER}/api/remoteplay/sessions/{SESSION}/video.mjpeg",
+    with urllib.request.urlopen(f"{MANAGER}/api/remoteplay/sessions/{session}/video.mjpeg",
                                 timeout=10) as r:
         data = r.read(2_000_000)
     start = data.find(b"\xff\xd8")
@@ -318,9 +347,17 @@ def main(argv=None):
     fsub = f.add_subparsers(dest="action", required=True)
     fls = fsub.add_parser("ls")
     fls.add_argument("remote", nargs="?")
+    fsize = fsub.add_parser("size")
+    fsize.add_argument("remote")
+    fchmod = fsub.add_parser("chmod")
+    fchmod.add_argument("mode", choices=("644", "755", "777"))
+    fchmod.add_argument("remote")
     fput = fsub.add_parser("put")
     fput.add_argument("local")
     fput.add_argument("remote")
+    fdir = fsub.add_parser("put-dir")
+    fdir.add_argument("local")
+    fdir.add_argument("remote")
     frm = fsub.add_parser("rm")
     frm.add_argument("remote")
     frm.add_argument("--dir", action="store_true")
@@ -333,6 +370,7 @@ def main(argv=None):
     k = sub.add_parser("klog")
     k.add_argument("--seconds", type=float, default=30)
     s = sub.add_parser("shot")
+    s.add_argument("--session", default=SESSION)
     s.add_argument("out")
     sh = sub.add_parser("shell")
     sh.add_argument("cmd")
