@@ -36,6 +36,35 @@ Updated: 2026-10-08. Plan: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LO
 - Next: complete host builds/integration checks, deploy only changed files to PPSA99023 if the
   console is reachable, then test browse/download/runtime discovery without touching PPSA99004.
 
+## Compatibility with PR #6 (midnight-ui)
+
+This branch was rebased clean onto upstream `main` (`git merge-tree` reported no conflicts); it
+does not merge against `wip/midnight-ui` itself, since that PR is still open and its native UI is
+still changing. For whoever ports the Models downloader once midnight-ui lands:
+
+- `src/model_downloader_ps5.cpp`/`.hpp` (namespace `prospero_model_download`: `State`,
+  `Candidate`, `poll()`, `browse()`, `download()`) has no RmlUi dependency — only
+  `gpt_app.cpp`'s `RefreshModels()` and its controller-input handling talk to RmlUi elements by
+  id. The backend can be reused as-is.
+- midnight-ui already names its model-library tab "Models" (`kTabs[]` in `src/native_ui.cpp`),
+  matching this branch's `View::Models` — no rename needed.
+- midnight-ui's Models screen (`draw_models`/`draw_model` in `src/native_ui_screens.cpp`,
+  `handle_models` in `src/native_ui.cpp:395`) has no download code or networking (no
+  `sceHttp`/`sceSsl` anywhere in that branch) and an explicit empty-state string ("Nothing is
+  downloaded by the app"). The natural hook is a new `DialogAction` (alongside `kUseModel`,
+  `kDeleteConversation`, `kCloseApp`) plus the existing `chip()`/`spinner()` pending-state pattern
+  (already used for model preparation) and `ui::ToastStack` for completion/failure notices —
+  follow that pattern instead of introducing new UI primitives.
+
+## Cold-load time lead (untested)
+
+`src/gpt_runtime_vulkan.cpp` sets `mp.load_mode = LLAMA_LOAD_MODE_NONE`, which disables mmap and
+forces a full eager read+copy of the ~3.85 GiB of weights before any GPU upload. AGC loads the
+same-size model from the same storage in ~1.5 s, which points at this eager-read path — not RADV
+upload — as the likely cause of the ~60 s Vulkan cold load. Switching to `LLAMA_LOAD_MODE_MMAP`
+is a one-line experiment worth measuring against the existing benchmark recipe before concluding
+anything more structural (e.g. pipelined per-tensor read/upload) is needed.
+
 ## Evidence
 
 - [Benchmark report](VK_BENCHMARK_2026-10-08.md)
