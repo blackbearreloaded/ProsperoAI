@@ -82,8 +82,14 @@ def tensor_bytes(tensor):
 
 
 def parse(path: Path,
+          # The empty prefix matches every key, so parse() now retains all
+          # GGUF metadata, not just the architecture's. That is deliberate:
+          # pack_ps5_model needs block_count and friends for an architecture it
+          # may not know in order to report "no runtime layout" instead of
+          # raising KeyError. The cost is that unrelated metadata such as the
+          # large tokenizer.ggml.* arrays is also held in memory during packing.
           metadata_prefixes=("general.", "llama.", "mistral.", "qwen35.",
-                             "smollm3.")):
+                             "smollm3.", "")):
     handle = path.open("rb")
     data = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)
     reader = Reader(data)

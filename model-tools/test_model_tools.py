@@ -11,6 +11,44 @@ from capture_model_recipe import capture, file_identity
 from prepare_model import load_recipe
 from repack_ps5_model_runtime import (ENTRY_BYTES, ENTRY_FORMAT, HEADER_BYTES,
                                       HEADER_FORMAT)
+from pack_ps5_model import RUNTIME_LAYOUTS, check_runtime_layout
+
+
+class RuntimeLayoutGateTest(unittest.TestCase):
+    """The packer must reject models the runtime cannot dispatch."""
+
+    def signature(self, layout: str) -> tuple:
+        spec = RUNTIME_LAYOUTS[layout]
+        return (spec["block_count"], spec["embedding_length"],
+                spec["feed_forward_length"], spec["head_count"],
+                spec["head_count_kv"], spec["vocab_size"])
+
+    def test_accepts_every_known_layout(self):
+        for layout in sorted(RUNTIME_LAYOUTS):
+            self.assertEqual(
+                check_runtime_layout("test", self.signature(layout)), layout)
+
+    def test_mistral_layout_is_reachable_from_llama_architecture(self):
+        # Mistral ships as GGUF architecture "llama", so the gate must key on
+        # header dimensions and never on the architecture string alone.
+        self.assertEqual(
+            check_runtime_layout("llama", self.signature(
+                "mistral-7b-runtime-v1")),
+            "mistral-7b-runtime-v1")
+
+    def test_rejects_unsupported_model_with_clear_message(self):
+        with self.assertRaises(ValueError) as raised:
+            check_runtime_layout("gemma", (26, 2048, 8192, 8, 4, 256000))
+        message = str(raised.exception)
+        self.assertIn("gemma", message)
+        self.assertIn("mistral-7b-runtime-v1", message)
+        self.assertIn("qwen35-9b-runtime-v1", message)
+
+    def test_rejects_known_architecture_with_wrong_dimensions(self):
+        # A real trap: a Qwen GGUF whose vocab size differs has no layout.
+        with self.assertRaises(ValueError) as raised:
+            check_runtime_layout("qwen35", (32, 4096, 12288, 16, 4, 151936))
+        self.assertIn("qwen35", str(raised.exception))
 
 
 class ModelToolsTest(unittest.TestCase):
