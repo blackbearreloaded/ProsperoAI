@@ -1,0 +1,60 @@
+# ProsperoAI - What the interface costs the sound model: the same clip four times.
+#
+# 1 as the app is, 2 with nothing drawn, 3 with the model's small allocations kept out of
+# the interface's heap, 4 as the app is again (does a run slow the next one down?).
+# Each "status" gives the time of the answer before it; the app's log has the stages.
+limit 2700
+
+until started 60
+until ready 420
+wait 3
+status
+press r1
+wait 1
+type stable-audio
+wait 1
+press cross
+wait 1
+press right
+press cross
+until ready 420
+expect model stable-audio
+backspace 12
+press l1
+wait 1
+status
+
+type Soft rain on a window
+submit
+until idle 900
+expect audio
+wait 2
+status
+
+set draw off
+type Soft rain on a window
+submit
+until idle 900
+set draw on
+expect audio
+wait 2
+status
+
+set shared-heap off
+type Soft rain on a window
+submit
+until idle 900
+set shared-heap on
+expect audio
+wait 2
+status
+
+type Soft rain on a window
+submit
+until idle 900
+expect audio
+wait 2
+status
+shot 01-sound
+
+quit 60

@@ -132,6 +132,25 @@ int isatty(int descriptor)
  * which leaves a black screen while programs build and fonts load. The build
  * routes every such call here (--wrap), and the kit's sys::hide_splash_screen()
  * lets them through by calling hui_release_splash(). */
+/* Counted for test runs: a model runtime that is refused its threads works alone. */
+extern int __real_pthread_create(void *thread, const void *attributes, void *(*entry)(void *),
+                                 void *argument);
+static unsigned threads_started, threads_refused;
+
+int __wrap_pthread_create(void *thread, const void *attributes, void *(*entry)(void *),
+                          void *argument)
+{
+    const int result = __real_pthread_create(thread, attributes, entry, argument);
+    __atomic_add_fetch(result == 0 ? &threads_started : &threads_refused, 1u, __ATOMIC_RELAXED);
+    return result;
+}
+
+void prospero_thread_counts(unsigned *started, unsigned *refused)
+{
+    *started = __atomic_load_n(&threads_started, __ATOMIC_RELAXED);
+    *refused = __atomic_load_n(&threads_refused, __ATOMIC_RELAXED);
+}
+
 extern int __real_sceSystemServiceHideSplashScreen(void);
 static int splash_released;
 

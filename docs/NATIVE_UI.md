@@ -179,6 +179,7 @@ The same script plays against the PC stand-ins with
 | `expect model <part of its id>\|answer\|image\|audio` | Notes whether that model is active and ready, or the last answer is of that kind (a text answer with `<unk>` in it is not one); an unmet one fails the run, which goes on |
 | `shot <name>` | Saves the frame as `<name>.bmp` |
 | `status` | Writes the state, the last answer's figures and the frame times since the last status |
+| `set draw on\|off`, `set shared-heap on\|off` | Test switches: stop drawing (the interface still runs), or keep the model runtimes' small allocations out of the interface's heap |
 | `quit [seconds]` | Writes the result, stays up that long, then closes the app |
 
 A wait that runs out, or a model that is not prepared, ends the run at once; an `expect`
