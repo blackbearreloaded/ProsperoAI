@@ -2,20 +2,67 @@
 // Copyright (C) 2026 BlackBearReloaded
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_ui.hpp"
+#include "dev_script.hpp"
 #include "gpt_input.hpp"
 #include "gpt_ime.hpp"
 #include "audio/cues.hpp"
+#include "gfx/canvas.hpp"
 #include "gfx/renderer.hpp"
 #include "platform/ps5/display_egl.hpp"
 #include "platform/ps5/audio_out.hpp"
 #include "platform/ps5/system.hpp"
 #include <SDL2/SDL.h>
 #include <algorithm>
+#include <cstdio>
+#include <vector>
 
 void prospero_setup_sdl_memory();
 
 namespace
 {
+// A scripted run's pictures: half the canvas is enough to compare with the PC's.
+constexpr int kPictureWidth = 960, kPictureHeight = 540;
+
+// The bound framebuffer, bottom row first, as a 24-bit BMP.
+bool save_picture(const std::string &path, int width, int height)
+{
+    std::vector<unsigned char> pixels(static_cast<std::size_t>(width) * height * 4);
+    glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    const std::uint32_t row = (static_cast<std::uint32_t>(width) * 3 + 3) & ~3u;
+    const std::uint32_t size = 54 + row * static_cast<std::uint32_t>(height);
+    unsigned char header[54] = {'B', 'M'};
+    const auto put = [&](int at, std::uint32_t value)
+    {
+        for (int i = 0; i < 4; ++i)
+            header[at + i] = static_cast<unsigned char>(value >> (8 * i));
+    };
+    put(2, size);
+    put(10, 54);
+    put(14, 40);
+    put(18, static_cast<std::uint32_t>(width));
+    put(22, static_cast<std::uint32_t>(height));
+    header[26] = 1;
+    header[28] = 24;
+    put(34, size - 54);
+    std::FILE *file = std::fopen(path.c_str(), "wb");
+    if (file == nullptr)
+        return false;
+    bool ok = std::fwrite(header, 1, sizeof(header), file) == sizeof(header);
+    std::vector<unsigned char> line(row);
+    for (int y = 0; y < height && ok; ++y)
+    {
+        const unsigned char *source = pixels.data() + static_cast<std::size_t>(y) * width * 4;
+        for (int x = 0; x < width; ++x)
+        {
+            line[static_cast<std::size_t>(x) * 3] = source[x * 4 + 2];
+            line[static_cast<std::size_t>(x) * 3 + 1] = source[x * 4 + 1];
+            line[static_cast<std::size_t>(x) * 3 + 2] = source[x * 4];
+        }
+        ok = std::fwrite(line.data(), 1, line.size(), file) == line.size();
+    }
+    return std::fclose(file) == 0 && ok;
+}
+
 void ime_result(const char *value, void *context)
 {
     static_cast<prospero::NativeUI *>(context)->keyboard_result(value);
@@ -82,13 +129,19 @@ int main()
     prospero::UiFrame frame;
     frame.glass_texture = renderer.glass_texture();
     hui::ui::Feedback feedback;
+    // A test run written in the install folder's dev/request.txt; nothing without it.
+    prospero::DevScript script;
+    if (script.load("/app0/dev/request.txt", "/download0/ProsperoAI/dev"))
+        hui::sys::log("[prosperoai] scripted run");
+    hui::gfx::Canvas picture;
     auto previous = hui::sys::monotonic_us();
     bool first_frame = true;
-    while (!ui.quit_requested())
+    while (!ui.quit_requested() && !script.quit())
     {
         // Animation time runs from frame start to frame start, and is clamped.
         const auto now = hui::sys::monotonic_us();
-        const float dt = std::clamp(static_cast<float>(now - previous) / 1000000.0f, 0.001f, 0.05f);
+        const float elapsed = static_cast<float>(now - previous) / 1000000.0f;
+        const float dt = std::clamp(elapsed, 0.001f, 0.05f);
         previous = now;
         feedback.clear();
         hui::InputFrame input;
@@ -99,6 +152,7 @@ int main()
             if (!intercepted)
                 input_event(event, input, ui, feedback);
         gpt_ime_poll();
+        script.update(elapsed, app, ui, input, feedback);
         ui.update(input, dt, feedback);
         const float gain = static_cast<float>(app.state().preferences.volume) / 100;
         mixer.set_bus_gain(hui::audio::Bus::ui, gain);
@@ -114,6 +168,21 @@ int main()
             renderer.glass();
         renderer.draw(frame.overlay);
         renderer.present(0, display.width(), display.height());
+        if (!script.capture().empty())
+        {
+            // The same frame drawn once more into a small off-screen target: reading
+            // the display surface back is slow.
+            if (picture.texture() == 0)
+                picture.create(kPictureWidth, kPictureHeight, 1);
+            picture.bind();
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            renderer.present(picture.framebuffer(), kPictureWidth, kPictureHeight);
+            glBindFramebuffer(GL_FRAMEBUFFER, picture.framebuffer());
+            script.capture_done(save_picture(script.capture(), kPictureWidth, kPictureHeight));
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            previous = hui::sys::monotonic_us(); // saving is slow; the frame was not
+        }
         if (!display.swap())
             break;
         if (first_frame)

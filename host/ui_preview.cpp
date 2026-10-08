@@ -2,6 +2,7 @@
 // No model weights, console connection, or deployment is involved.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_ui.hpp"
+#include "dev_script.hpp"
 #include "gfx/renderer.hpp"
 #include "gfx/gl_program.hpp"
 #include <EGL/egl.h>
@@ -324,6 +325,40 @@ int main(int argc, char **argv)
         }
     };
 
+    if (const char *request = std::getenv("PROSPERO_SCRIPT"))
+    {
+        // The console's scripted run, played against the stand-ins in real time.
+        prospero::DevScript script;
+        if (!script.load(request, output))
+        {
+            std::fprintf(stderr, "no script in %s (or its token was already played)\n", request);
+            return 2;
+        }
+        auto before = std::chrono::steady_clock::now();
+        while (!script.quit() && !ui.quit_requested())
+        {
+            const auto now = std::chrono::steady_clock::now();
+            const float elapsed = std::chrono::duration<float>(now - before).count();
+            before = now;
+            feedback.clear();
+            hui::InputFrame input;
+            script.update(elapsed, app, ui, input, feedback);
+            ui.update(input, std::min(std::max(elapsed, 0.001f), 0.05f), feedback);
+            if (!script.capture().empty())
+            {
+                const std::string path = script.capture();
+                const std::string name =
+                    path.substr(path.find_last_of('/') + 1, path.size() - path.find_last_of('/') - 5);
+                capture(name.c_str());
+                script.capture_done(true);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        }
+        std::remove(image_fixture.c_str());
+        app.shutdown();
+        std::remove(PROSPERO_SETTINGS_PATH);
+        return 0;
+    }
     frames(40);
     capture("opening");
     settle();

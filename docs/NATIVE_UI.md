@@ -146,6 +146,45 @@ and their metrics, wrapping at spaces and between code points, bounded image dec
 allocator resizing and concurrent AGC initialization. The preview reports no OpenGL error
 on any page and that a reduced-motion page at rest is identical two seconds later.
 
+## A scripted run on a console
+
+A console cannot be driven or closed from a PC without killing the app, so a test run is
+written down instead. When the install folder holds `dev/request.txt`, the app plays its
+steps as if a controller and a keyboard were used (`src/dev_script.cpp`), writes a report
+and half-size pictures to `/download0/ProsperoAI/dev`, waits so that a PC can copy them
+(the title's storage is only readable while it runs), and closes itself the way Options
+and Close do. A request is played once: its token is remembered. Without the file none of
+this code does anything.
+
+```sh
+python3 tools/console-run.py <console address> tests/console/first-run.txt results/first-run
+```
+
+writes the request, starts the title with the launch controller of
+[ps5-homebrew-dev-protocol](https://github.com/blackbearreloaded/ps5-homebrew-dev-protocol),
+follows the report, brings back the pictures, the diagnostic log and the kernel log, checks
+the console's error history, and removes the request. It never closes or kills anything.
+The same script plays against the PC stand-ins with
+`PROSPERO_SCRIPT=<request file> python3 tools/host-ui-preview.py <folder>`.
+
+| Step | What it does |
+| --- | --- |
+| `token <word>` | Names the request (the runner adds it); a token already played is ignored |
+| `limit <seconds>` | The whole run's time limit (300 unless set) |
+| `wait <seconds>` | Lets time pass |
+| `until started\|idle\|ready [seconds]` | Waits for the catalogue, for the worker to be idle, or for an idle worker with a prepared model |
+| `press cross\|circle\|square\|triangle\|options\|l1\|r1\|up\|down\|left\|right` | One press |
+| `type <text>` | USB-keyboard typing, a character a frame |
+| `backspace [count]`, `submit`, `scroll <pixels>` | Backspace, Enter, and the right stick |
+| `expect model <part of its id>\|answer\|image\|audio` | Fails the run unless that model is active and ready, or the last answer is of that kind |
+| `shot <name>` | Saves the frame as `<name>.bmp` |
+| `status` | Writes the state, the last answer's figures and the frame times since the last status |
+| `quit [seconds]` | Writes the result, stays up that long, then closes the app |
+
+A step that fails (a wait that runs out, a model that is not prepared, an `expect` that is
+not met) ends the run at once: the report says `RESULT: FAILED` and the app closes after
+the `quit` step's wait.
+
 ## Not verified on a console
 
 Nothing in this interface has run on hardware yet: start-up, controller feel, the system

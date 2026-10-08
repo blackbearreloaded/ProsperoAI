@@ -227,6 +227,7 @@ include/             Application interfaces
 assets/              The last-resort bitmap font (other fonts and sounds come from the kit)
 ui-kit/              Which sources of the fetched interface kit are compiled
 host/                Deterministic native-frontend capture harness
+tests/console/       Scripts the app plays by itself in a test run on a console
 sce_sys/             PS5 title metadata, artwork, icon, and selection music
 models/README.txt    Model-free release placeholder and install guidance
 model-tools/         GGUF converter, validated recipes, and porting guide

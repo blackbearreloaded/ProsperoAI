@@ -18,6 +18,8 @@
   has an About page with the version.
 - Moved to ps5-opengl SDK 1.0.1.
 - The diagnostic log is off unless the install folder holds `dev/log.txt`.
+- A scripted, self-ending run for tests on a console (`dev/request.txt`,
+  `tools/console-run.py`, `tests/console/first-run.txt`); inert without the request file.
 - Adopted the foundation's parallel incremental Ninja build and ccache-backed
   local/CI compilation workflow.
 - Fixed RELRO load-segment alignment for executables whose relocated read-only
