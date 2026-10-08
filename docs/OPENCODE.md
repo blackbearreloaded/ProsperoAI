@@ -12,12 +12,15 @@ download a model. Downloads are saved to `/data/homebrew/prosperoai/models`; the
 registers them immediately and returns their IDs from `/v1/models`. Use the exact model ID
 returned by `/v1/models`.
 
-For a bearer API key, create a file named `api_key.txt` in the deployed app's root
-(`/data/homebrew/PPSA99023/api_key.txt` in the test slot), containing your key on one
-line, at most 256 bytes including a trailing newline. Restart the title to load it.
-The server then requires `Authorization: Bearer <key>` on all HTTP routes, including
-the older Ollama routes. The built-in web page does not supply this header. Without
-this file the local API does not require authentication. The API uses plain HTTP.
+By default the local API requires no authentication: without an `api_key.txt` file,
+every HTTP route (including the older Ollama routes) accepts unauthenticated requests.
+The API uses plain HTTP, so only expose it on a network you trust.
+
+To require a bearer key instead, create a file named `api_key.txt` in the deployed
+app's root (`/data/homebrew/PPSA99023/api_key.txt` in the test slot), containing your
+key on one line, at most 256 bytes including a trailing newline, and restart the
+title to load it. The server then requires `Authorization: Bearer <key>` on all HTTP
+routes; the built-in web page does not supply this header, so adding a key breaks it.
 Keep keys out of Git and PR descriptions.
 
 The Vulkan context defaults to 4096 tokens. For OpenCode, put `16384` in
@@ -27,8 +30,8 @@ GPU memory. The benchmark report used 4096; its buffer figures do not describe 1
 
 ## Configure OpenCode
 
-Set `PROSPEROAI_API_KEY` in your local environment to the same key, then add this to
-`opencode.json` (adjust the address and model ID):
+Add this to `opencode.json` (adjust the address and model ID). No API key is needed
+by default, matching the server's unauthenticated default above:
 
 ```json
 {
@@ -38,8 +41,7 @@ Set `PROSPEROAI_API_KEY` in your local environment to the same key, then add thi
       "npm": "@ai-sdk/openai-compatible",
       "name": "PS5 ProsperoAI",
       "options": {
-        "baseURL": "http://10.0.0.127:11434/v1",
-        "apiKey": "{env:PROSPEROAI_API_KEY}"
+        "baseURL": "http://10.0.0.127:11434/v1"
       },
       "models": {
         "Mistral-7B-Instruct-v0.3.Q4_0.gguf": {
@@ -53,6 +55,10 @@ Set `PROSPEROAI_API_KEY` in your local environment to the same key, then add thi
   "model": "prosperoai/Mistral-7B-Instruct-v0.3.Q4_0.gguf"
 }
 ```
+
+If you set up `api_key.txt` above, also set `PROSPEROAI_API_KEY` in your local
+environment to the same key and add `"apiKey": "{env:PROSPEROAI_API_KEY}"` under
+`options`.
 
 This uses OpenCode's [custom OpenAI-compatible provider](https://opencode.ai/docs/providers/#custom-provider).
 A direct OpenCode 1.1.36 streaming connection returned `API_OK` on the PS5 test build. A PS5 function-call test called `lookup` with `{"query":"Vulkan"}`, accepted the tool result and produced a final answer.
