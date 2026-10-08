@@ -4,7 +4,7 @@
 # dev/request.txt; tools/console-run.py puts it there with a fresh token, starts the app,
 # collects the report and the pictures, and waits for the app to close itself.
 #
-# It expects one model of each kind, found by these search words: "qwen" (text),
+# It expects one model of each kind, found by these search words: "mistral" (text),
 # "sd-turbo" (image), "stable-audio" (sound) and "kokoro" (voice). A model that is not
 # installed makes its step fail, which ends the run early and says so.
 limit 1500
@@ -35,7 +35,7 @@ press l1
 wait 1
 
 # Text: choose the model through the search, as a player with a keyboard would.
-type qwen
+type mistral
 wait 1
 press cross
 wait 1
@@ -43,9 +43,9 @@ shot 06-use-model
 press right
 press cross
 until ready 420
-expect model qwen
+expect model mistral
 status
-backspace 4
+backspace 7
 press l1
 wait 1
 type Say hello in five words.

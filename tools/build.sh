@@ -303,6 +303,12 @@ cp "$kit"/assets/audio/sfx/glass/*.wav "$app/assets/audio/sfx/glass/"
 for cue in complete_01 tick_01 tick_02 type_01 type_02; do
     cp "$kit/assets/audio/sfx/paper/$cue.wav" "$app/assets/audio/sfx/paper/"
 done
+# A title cannot list its own folders on the console: the kit's sound bank reads the
+# names from an index.txt beside the files (as the kit's own build writes them).
+for sounds in "$app"/assets/audio/sfx/*/; do
+    (cd "$sounds" && find . -maxdepth 1 -type f ! -name index.txt -printf '%f\n' |
+        LC_ALL=C sort > index.txt)
+done
 mkdir -p "$app/models"
 cp "$root/models/README.txt" "$app/models/README.txt"
 
