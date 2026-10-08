@@ -49,17 +49,37 @@ RADV support on this hardware/firmware in general. Worth inspecting RetroArch's 
 list, link flags via `make inspect` equivalent) as a second known-good reference alongside
 ProsperoAI's AGC build.
 
+## Ruled out today, in addition to the earlier list
+
+- **`param.json`'s `attribute3`:** RetroArch (the one confirmed-working RADV title on this
+  console) sets `0x80040` ("120 Hz output", per Mihawk's `HARDWARE_FINDINGS.md`); our builds had
+  `0`. Set it to `0x80040` on a fresh ID (`PPSA99022`) and retested: registered, launched, same
+  `ProcessTerm()` outcome. Not the fix, though it may still be worth keeping set since it's one
+  less difference from a known-working title.
+- **Static FSELF/ELF comparison with RetroArch:** downloaded its `eboot.bin` from the console
+  (`/data/homebrew/PPSA99169/eboot.bin`, 38.2 MB) and ran Mihawk's `make inspect` on it —
+  identical shape to ours (FSELF, 12 segment entries, entry `0x120`, 14 program headers, 4 mapped
+  LOADs, `StaticErrors: 0`). Tried to extract the raw ELF to diff NEEDED lists the way we did
+  between our build and Mihawk's smoke eboot earlier; failed — a development FSELF's segments are
+  stored per the FSELF segment table, not as a contiguous plain ELF, so a naive byte slice at the
+  computed ELF offset produces a truncated, unparseable file beyond the headers. Need proper
+  FSELF segment-table-aware extraction (or a tool that already does it) to go further this way.
+- **Coredump race, attempt 2:** a `threading`-based poller started *before* the launch command
+  (rather than after, as the first attempt did) still missed the ~1s window twice. FTP round-trip
+  latency over this network is almost certainly too high for `ftplib`'s `NLST` to win this race;
+  would need either a lower-latency protocol/path to the console or to disable whatever makes the
+  cleanup immediate (`CrashReportSequencerReporter`'s `needsToReport=False` suggests this
+  "Developer" console build auto-discards reports it would otherwise keep for a submission flow).
+
 ## Next, in order
 
-1. **Grab a coredump before the cleaner deletes it.** The directory
-   (`/devlog/system/sce_coredumps.0/<title>_<ts>/`) exists for under ~1s. A tighter race (parallel
-   poller started *before* the launch command is even sent, or using `MLSD`/raw FTP without
-   `ftplib`'s per-call overhead) might catch it. If caught, the dump's register state (PC/LR) or
-   signal number would say exactly where/why it faults.
-2. Compare PS5 RetroArch's RADV eboot (`/data/homebrew/PPSA99169/eboot.bin`) against ours: NEEDED
-   list, FSELF header, and — if obtainable — how it links RADV. It is proof that a RADV title
-   *can* run on this console, so its differences from our/Mihawk's smoke title are the most
-   direct remaining lead.
+1. Find a way to keep the coredump instead of racing to read it: a console/debug setting that
+   changes `CrashReportSequencerReporter`'s "Developer" auto-discard behavior, or a way to make
+   the race winnable (local-network tool faster than Python `ftplib`, or a payload that copies the
+   dump out from *inside* the console the instant it appears, with no network round-trip at all).
+2. Get proper FSELF extraction working (segment-table-aware, not a flat byte slice) so RetroArch's
+   real `.dynamic`/NEEDED list and the shape of its RADV linkage can be compared directly against
+   ours and against Mihawk's smoke title.
 3. Ask Mihawk's docs (or upstream) directly whether a specific payload/loader
    (HEN/etaHEN/kstuff version) is a documented prerequisite for a *custom* title to pass
    `LaunchFlow`, as opposed to a pre-registered retail/homebrew one. `/data/etaHEN` does not exist
