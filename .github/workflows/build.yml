@@ -38,10 +38,11 @@ jobs:
         with:
           python-version: "3.13"
 
+      # clang-tidy is a local check (make tidy); it is not installed or run here.
       - name: Install native toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang-18 clang-format-18 clang-tidy-18 lld-18 make ninja-build ccache pkg-config python3-venv tar unzip wget
+          sudo apt-get install --yes clang-18 clang-format-18 lld-18 make ninja-build ccache pkg-config python3-venv tar unzip wget
 
       - name: Restore dependencies
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -109,7 +110,24 @@ jobs:
           }
           cd dist
           test -f "$TITLE_ID.zip"
+          # The console only starts an app whose files are open to all, and some tools
+          # keep a ZIP's permissions when unpacking: every entry must be stored as 0777.
+          python3 - "$TITLE_ID.zip" "$TITLE_ID" "$CONTENT_VERSION" <<'PY'
+          import json, sys, zipfile
+          archive, title, version = sys.argv[1:4]
+          with zipfile.ZipFile(archive) as z:
+              assert z.testzip() is None, "damaged ZIP entry"
+              names = z.namelist()
+              assert all(n.startswith(title + "/") for n in names), "entries outside the app folder"
+              assert title + "/eboot.bin" in names, "no eboot.bin"
+              wrong = [i.filename for i in z.infolist() if (i.external_attr >> 16) & 0o777 != 0o777]
+              assert not wrong, f"entries not stored as 0777: {wrong[:3]}"
+              meta = json.loads(z.read(title + "/sce_sys/param.json"))
+              assert meta["contentVersion"] == version, meta["contentVersion"]
+              print(f"{archive}: {len(names)} entries, all 0777, version {version}")
+          PY
           sha256sum "$TITLE_ID.zip" > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Upload build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

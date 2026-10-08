@@ -166,7 +166,7 @@ help:
 	  'make format          Apply the shared Clang formatting policy' \
 	  'make format-check    Check formatting without modifying files' \
 	  'make tidy            Run the shared Clang static-analysis policy' \
-	  'make lint            Run format, tidy, metadata, and shell checks' \
+	  'make lint            Run format, metadata, and shell checks (no clang-tidy)' \
 	  'make check           Run lint and build ProsperoAI' \
 	  'make ffpkg           Build the folder and UFS2 .ffpkg image' \
 	  'make ffpfsc          Build the folder and compressed .ffpfsc image' \
