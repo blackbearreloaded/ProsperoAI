@@ -6,6 +6,9 @@
 
 #include "gpt_ime.hpp"
 #include "gpt_runtime.hpp"
+#ifdef PS5_LLAMA_VULKAN
+#include "model_downloader_ps5.hpp"
+#endif
 
 #include <RmlUi/Core/Element.h>
 #include <RmlUi/Core/ElementDocument.h>
@@ -335,6 +338,10 @@ bool ProsperoAiApp::Initialize(Rml::ElementDocument *document)
     document_ = document;
     if (!document_)
         return false;
+#ifndef PS5_LLAMA_VULKAN
+    SetVisible(document_, "tab-models", false);
+    SetText(document_, "footer-options-label", "Options: Workshop · R1: Workshop");
+#endif
     active_ = this;
     conversation_auto_follow = true;
     conversation_scroll_offset = 0;
@@ -1083,6 +1090,10 @@ void ProsperoAiApp::ArchiveGeneratedMedia()
 
 void ProsperoAiApp::Poll()
 {
+#ifdef PS5_LLAMA_VULKAN
+    prospero_model_download::poll();
+    if (view_ == View::Models) RefreshModels();
+#endif
     if (warming && warmup_done.load(std::memory_order_acquire))
     {
         scePthreadJoin(warmup_thread, nullptr);
@@ -1185,9 +1196,14 @@ void ProsperoAiApp::SetView(View view)
     view_ = view;
     SetVisible(document_, "conversation-screen", view_ == View::Conversation);
     SetVisible(document_, "workshop-screen", view_ == View::Workshop);
+    SetVisible(document_, "models-screen", view_ == View::Models);
     SetClass(document_, "tab-conversation", "active", view_ == View::Conversation);
     SetClass(document_, "tab-workshop", "active", view_ == View::Workshop);
+    SetClass(document_, "tab-models", "active", view_ == View::Models);
     RefreshSettings();
+#ifdef PS5_LLAMA_VULKAN
+    if (view_ == View::Models) RefreshModels();
+#endif
 }
 
 void ProsperoAiApp::ChangeSetting(int direction)
@@ -1235,7 +1251,11 @@ void ProsperoAiApp::HandleInput(const gpt_input_event_t &event)
     }
     if (event.key == GPT_INPUT_R1)
     {
+#ifdef PS5_LLAMA_VULKAN
+        SetView(View::Models);
+#else
         SetView(View::Workshop);
+#endif
         return;
     }
     if (view_ == View::Conversation)
@@ -1338,6 +1358,51 @@ void ProsperoAiApp::HandleInput(const gpt_input_event_t &event)
         else if (event.key == GPT_INPUT_CROSS)
             OpenKeyboard();
         return;
+    }
+    if (view_ == View::Models)
+    {
+#ifdef PS5_LLAMA_VULKAN
+        const auto state = prospero_model_download::state();
+        if (event.key == GPT_INPUT_CIRCLE || event.key == GPT_INPUT_L1) { SetView(View::Conversation); return; }
+        if (event.key == GPT_INPUT_UP || event.key == GPT_INPUT_DOWN)
+        {
+            if (models_focus_ >= 2 && prospero_model_download::candidate_count())
+            {
+                const unsigned count = static_cast<unsigned>(prospero_model_download::candidate_count());
+                model_candidate_selection_ = event.key == GPT_INPUT_UP
+                    ? (model_candidate_selection_ + count - 1) % count
+                    : (model_candidate_selection_ + 1) % count;
+                models_focus_ = model_candidate_selection_ + 2;
+            }
+            else if (event.key == GPT_INPUT_DOWN && models_focus_ == 1 && prospero_model_download::candidate_count())
+                models_focus_ = model_candidate_selection_ + 2;
+            else models_focus_ = event.key == GPT_INPUT_UP ? 0 : 1;
+            RefreshModels(); return;
+        }
+        if (event.key == GPT_INPUT_LEFT || event.key == GPT_INPUT_RIGHT)
+        {
+            models_focus_ = models_focus_ == 0 ? 1 : 0;
+            RefreshModels(); return;
+        }
+        if (event.key == GPT_INPUT_SQUARE)
+        {
+            prospero_model_download::browse(model_repository_); RefreshModels(); return;
+        }
+        if (event.key == GPT_INPUT_CROSS)
+        {
+            if (models_focus_ == 0)
+                gpt_ime_request(model_repository_, ModelRepoResult, this);
+            else if (models_focus_ == 1)
+                prospero_model_download::browse(model_repository_);
+            else if (state == prospero_model_download::State::Ready)
+                prospero_model_download::download(model_candidate_selection_);
+            RefreshModels(); return;
+        }
+        return;
+#else
+        SetView(View::Conversation);
+        return;
+#endif
     }
     if (event.key == GPT_INPUT_CIRCLE)
     {
@@ -1521,6 +1586,73 @@ void ProsperoAiApp::RefreshStatus()
     SetText(document_, "model-spinner", busy ? spinner[busy_animation_frame & 3U] : "");
     SetClass(document_, "model-spinner", "busy", busy);
     SetClass(document_, "model-state", "busy", busy);
+}
+
+void ProsperoAiApp::ModelRepoResult(const char *text, void *user_data)
+{
+#ifdef PS5_LLAMA_VULKAN
+    auto *app = static_cast<ProsperoAiApp *>(user_data);
+    if (!app || !text || !*text) return;
+    std::snprintf(app->model_repository_, sizeof(app->model_repository_), "%s", text);
+    app->model_candidate_selection_ = 0;
+    app->models_focus_ = 1;
+    prospero_model_download::browse(app->model_repository_);
+    app->RefreshModels();
+#else
+    (void)text; (void)user_data;
+#endif
+}
+
+void ProsperoAiApp::RefreshModels()
+{
+#ifdef PS5_LLAMA_VULKAN
+    SetText(document_, "models-repository", model_repository_);
+    char status[192]{};
+    prospero_model_download::status(status, sizeof(status));
+    SetText(document_, "models-download-status", status);
+    const auto state = prospero_model_download::state();
+    SetText(document_, "models-action-label", state == prospero_model_download::State::Loading
+        ? "SEARCHING HUGGING FACE" : state == prospero_model_download::State::Downloading
+        ? "DOWNLOADING GGUF" : state == prospero_model_download::State::Ready
+        ? "SELECT A GGUF TO DOWNLOAD" : "ENTER A REPOSITORY AND SEARCH");
+    const unsigned count = static_cast<unsigned>(prospero_model_download::candidate_count());
+    if (count == 0) SetText(document_, "models-file-0", state == prospero_model_download::State::Loading
+        ? "Searching Hugging Face..." : "No GGUF files loaded. Enter a repository and press Square.");
+    for (unsigned i = 0; i < 8; ++i)
+    {
+        char id[32]; std::snprintf(id, sizeof(id), "models-file-%u", i);
+        if (i < count)
+        {
+            prospero_model_download::Candidate item{};
+            if (prospero_model_download::candidate(i, &item))
+            {
+                char row[224];
+                std::snprintf(row, sizeof(row), "%s%s   ·   %.2f GiB",
+                    i == model_candidate_selection_ ? ">  " : "   ", item.name,
+                    static_cast<double>(item.size) / (1024.0 * 1024.0 * 1024.0));
+                SetText(document_, id, row); SetVisible(document_, id, true);
+            }
+        }
+        else SetVisible(document_, id, false);
+        SetClass(document_, id, "focused", models_focus_ >= 2 && i == model_candidate_selection_);
+    }
+    for (unsigned i = 0; i < 6; ++i)
+    {
+        char id[32]; std::snprintf(id, sizeof(id), "models-installed-%u", i);
+        if (i < gpt_runtime_model_count())
+        {
+            char row[200];
+            std::snprintf(row, sizeof(row), "%s%s", i == gpt_runtime_selected_model() ? "•  " : "   ",
+                          gpt_runtime_model_id(i));
+            SetText(document_, id, row); SetVisible(document_, id, true);
+        }
+        else SetVisible(document_, id, false);
+    }
+    SetClass(document_, "models-repository-card", "focused", models_focus_ == 0);
+    SetClass(document_, "models-search-card", "focused", models_focus_ == 1);
+    SetVisible(document_, "models-search-card", state != prospero_model_download::State::Loading &&
+        state != prospero_model_download::State::Downloading);
+#endif
 }
 
 void ProsperoAiApp::RefreshSettings()

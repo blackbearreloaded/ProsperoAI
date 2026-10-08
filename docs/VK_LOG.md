@@ -48,6 +48,16 @@ questions belong in [VK_ACTIVE.md](VK_ACTIVE.md), not here.
 - Console had gone to standby since the earlier session today; woken via P5 Manager
   (`/api/remoteplay/wake`). Jailbroken payload loader (9021) and FTP (2120) survived standby; the
   control payload (`ps5vkctl`, 9111) and klog server (3232) did not and were resent.
+
+## 2026-10-08 (Models downloader)
+
+- Added a Vulkan-only Models screen and a PS5 HTTPS downloader for public Hugging Face GGUF
+  repositories. It sorts common quantizations, downloads to
+  `/data/homebrew/prosperoai/models`, streams to a `.part` file, verifies expected size and
+  SHA-256, then refreshes runtime model discovery. Catalog listing is limited to the eight
+  preferred entries; downloads are capped at 7 GiB to retain GPU/KV-cache headroom.
+- Initial `make app-vulkan-folder` compiled and linked successfully. PS5 network, TLS, write
+  permissions, redirect handling and a real model transfer are not yet verified.
 - `/data/homebrew` content had changed entirely since the 10-05/06 session: our test packages
   (`PPSA99004`, `PPSA99014`..`PPSA99021`) are gone; new content includes `PPSA99008` (Lapy JB
   Daemon), `PPSA99169` (PS5 RetroArch, with a populated `radv-shader-cache/`), and two

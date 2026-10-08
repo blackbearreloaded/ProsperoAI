@@ -51,7 +51,8 @@ void scan(const std::string &root, int depth) {
         }
         if (S_ISDIR(st.st_mode) && depth == 0) scan(path, 1);
         else if (S_ISREG(st.st_mode) && path.size() > 5 && path.substr(path.size() - 5) == ".gguf") {
-            std::string id = path.substr(std::strlen("/app0/models/"));
+            std::string id = path.substr(root.size() + 1);
+            if (root == "/data/homebrew/prosperoai/models") id = "downloaded/" + id;
             if (id.find_first_of("\"\\\r\n") == std::string::npos) files.push_back({id, path});
         }
     }
@@ -61,6 +62,7 @@ void scan_models() {
     if (scanned) return;
     scanned = true;
     scan("/app0/models", 0);
+    scan("/data/homebrew/prosperoai/models", 0);
     std::sort(files.begin(), files.end(), [](const ModelFile &a, const ModelFile &b) { return a.id < b.id; });
     char line[128];
     std::snprintf(line, sizeof(line), "models: discovered %zu GGUF files\n", files.size());
@@ -136,6 +138,15 @@ bool gpt_runtime_select_model(unsigned i) {
     if (i != selected) { release_model(); selected = i; }
     context_full = false;
     return true;
+}
+
+void gpt_runtime_refresh_models() {
+    std::lock_guard<std::mutex> lock(runtime_mutex);
+    std::string selected_id = selected < files.size() ? files[selected].id : std::string();
+    files.clear(); scanned = false; scan_models();
+    auto found = std::find_if(files.begin(), files.end(), [&](const ModelFile &file) { return file.id == selected_id; });
+    if (found != files.end()) selected = static_cast<unsigned>(found-files.begin());
+    else if (selected >= files.size()) selected = 0;
 }
 
 int gpt_runtime_prepare() {

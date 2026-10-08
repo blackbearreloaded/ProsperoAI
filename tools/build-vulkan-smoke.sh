@@ -30,7 +30,7 @@ else
         source "$root/tools/ninja-build.sh"
         ninja_begin "$work/app.ninja"
         app_objects=()
-        for name in main gpt_runtime_vulkan gpt_app gpt_input gpt_ime bitmap_font_engine http_server session_store; do
+        for name in main gpt_runtime_vulkan model_downloader_ps5 gpt_app gpt_input gpt_ime bitmap_font_engine http_server session_store; do
             object="$work/obj/$name.o"
             ninja_inputs=("$root/src/$name.cpp" "$root/tooling/prospero-clang18")
             ninja_edge CXX "$object" env PS5_PAYLOAD_SDK="$sdk" USE_CCACHE="${USE_CCACHE:-1}" \

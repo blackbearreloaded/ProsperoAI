@@ -131,6 +131,7 @@ button {
 
 #tab-conversation { left: 650px; }
 #tab-workshop { left: 840px; }
+#tab-models { left: 1030px; }
 
 .top-tab.active {
     border-bottom: 4px #c95b3f;
@@ -639,3 +640,24 @@ button {
     letter-spacing: 2px;
     text-align: right;
 }
+
+#models-screen { position:absolute; left:0px; top:104px; width:1920px; height:900px; overflow:hidden; background-color:#efe9dc; }
+#models-screen .workshop-kicker { left:64px; top:34px; }
+#models-screen .workshop-title { left:64px; top:60px; }
+#models-screen .workshop-copy { left:64px; top:112px; width:1300px; }
+.models-repository, .models-search { position:absolute; top:190px; height:76px; border:1px #d4c9b6; background-color:#f7f2e8; }
+.models-repository { left:64px; width:960px; }
+.models-search { left:1040px; width:420px; text-align:center; font-weight:700; }
+.models-repository.focused, .models-search.focused, .models-file.focused { border:3px #c95b3f; background-color:#fffaf0; }
+.models-small-label, .models-section-label { position:absolute; left:22px; top:8px; color:#a84731; font-size:14px; font-weight:700; line-height:20px; letter-spacing:1px; }
+.models-repository-value { position:absolute; left:22px; top:30px; width:720px; height:34px; overflow:hidden; font-size:21px; line-height:30px; }
+.models-control { position:absolute; right:16px; bottom:8px; color:#756d60; font-size:13px; line-height:18px; }
+#models-search-card > span:first-child { position:absolute; left:16px; top:16px; width:388px; }
+#models-catalog { position:absolute; left:64px; top:296px; width:1100px; height:550px; border:1px #d4c9b6; background-color:#f7f2e8; }
+.models-file { position:absolute; left:18px; top:50px; width:1060px; height:54px; padding:10px 14px; overflow:hidden; border-bottom:1px #ded4c3; color:#28261f; font-size:17px; line-height:30px; }
+#models-file-1 { top:108px; } #models-file-2 { top:166px; } #models-file-3 { top:224px; } #models-file-4 { top:282px; } #models-file-5 { top:340px; } #models-file-6 { top:398px; } #models-file-7 { top:456px; }
+.models-status { position:absolute; left:20px; bottom:8px; width:1050px; height:34px; overflow:hidden; color:#655e53; font-size:16px; line-height:28px; }
+#models-installed-panel { position:absolute; left:1190px; top:296px; width:660px; height:550px; border:1px #d4c9b6; background-color:#f7f2e8; }
+.models-installed { position:absolute; left:18px; top:50px; width:620px; height:52px; overflow:hidden; border-bottom:1px #ded4c3; color:#28261f; font-size:16px; line-height:46px; }
+#models-installed-1 { top:104px; } #models-installed-2 { top:158px; } #models-installed-3 { top:212px; } #models-installed-4 { top:266px; } #models-installed-5 { top:320px; }
+.models-storage-note { position:absolute; left:20px; top:400px; width:610px; color:#756d60; font-size:15px; line-height:24px; }

@@ -983,3 +983,6 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned message
     }
     return result;
 }
+
+// The AGC model catalog is fixed by installed recipe folders.
+void gpt_runtime_refresh_models() {}

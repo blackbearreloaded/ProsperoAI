@@ -25,6 +25,17 @@ Updated: 2026-10-08. Plan: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LO
 - Console test config uses 16384 context via context_size.txt; the benchmark above remains at 4096.
 - Image/audio/speech remain on the existing AGC build; Vulkan media migration is planned.
 
+## Models downloader (in progress)
+
+- Vulkan Models screen can browse public Hugging Face repos, list the eight preferred GGUF
+  quantizations, download to `/data/homebrew/prosperoai/models`, and verify file size and SHA-256
+  before making the file visible to the runtime. Downloads are capped at 7 GiB for memory headroom.
+- Host folder build compiled after adding the downloader. The changed build has not yet been
+  deployed or exercised on PS5. HTTPS redirects, TLS access under the title's privilege level,
+  storage permissions and long-transfer behavior remain to be verified on console.
+- Next: complete host builds/integration checks, deploy only changed files to PPSA99023 if the
+  console is reachable, then test browse/download/runtime discovery without touching PPSA99004.
+
 ## Evidence
 
 - [Benchmark report](VK_BENCHMARK_2026-10-08.md)

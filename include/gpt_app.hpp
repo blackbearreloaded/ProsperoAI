@@ -35,7 +35,7 @@ private:
     static constexpr unsigned VisibleSessionCount = 7;
     using Message = prospero_session::Message;
 
-    enum class View { Conversation, Workshop };
+    enum class View { Conversation, Workshop, Models };
 
     Rml::ElementDocument* document_ = nullptr;
     Message history_[MessageCapacity]{};
@@ -50,6 +50,9 @@ private:
     unsigned output_limit_ = 64;
     unsigned style_ = 0;
     unsigned settings_focus_ = 0;
+    unsigned models_focus_ = 0;
+    unsigned model_candidate_selection_ = 0;
+    char model_repository_[129] = "QuantFactory/Mistral-7B-Instruct-v0.3-GGUF";
     View view_ = View::Conversation;
     void* generation_thread_ = nullptr;
     int generation_result_ = 0;
@@ -93,6 +96,7 @@ private:
     void RefreshAll();
     void RefreshConversation();
     void RefreshSettings();
+    void RefreshModels();
     void RefreshStatus();
     void SetView(View view);
     void ChangeSetting(int direction);
@@ -102,5 +106,6 @@ private:
     static void* GenerationWorker(void* user_data);
     static void StreamCallback(const char* text);
     static void ImeResult(const char* text, void* user_data);
+    static void ModelRepoResult(const char* text, void* user_data);
     static ProsperoAiApp* active_;
 };

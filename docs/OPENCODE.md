@@ -7,7 +7,10 @@ chunks, finish reasons, usage, and `[DONE]`. The existing console layout is unch
 ## Configure the console
 
 Build with `make app-vulkan-folder`. Install raw GGUF models under the app's `models/`
-folder. Use the exact model ID returned by `/v1/models`.
+folder or use the Vulkan app's Models screen to browse a public Hugging Face repository and
+download a model. Downloads are saved to `/data/homebrew/prosperoai/models`; the runtime
+registers them immediately and returns their IDs from `/v1/models`. Use the exact model ID
+returned by `/v1/models`.
 
 For a bearer API key, create a file named `api_key.txt` in the deployed app's root
 (`/data/homebrew/PPSA99023/api_key.txt` in the test slot), containing your key on one
