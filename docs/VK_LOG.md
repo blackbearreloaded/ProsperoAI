@@ -83,3 +83,16 @@ questions belong in [VK_ACTIVE.md](VK_ACTIVE.md), not here.
   **etaHEN** as the required enabler. This is now the leading hypothesis for the environment
   mismatch, unproven. Flagged for the user rather than acted on, since changing the console's
   jailbreak framework is a console-level decision, not a build-side one.
+
+## 2026-10-08 (correction)
+
+- The KStuff-vs-etaHEN claim in the previous entry is wrong and retracted: etaHEN itself runs on
+  KStuff as its low-level backend on most current firmware (they are not alternatives), per a web
+  search the user prompted by pointing out the error. `/data/.kstuff_noautomount` existing says
+  nothing about whether etaHEN is present.
+- Checked the more specific lead instead: `platform.c`'s Lapy daemon (`ps5_elevation_request`) for
+  `/data` access. Launched `PPSA99008` (Lapy JB Daemon) and confirmed it stays resident
+  (`agent procs`: `app=24 title=PPSA99008 count=1 pids=128`), then launched the RADV test
+  (`PPSA99023`) while it was running. Identical crash. The launch necessarily killed Lapy first
+  (one foreground app at a time), so this doesn't fully rule out Lapy mattering if it could run
+  truly in the background, only that launching it immediately before doesn't help.

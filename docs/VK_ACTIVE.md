@@ -88,27 +88,31 @@ repo — it's large; see VK_PLAN.md invariants on what to pull from it on demand
   even `radv_marker("main: entered")`, the very first line of `main`. This rules out
   return-from-main as *our* crash's cause (it's a real rule, just not what's killing us — we
   never get far enough into `main` to hit it).
-- **Found the likely actual environment mismatch:** `AGENTS.md` names the required homebrew
-  environment as "an enabler (**etaHEN**), ShadowMountPlus, ftpsrv, klogsrv, an ELF loader, and
-  PS5_Vulkan's control payload". This console's `/data` has `.kstuff_noautomount` — it runs
-  **KStuff**, not etaHEN. (Matches everything seen all along: the sentinel toasts are phrased
-  around KStuff — "crashed before KStuff was paused... KStuff is not the cause" — implying
-  KStuff's own monitoring is active and routinely suspected.) KStuff and etaHEN are different
-  jailbreak/kernel-patch frameworks with different payload APIs; a title whose crash only shows up
-  with specific NEEDED system modules (`libSceAgc`, `libSceAgcDriver`, `libSceSystemService`
-  together) could plausibly hit a KStuff-specific gap that etaHEN's patches cover. **Not proven**
-  — no direct evidence of *which* kernel patch or hook is missing, only that the documented
-  prerequisite (etaHEN) isn't what this console runs. Switching the console's jailbreak framework
-  is a console-level change with real risk and is not something to do without the user explicitly
-  choosing it.
+- **KStuff vs etaHEN, retracted:** first guessed this console (which has
+  `/data/.kstuff_noautomount`) lacks the "enabler (etaHEN)" `AGENTS.md` names as a prerequisite.
+  Wrong: on most current firmware ranges etaHEN itself runs *on top of* KStuff as its low-level
+  kernel-patch backend (they are not alternatives), so that file's presence says nothing about
+  whether etaHEN is or isn't in the picture. No longer a lead on its own.
+- **Lapy daemon, a more specific and still-open lead:** the same `platform.c` explicitly talks to
+  a "Lapy daemon" for `/data` access elevation (`ps5_elevation_request`; "without a running daemon
+  it times out and the title keeps to `/app0`"). This console has `PPSA99008` installed, which
+  earlier inspection (10-05/06 session) identified as **Lapy JB Daemon** (`lapy.elf`,
+  `lapy-manifest.json`, `self-updater.elf`). Installed as a title, not confirmed resident/running
+  in the background the way the control payload or shadowmount are. Whether it needs to be running
+  for a RADV title to start at all (not just for `/data` writes) is untested.
+  **Tested and ruled out:** launched `PPSA99008` (it stays resident: `agent procs` showed
+  `app=24 title=PPSA99008 count=1 pids=128`), then launched the RADV test (`PPSA99023`) while it
+  was running. The shell switched foreground apps and killed Lapy to do it (same one-foreground-
+  app-at-a-time behavior as any title swap); the RADV crash was identical. Lapy being installed
+  and launchable isn't the same as it running as a true background elevation daemon the whole
+  time, and a title swap kills whatever was foreground — so this doesn't fully rule out "Lapy
+  resident in the background" as a factor, only "Lapy launched right before" as one.
 
 ## Next, in order
 
-1. **Decide on the KStuff/etaHEN question with the user** before any more build-side guessing:
-   either install etaHEN alongside (or instead of) KStuff on this console to test the hypothesis
-   directly, or look specifically for what a RADV-linked title needs from the kernel patch side
-   that KStuff might not provide (requires lower-level jailbreak knowledge than this project has
-   needed so far).
+1. Check whether the Lapy daemon (`PPSA99008`) is actually resident/running, and whether launching
+   it first changes anything about the RADV crash (not just `/data` access, which is a narrower
+   claim than what we need explained).
 2. Find a way to keep the coredump instead of racing to read it: a console/debug setting that
    changes `CrashReportSequencerReporter`'s "Developer" auto-discard behavior, or a way to make
    the race winnable (local-network tool faster than Python `ftplib`, or a payload that copies the
