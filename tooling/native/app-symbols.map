@@ -5,7 +5,8 @@
  *
  * Keeps all application and static-library definitions internal. The native
  * converter publishes only imported PS5 symbols; this avoids exposing C++ RTTI
- * and standard-library implementation details from the RmlUi build.
+ * and standard-library implementation details from the statically linked
+ * libraries.
  */
 
 {

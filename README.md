@@ -18,9 +18,12 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
 </p>
 
-Demo available by clicking the image below.
+![ProsperoAI native model library](docs/images/native-models.png)
 
-[![ProsperoAI conversation and saved sessions](docs/images/prosperoai-demo.png)](https://i.imgur.com/vRqZFqn.mp4)
+The interface is built with [ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui),
+fetched at a pinned commit when the app is built. This picture is the production frontend
+drawn on a PC with stand-in models. See the [UI guide](docs/NATIVE_UI.md) for the pages,
+how it is built, and what a run on a console showed.
 
 > [!WARNING]
 > ProsperoAI is an experimental project for validating generative-AI workloads
@@ -30,7 +33,11 @@ Demo available by clicking the image below.
 
 - Runs supported models locally without an account, cloud API, or conversation upload.
 - Uses native PS5 AGC GPU compute for the model paths; this is not a ROCm port.
-- Switches between Mistral, Qwen, SD-Turbo, Stable Audio, and Kokoro model purposes in Workshop.
+- Searches and filters installed text, image, audio, and speech models in a scrolling library.
+- Uses stable model IDs for selection and saved conversations, with no eight-model catalog limit.
+- Offers Midnight and Daylight themes, a living backdrop, interface sounds, notices, reduced motion,
+  high contrast, and larger text.
+- Draws answers in Latin, Greek, Cyrillic, Chinese, Japanese and Korean with scalable faces.
 - Stores independent text, image, audio, and speech sessions under `/download0`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
 - Ships without model weights. Users choose and install curated model folders separately.
@@ -113,7 +120,7 @@ generation. Both are functional demonstrations rather than real-time paths.
    intentionally empty `PPSA99004/models/` directory.
 3. Open one of the curated Hugging Face repositories above, download the whole
    repository, and copy its named model folder into `PPSA99004/models/`.
-4. Repeat step 3 for any other models you want available in Workshop.
+4. Repeat step 3 for any other models you want available in Models.
 5. Upload the complete `PPSA99004` directory to `/data/homebrew/`, producing
    `/data/homebrew/PPSA99004/eboot.bin`.
 6. Refresh or restart your homebrew loader, then launch ProsperoAI.
@@ -138,7 +145,7 @@ PPSA99004/
 ```
 
 Keep each downloaded model folder intact. ProsperoAI discovers all valid model
-folders at launch and shows their friendly names and purposes in Workshop. If
+folders at launch and shows their friendly names and purposes in Models. If
 no compatible model is installed, the app opens normally and explains where to
 add one.
 
@@ -149,14 +156,17 @@ title is mounted.
 
 | Input | Action |
 | --- | --- |
-| D-pad / left stick | Select saved sessions or change Workshop settings |
-| Cross | Open a session, activate a control, or write a prompt |
-| Circle | Return to Conversation |
-| Square | Start a new session |
-| Triangle | Delete the selected session or play/replay its generated audio |
-| Options | Switch between Conversation and Workshop |
+| D-pad / left stick | Move through models, conversations, or settings; Left reaches the conversation list |
+| Cross | Start or open a conversation, write or send a prompt, choose a model, change a setting |
+| Circle | Close a dialog, leave the conversation list, or return to the settings categories |
+| L1 / R1 | Switch between Workspace, Models, and Settings |
+| Square | Start a new conversation in Workspace; search in Models |
+| Triangle | Step through the model kinds, retry a failed answer, delete the focused conversation, or play saved audio |
+| Options | Ask to close the app, once nothing is running and the conversation is saved |
 | Right stick | Scroll through the current conversation |
-| Physical USB keyboard | Type in the prompt field; Enter sends |
+| Physical USB keyboard | Type in the prompt field or the model search; Enter sends |
+
+The row at the bottom right of every page names what the buttons do there.
 
 Each conversation is an independent session. Text and metadata are saved under
 `/download0/ProsperoAI/sessions/`; generated image and audio files live inside
@@ -183,9 +193,10 @@ dist/PPSA99004/           complete model-free app folder
 dist/PPSA99004.zip        archived model-free app folder
 ```
 
-The build downloads and verifies the public PS5 Payload SDK and zlib inside the
-ignored `.deps/` directory. It rebuilds the clean-room `libc.prx`
-runtime, compiles the native app through parallel incremental Ninja builds,
+The build downloads and verifies the public PS5 Payload SDK, the ps5-opengl SDK, the
+ps5-homebrew-ui interface kit, the Noto Sans faces for Chinese, Japanese and Korean, and zlib
+inside the ignored `.deps/` directory. It bakes the interface fonts, rebuilds the clean-room
+`libc.prx` runtime, compiles the native app through parallel incremental Ninja builds,
 caches compiler results with ccache, signs the executable, validates assets,
 and assembles the release. Set `USE_CCACHE=0` to disable the cache or
 `BUILD_JOBS=<count>` to limit parallel compilation. Model weights are never
@@ -214,7 +225,10 @@ see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md).
 src/                 ProsperoAI UI, sessions, model routing, and GPU runtimes
 src/backends/        Mistral and Qwen architecture-specific AGC programs
 include/             Application interfaces
-assets/              RmlUi documents, styles, fonts, and controller icons
+assets/              The last-resort bitmap font (other fonts and sounds come from the kit)
+ui-kit/              Which sources of the fetched interface kit are compiled
+host/                Deterministic native-frontend capture harness
+tests/console/       Scripts the app plays by itself in a test run on a console
 sce_sys/             PS5 title metadata, artwork, icon, and selection music
 models/README.txt    Model-free release placeholder and install guidance
 model-tools/         GGUF converter, validated recipes, and porting guide

@@ -1808,13 +1808,15 @@ int run_model_token(void)
             0, direct_size, PRIMARY_MAPPING_BYTES, 0x4000,
             DIRECT_MEMORY_TYPE, &work_start);
 #ifdef PS5_DUAL_BACKEND
-        /* Reuse the low-aperture range that the media backend just released.
+        /* Ask for the low-aperture range that the media backend just released.
            Without this, FreeBSD's next-fit cursor remains above 0x3... even
-           though the lower virtual range and its direct memory are free. */
+           though the lower virtual range and its direct memory are free.
+           The address is where the search starts, never a fixed mapping:
+           this mapping is several times larger than the released range, and
+           the memory after that range may be in use (the interface's
+           graphics pool is), which a fixed mapping would replace silently. */
         work_mapping = (uint8_t *)ps5_agc_backend_take_released_scratch_address();
-        if (work_mapping && (uint32_t)((uintptr_t)work_mapping >> 32) == 2u)
-            map_flags = MAP_FIXED;
-        else
+        if (!work_mapping || (uint32_t)((uintptr_t)work_mapping >> 32) != 2u)
             work_mapping = NULL;
 #endif
         int map_rc = allocate_rc == 0

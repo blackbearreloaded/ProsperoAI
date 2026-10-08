@@ -1,0 +1,157 @@
+# ProsperoAI - First run on a console: every page, and one answer from every kind of model.
+#
+# Played by the app itself (src/dev_script.cpp) when this file is the install folder's
+# dev/request.txt; tools/console-run.py puts it there with a fresh token, starts the app,
+# collects the report and the pictures, and waits for the app to close itself.
+#
+# It expects one model of each kind, found by these search words: "mistral" (text),
+# "sd-turbo" (image), "stable-audio" (sound) and "kokoro" (voice). A model that is not
+# installed fails its "expect" lines; the run goes on to the other kinds and ends FAILED.
+limit 1500
+
+# The opening, then the saved model (or the first one) is prepared behind it.
+until started 60
+shot 01-opening
+until ready 420
+wait 3
+status
+shot 02-welcome
+
+# The other pages.
+press r1
+wait 2
+shot 03-models
+press r1
+wait 2
+shot 04-settings
+press circle
+press down
+press down
+press down
+press down
+wait 1
+shot 05-about
+press l1
+wait 1
+
+# Text: choose the model through the search, as a player with a keyboard would.
+type mistral
+wait 1
+press cross
+wait 1
+shot 06-use-model
+press right
+press cross
+until ready 420
+expect model mistral
+status
+backspace 7
+press l1
+wait 1
+type Say hello in five words.
+submit
+wait 2
+shot 07-thinking
+until idle 420
+expect answer
+wait 2
+status
+shot 08-answer
+
+# Image.
+press r1
+wait 1
+type sd-turbo
+wait 1
+press cross
+wait 1
+press right
+press cross
+until ready 420
+expect model sd-turbo
+status
+backspace 8
+press l1
+wait 1
+type A lighthouse at sunset, oil painting
+submit
+until idle 600
+expect image
+wait 3
+status
+shot 09-image
+
+# Sound.
+press r1
+wait 1
+type stable-audio
+wait 1
+press cross
+wait 1
+press right
+press cross
+until ready 420
+expect model stable-audio
+status
+backspace 12
+press l1
+wait 1
+type Soft rain on a window
+submit
+until idle 600
+expect audio
+wait 2
+status
+shot 10-sound
+press triangle
+wait 6
+
+# Voice.
+press r1
+wait 1
+type kokoro
+wait 1
+press cross
+wait 1
+press right
+press cross
+until ready 420
+expect model kokoro
+status
+backspace 6
+press l1
+wait 1
+type Hello from ProsperoAI.
+submit
+until idle 600
+expect audio
+wait 2
+status
+shot 11-voice
+
+# The conversation list, Daylight, and the closing dialog (answered "Not now").
+press left
+wait 1
+shot 12-conversations
+press right
+press r1
+press r1
+wait 1
+press circle
+press up
+press up
+press up
+press up
+press cross
+press right
+wait 2
+shot 13-daylight
+press left
+wait 1
+press options
+wait 1
+shot 14-close
+press circle
+wait 1
+
+quit 60

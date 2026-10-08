@@ -336,7 +336,11 @@ bool initialize_api()
     return true;
 }
 
-bool allocate_scratch(size_t required)
+// The scratch area's three programs are made once AGC is initialised; the area
+// itself can be mapped before that (ps5_agc_backend_reserve_memory).
+bool scratch_programs_ready = false;
+
+bool map_scratch(size_t required)
 {
     if (runtime.memory && runtime.memory_size >= required)
         return true;
@@ -371,6 +375,16 @@ bool allocate_scratch(size_t required)
     released_scratch_address = 0;
     runtime.memory_size = size;
     std::memset(runtime.memory, 0, kDataOffset);
+    scratch_programs_ready = false;
+    return true;
+}
+
+bool allocate_scratch(size_t required)
+{
+    if (!map_scratch(required))
+        return false;
+    if (scratch_programs_ready)
+        return true;
     if (!create_program(media_gemm_agc_package, media_gemm_agc_package_len, runtime.memory,
                         runtime.memory + 0x1000, &runtime.gemm) ||
         !create_program(media_im2col_agc_package, media_im2col_agc_package_len,
@@ -379,6 +393,7 @@ bool allocate_scratch(size_t required)
                         runtime.memory + 0xc000, runtime.memory + 0xd000,
                         &runtime.stable_audio_gemm))
         return false;
+    scratch_programs_ready = true;
     trace("[ps5_agc] scratch required=%zu mapped=%zu address=%p physical=%llx\n", required,
           runtime.memory_size, runtime.memory,
           static_cast<unsigned long long>(runtime.direct_start));
@@ -886,18 +901,30 @@ extern "C" ggml_backend_t ggml_backend_ps5agc_init(void)
 } // namespace
 #endif
 
-extern "C" int ps5_agc_backend_reserve(void)
+namespace
 {
 #ifdef PS5_AGC_STABLE_AUDIO
-    // Stable Audio keeps OpenCL buffers inside this arena, so it must never
-    // move while a generation is active.
-    constexpr size_t audio_reservation = 256ULL * 1024 * 1024;
-    constexpr size_t reservation =
-        kInitialScratch > audio_reservation ? kInitialScratch : audio_reservation;
+// Stable Audio keeps OpenCL buffers inside this arena, so it must never
+// move while a generation is active.
+constexpr size_t kAudioReservation = 256ULL * 1024 * 1024;
+constexpr size_t kReservation =
+    kInitialScratch > kAudioReservation ? kInitialScratch : kAudioReservation;
 #else
-    constexpr size_t reservation = kMinScratch;
+constexpr size_t kReservation = kMinScratch;
 #endif
-    return initialize_api() && allocate_scratch(reservation) ? 0 : -1;
+} // namespace
+
+extern "C" int ps5_agc_backend_reserve(void)
+{
+    return initialize_api() && allocate_scratch(kReservation) ? 0 : -1;
+}
+
+// The mapping alone, with no AGC call: the scratch area is only accepted in one
+// address range, and the OpenGL runtime, which starts first and initialises AGC
+// itself, maps a great deal. Called before it starts, this keeps the range.
+extern "C" int ps5_agc_backend_reserve_memory(void)
+{
+    return map_scratch(kReservation) ? 0 : -1;
 }
 
 extern "C" int ps5_agc_backend_release_scratch(void)

@@ -17,6 +17,7 @@ extern "C"
 #endif
     void ps5_agc_backend_print_stats(void);
     int ps5_agc_backend_reserve(void);
+    int ps5_agc_backend_reserve_memory(void);
     int ps5_agc_backend_release_scratch(void);
     void *ps5_agc_backend_take_released_scratch_address(void);
 
