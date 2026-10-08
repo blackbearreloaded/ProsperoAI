@@ -35,12 +35,6 @@ class DevScript
         return capture_;
     }
     void capture_done(bool saved);
-    // False while a test has switched drawing off ("set draw off"): the interface
-    // still runs, and nothing is drawn or shown.
-    bool draw() const
-    {
-        return draw_;
-    }
     // The run is over: leave the main loop and close as the app always does.
     bool quit() const
     {
@@ -60,7 +54,7 @@ class DevScript
     std::string output_, capture_, typing_;
     std::vector<Step> steps_;
     std::size_t at_ = 0;
-    bool loaded_ = false, quit_ = false, failed_ = false, entered_ = false, draw_ = true;
+    bool loaded_ = false, quit_ = false, failed_ = false, entered_ = false;
     float clock_ = 0, step_clock_ = 0, limit_ = 300, stalled_ = 0;
     // Frame times since the last status line.
     unsigned frames_ = 0, slow_ = 0, unmet_ = 0;

@@ -316,9 +316,6 @@ std::atomic<int> interface_heap_state{0}; // 0 not made, 1 being made, 2 ready, 
 void *interface_heap_base{};
 std::size_t interface_heap_bytes{};
 void *interface_heap{};
-// For test runs: other threads can be kept out, and what the heap served is counted.
-std::atomic<bool> interface_heap_shared{true};
-std::atomic<unsigned long long> interface_heap_served{0}, interface_heap_refused{0};
 
 bool outside_scratch_range(const void *address) noexcept
 {
@@ -386,25 +383,11 @@ bool interface_heap_owns(const void *address) noexcept
 
 bool interface_heap_takes(std::size_t size) noexcept
 {
-    if (on_interface_thread())
-        return size <= interface_heap_largest && interface_heap_ready();
-    return size <= interface_heap_largest_elsewhere &&
-           interface_heap_shared.load(std::memory_order_relaxed) && interface_heap_ready();
+    return size <= (on_interface_thread() ? interface_heap_largest
+                                          : interface_heap_largest_elsewhere) &&
+           interface_heap_ready();
 }
 } // namespace
-
-extern "C" __attribute__((visibility("hidden"))) void
-ps5SetInterfaceHeapShared(bool shared) noexcept
-{
-    interface_heap_shared.store(shared, std::memory_order_relaxed);
-}
-
-extern "C" __attribute__((visibility("hidden"))) void
-ps5InterfaceHeapCounts(unsigned long long *served, unsigned long long *refused) noexcept
-{
-    *served = interface_heap_served.load(std::memory_order_relaxed);
-    *refused = interface_heap_refused.load(std::memory_order_relaxed);
-}
 
 extern "C" __attribute__((visibility("hidden"))) void ps5SetInterfaceThread() noexcept
 {
@@ -430,14 +413,8 @@ extern "C" __attribute__((visibility("hidden"))) void *__wrap_malloc(std::size_t
 {
     size = size == 0 ? 1 : size;
     if (interface_heap_takes(size))
-    {
         if (void *address = sceLibcMspaceMalloc(interface_heap, size))
-        {
-            interface_heap_served.fetch_add(1, std::memory_order_relaxed);
             return address;
-        }
-        interface_heap_refused.fetch_add(1, std::memory_order_relaxed);
-    }
     if (void *address = __real_malloc(size))
         return address;
     return allocate_fallback(size, alignof(std::max_align_t));

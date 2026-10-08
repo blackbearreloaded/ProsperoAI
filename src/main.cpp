@@ -166,12 +166,6 @@ int main()
         mixer.set_bus_gain(hui::audio::Bus::sfx, gain);
         for (const auto &cue : feedback.cues)
             sounds.play(mixer, hui::audio::SoundSet::glass, cue);
-        if (!script.draw() && !first_frame)
-        {
-            // A test's "set draw off": everything runs but the drawing.
-            SDL_Delay(16);
-            continue;
-        }
         frame.reset();
         ui.draw(frame);
         renderer.begin();

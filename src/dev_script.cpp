@@ -20,13 +20,6 @@
 #define PROSPERO_BUILD_LABEL ""
 #endif
 
-#ifndef PROSPERO_HOST
-extern "C" void ps5SetInterfaceHeapShared(bool shared) noexcept;
-extern "C" void ps5InterfaceHeapCounts(unsigned long long *served,
-                                       unsigned long long *refused) noexcept;
-extern "C" void prospero_thread_counts(unsigned *started, unsigned *refused);
-#endif
-
 namespace prospero
 {
 namespace
@@ -185,16 +178,6 @@ void DevScript::status(App &app)
                static_cast<double>(kSlowFrame * 1000));
     frames_ = slow_ = 0;
     frame_sum_ = frame_worst_ = 0;
-#ifndef PROSPERO_HOST
-    // Since the app started: threads asked of the system, and the small blocks the
-    // interface's heap gave or could not hold.
-    unsigned started = 0, refused = 0;
-    unsigned long long served = 0, full = 0;
-    prospero_thread_counts(&started, &refused);
-    ps5InterfaceHeapCounts(&served, &full);
-    report("threads: %u started, %u refused; interface heap: %llu blocks served, %llu not held",
-           started, refused, served, full);
-#endif
 }
 
 void DevScript::fail(const char *why)
@@ -372,27 +355,6 @@ void DevScript::update(float seconds, App &app, NativeUI &ui, hui::InputFrame &i
     else if (step.verb == "status")
     {
         status(app);
-        done = true;
-    }
-    else if (step.verb == "set")
-    {
-        // Test switches, to measure what the interface costs a model at work.
-        const bool on = step.argument.size() > 3 &&
-                        step.argument.compare(step.argument.size() - 3, 3, " on") == 0;
-        if (step.argument.rfind("draw ", 0) == 0)
-            draw_ = on;
-        else if (step.argument.rfind("shared-heap ", 0) == 0)
-        {
-#ifndef PROSPERO_HOST
-            ps5SetInterfaceHeapShared(on);
-#endif
-        }
-        else
-        {
-            fail("no such switch");
-            return;
-        }
-        report("set %s", step.argument.c_str());
         done = true;
     }
     else if (step.verb == "quit")

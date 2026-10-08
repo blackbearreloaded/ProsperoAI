@@ -272,7 +272,7 @@ fi
 ninja_edge LINK "$build/llvm-pie.elf" "$sdk_root/bin/prospero-lld" \
     -T "$native/ps5-pie.ld" --eh-frame-hdr --wrap=malloc --wrap=calloc \
     --wrap=posix_memalign --wrap=free --wrap=realloc --wrap=malloc_usable_size \
-    --wrap=sceAgcInit --wrap=sceSystemServiceHideSplashScreen --wrap=pthread_create \
+    --wrap=sceAgcInit --wrap=sceSystemServiceHideSplashScreen \
     --version-script "$native/app-symbols.map" \
     -L "$sdk_root/target/lib" -e _start -o "$build/llvm-pie.elf" "${link_inputs[@]}" \
     --as-needed "${sdk_stubs[@]}"
