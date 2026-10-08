@@ -1,4 +1,5 @@
-// Exercises fallback allocations used by Mesa's realloc/usable-size calls.
+// Exercises the application allocator: the interface heap the OpenGL runtime lives on,
+// and the fallback allocations behind it.
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -12,8 +13,22 @@
 #include <atomic>
 #include <thread>
 #include <array>
+#include <pthread.h>
 
 std::atomic<unsigned> initialization_count{0};
+
+// A stand-in for the system's mspace allocator: blocks handed out in order from the region
+// it was given, each remembering the size asked for.
+struct FakeSpace
+{
+    unsigned char *base = nullptr;
+    std::size_t size = 0, used = 0;
+} fake_space;
+bool in_interface_heap(const void *address)
+{
+    const auto *byte = static_cast<const unsigned char *>(address);
+    return fake_space.base && byte >= fake_space.base && byte < fake_space.base + fake_space.size;
+}
 
 extern "C"
 {
@@ -87,6 +102,61 @@ extern "C"
     {
         return 0;
     }
+    void *scePthreadSelf()
+    {
+        return reinterpret_cast<void *>(pthread_self());
+    }
+    void ps5SetInterfaceThread() noexcept;
+    void ps5SetDirectFallback(int) noexcept;
+    void *sceLibcMspaceCreate(const char *, void *base, std::size_t size, unsigned)
+    {
+        fake_space = {static_cast<unsigned char *>(base), size, 0};
+        return &fake_space;
+    }
+    void *sceLibcMspaceMalloc(void *, std::size_t size)
+    {
+        const std::size_t need = (size + 16 + 15) & ~std::size_t(15);
+        if (need > fake_space.size - fake_space.used)
+            return nullptr;
+        unsigned char *block = fake_space.base + fake_space.used;
+        fake_space.used += need;
+        std::memcpy(block, &size, sizeof(size));
+        return block + 16;
+    }
+    std::size_t sceLibcMspaceMallocUsableSize(const void *address)
+    {
+        std::size_t size = 0;
+        std::memcpy(&size, static_cast<const unsigned char *>(address) - 16, sizeof(size));
+        return size;
+    }
+    void *sceLibcMspaceCalloc(void *space, std::size_t count, std::size_t size)
+    {
+        void *address = sceLibcMspaceMalloc(space, count * size);
+        if (address)
+            std::memset(address, 0, count * size);
+        return address;
+    }
+    void *sceLibcMspaceRealloc(void *space, void *address, std::size_t size)
+    {
+        void *next = sceLibcMspaceMalloc(space, size);
+        if (next)
+        {
+            const std::size_t kept = sceLibcMspaceMallocUsableSize(address);
+            std::memcpy(next, address, kept < size ? kept : size);
+        }
+        return next;
+    }
+    void sceLibcMspaceFree(void *, void *)
+    {
+    }
+    int sceLibcMspacePosixMemalign(void *space, void **address, std::size_t alignment,
+                                   std::size_t size)
+    {
+        if (alignment > 16)
+            return 12;
+        *address = sceLibcMspaceMalloc(space, size);
+        return *address ? 0 : 12;
+    }
 }
 
 int main()
@@ -97,8 +167,9 @@ int main()
     for (auto &thread : threads)
         thread.join();
     assert(initialization_count == 1);
+    // What the libc heap refuses is served by the interface heap first.
     auto *first = static_cast<unsigned char *>(__wrap_malloc(8192));
-    assert(first && __wrap_malloc_usable_size(first) == 8192);
+    assert(first && __wrap_malloc_usable_size(first) == 8192 && in_interface_heap(first));
     std::memset(first, 0x5a, 8192);
     auto *grown = static_cast<unsigned char *>(__wrap_realloc(first, 32768));
     assert(grown && __wrap_malloc_usable_size(grown) == 32768);
@@ -112,4 +183,30 @@ int main()
     assert(__wrap_malloc_usable_size(nullptr) == 0);
     void *last = __wrap_realloc(nullptr, 8192);
     assert(last && !__wrap_realloc(last, 0));
+
+    // Off the interface's thread a large block never enters the interface heap: it is
+    // mapped on its own, as the model runtimes expect, and can be resized and freed.
+    auto *tensor = static_cast<unsigned char *>(__wrap_malloc(3u << 20));
+    assert(tensor && !in_interface_heap(tensor) && __wrap_malloc_usable_size(tensor) == 3u << 20);
+    tensor[0] = 0x33;
+    auto *shrunk = static_cast<unsigned char *>(__wrap_realloc(tensor, 4096));
+    assert(shrunk && shrunk[0] == 0x33 && in_interface_heap(shrunk));
+    // A block that outgrows the heap's limit moves out of it with its content.
+    auto *moved = static_cast<unsigned char *>(__wrap_realloc(shrunk, 3u << 20));
+    assert(moved && moved[0] == 0x33 && !in_interface_heap(moved));
+    __wrap_free(moved);
+
+    // The interface's own thread keeps its large blocks (font atlases, pictures) in the heap.
+    ps5SetInterfaceThread();
+    void *atlas = __wrap_malloc(26u << 20);
+    assert(atlas && in_interface_heap(atlas));
+    __wrap_free(atlas);
+    // While a model that uses the direct arena is selected, the interface still never
+    // reaches that arena (here it has no direct memory at all); other threads do.
+    ps5SetDirectFallback(1);
+    void *huge = __wrap_malloc(100u << 20);
+    assert(huge && !in_interface_heap(huge));
+    __wrap_free(huge);
+    std::thread([] { assert(__wrap_malloc(3u << 20) == nullptr); }).join();
+    ps5SetDirectFallback(0);
 }

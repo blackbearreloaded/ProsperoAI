@@ -17,6 +17,8 @@
 #include <vector>
 
 void prospero_setup_sdl_memory();
+extern "C" void ps5SetInterfaceThread() noexcept;
+extern "C" int ps5_agc_backend_reserve_memory(void);
 
 namespace
 {
@@ -101,6 +103,11 @@ void input_event(const gpt_input_event_t &event, hui::InputFrame &input, prosper
 
 int main()
 {
+    // This thread's large allocations stay out of the model runtimes' arena, and the
+    // inference scratch takes its address range before the OpenGL runtime maps anything.
+    ps5SetInterfaceThread();
+    if (ps5_agc_backend_reserve_memory() != 0)
+        hui::sys::log("[prosperoai] the inference scratch could not be reserved");
     prospero_setup_sdl_memory();
     SDL_Init(0); // Existing media decoder, clock and IME helpers; no SDL video.
     hui::ps5::Display display;

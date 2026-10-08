@@ -82,6 +82,23 @@ def errors(ftp):
     return {name: facts.get("modify", "") for name, facts in (names(ftp, history) or {}).items()}
 
 
+def klog_text():
+    try:
+        return (results / "klog.txt").read_text(errors="replace")
+    except OSError:
+        return ""
+
+
+def crashed():
+    """The kernel's report of a fatal signal in this title's process, if there is one."""
+    text = klog_text()
+    at = text.find("A user thread receives a fatal signal")
+    if at < 0:
+        return None
+    block = text[at:at + 1500]
+    return block if "eboot.bin" in block else None
+
+
 try:
     ftp = connect()
 except all_errors as error:
@@ -177,6 +194,9 @@ while True:
     except all_errors as error:
         say(f"console did not answer: {error}")
         alive = None
+    if crashed():
+        say("the kernel log reports a fatal signal in the app")
+        break
     if alive is False and appeared:
         say("the app is no longer running")
         break
@@ -200,10 +220,11 @@ try:
     ftp = connect()
     closed = not running(ftp)
     try:
-        ftp.delete(f"{install}/dev/request.txt")
+        # sendcmd, not delete(): this server answers 226, which ftplib's delete() refuses.
+        ftp.sendcmd(f"DELE {install}/dev/request.txt")
         say("request removed")
-    except all_errors:
-        say("request file could not be removed")
+    except all_errors as error:
+        say(f"request file could not be removed: {error}")
     new_errors = {n: m for n, m in errors(ftp).items() if errors_before.get(n) != m}
     for name in sorted(new_errors):
         record = read(ftp, f"{history}/{name}") or b"{}"
@@ -229,7 +250,20 @@ try:
 except ImportError:
     pass
 
-completed = result is not None and "COMPLETED" in result
+# What the app itself printed, and the kernel's words if it died.
+app_lines = [line for line in klog_text().splitlines() if line.startswith(("[HUI]", "[prosperoai]", "[ps5_agc]"))]
+(results / "app-lines.txt").write_text("\n".join(app_lines) + "\n")
+crash = crashed()
+if crash:
+    (results / "crash.txt").write_text(crash)
+    wanted = ("# signal", "# reason", "# fault address", "# rip", "# thread name")
+    for line in crash.splitlines():
+        if line.startswith(wanted):
+            say(f"crash {line[2:].strip()}")
+    for line in app_lines[-6:]:
+        say(f"app said: {line[:200]}")
+
+completed = result is not None and "COMPLETED" in result and not crash
 say(f"result: {'completed' if completed else 'NOT completed'}; app closed itself: {'yes' if closed else 'NO'}; "
     f"pictures: {len(fetched)}; evidence in {results}")
 raise SystemExit(0 if completed and closed and not new_errors else 1)
