@@ -10,6 +10,12 @@ import json
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def tool(name, *args):
+    """Runs a build tool that prints a folder (the kit staged at its pin, the baked fonts)."""
+    return Path(subprocess.run(["bash", str(ROOT / "tools" / name), *args], check=True,
+                               stdout=subprocess.PIPE, text=True).stdout.strip())
+
+
 class NativeController(unittest.TestCase):
     def test_real_catalog_paging(self):
         with tempfile.TemporaryDirectory(prefix="prospero-catalog-") as directory:
@@ -45,21 +51,19 @@ class NativeController(unittest.TestCase):
     def test_worker_state_and_unicode(self):
         with tempfile.TemporaryDirectory(prefix="prospero-controller-") as directory:
             directory = Path(directory)
-            font = directory / "multilingual.huifont"
-            subprocess.run(["python3", str(ROOT / "tools/convert-ui-font.py"),
-                            str(ROOT / "assets/ui/fonts/lvgl-bitmap/multilingual/Radio-24.fnt"),
-                            str(font)], check=True)
+            kit = tool("prepare-ui-kit.sh") / "src"
+            fonts = tool("bake-fonts.sh")
             binary = directory / "controller-test"
             subprocess.run([os.environ.get("HOST_CXX", "clang++"), "-std=c++20", "-pthread",
                             "-g", "-O1", "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
                             "-Wall", "-Wextra", "-Werror", "-DPROSPERO_HOST",
                             f'-DPROSPERO_SETTINGS_PATH="{directory / "settings.cfg"}"',
                             "-I" + str(ROOT / "include"),
-                            "-I" + str(ROOT / "vendor/homebrew-ui/src"),
+                            "-I" + str(kit),
                             str(ROOT / "tests/native_controller_test.cpp"),
                             str(ROOT / "src/native_app.cpp"),
                             str(ROOT / "src/media_preview.cpp"),
-                            str(ROOT / "vendor/homebrew-ui/src/gfx/font.cpp"),
+                            str(kit / "gfx/font.cpp"),
                             "-o", str(binary)], check=True)
-            subprocess.run([str(binary), str(ROOT / "assets/fonts/inter-regular.huifont"),
-                            str(font)], check=True, timeout=30)
+            subprocess.run([str(binary), str(fonts / "inter-regular.huifont"),
+                            str(fonts / "noto-sans-east-asian.huifont")], check=True, timeout=30)

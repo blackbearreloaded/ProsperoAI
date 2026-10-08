@@ -1,6 +1,0 @@
-ps5-homebrew-ui
-https://github.com/blackbearreloaded/ps5-homebrew-ui
-Revision: 4bd942579dd981b3df9c740438489ca6a614ddc0
-
-Selected renderer, controller components, timing, audio, and platform files.
-Application-specific changes are documented in docs/NATIVE_UI.md.

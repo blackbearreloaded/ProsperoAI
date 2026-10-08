@@ -5,31 +5,17 @@
 #include "gpt_input.hpp"
 #include "gpt_ime.hpp"
 #include "audio/cues.hpp"
-#include "core/save_file.hpp"
 #include "gfx/renderer.hpp"
 #include "platform/ps5/display_egl.hpp"
 #include "platform/ps5/audio_out.hpp"
 #include "platform/ps5/system.hpp"
 #include <SDL2/SDL.h>
 #include <algorithm>
-#include <array>
 
 void prospero_setup_sdl_memory();
 
 namespace
 {
-bool load_font(hui::gfx::Renderer &renderer, const char *name, hui::gfx::Font &font,
-               hui::ui::FontRef &ref)
-{
-    std::string data;
-    if (!hui::save::read_file(std::string("/app0/assets/fonts/") + name, &data) || !font.load(data))
-    {
-        hui::sys::log("[prosperoai] font load failed: %s", name);
-        return false;
-    }
-    ref = {&font, renderer.batch().create_font_texture(font)};
-    return ref.texture != 0;
-}
 void ime_result(const char *value, void *context)
 {
     static_cast<prospero::NativeUI *>(context)->keyboard_result(value);
@@ -76,21 +62,14 @@ int main()
     hui::gfx::Renderer renderer;
     if (!renderer.init())
         hui::sys::quit();
-    std::array<hui::gfx::Font, 5> faces;
-    hui::ui::Fonts fonts;
-    hui::ui::FontRef fallback;
-    if (!load_font(renderer, "inter-regular.huifont", faces[0], fonts.regular) ||
-        !load_font(renderer, "inter-semibold.huifont", faces[1], fonts.semibold) ||
-        !load_font(renderer, "montserrat-medium.huifont", faces[2], fonts.display) ||
-        !load_font(renderer, "dejavu-sans-mono.huifont", faces[3], fonts.mono) ||
-        !load_font(renderer, "multilingual.huifont", faces[4], fallback))
+    prospero::FontSet fonts;
+    if (!fonts.open(renderer, "/app0/assets/fonts"))
         hui::sys::quit();
-    for (unsigned i = 0; i < 4; ++i)
-        faces[i].set_fallback(&faces[4], fallback.texture);
-    fonts.pixel = fonts.hand = fonts.regular;
     hui::audio::Mixer mixer;
     hui::audio::SoundBank sounds;
-    sounds.load("/app0/assets/audio/sfx");
+    const auto loaded = sounds.load("/app0/assets/audio/sfx");
+    hui::sys::log("[prosperoai] interface sounds: %d loaded, %d rejected", loaded.files,
+                  loaded.rejected);
     hui::ps5::AudioOut audio;
     if (!audio.start(mixer))
         hui::sys::log("[prosperoai] interface audio unavailable");
@@ -107,6 +86,7 @@ int main()
     bool first_frame = true;
     while (!ui.quit_requested())
     {
+        // Animation time runs from frame start to frame start, and is clamped.
         const auto now = hui::sys::monotonic_us();
         const float dt = std::clamp(static_cast<float>(now - previous) / 1000000.0f, 0.001f, 0.05f);
         previous = now;
@@ -138,6 +118,8 @@ int main()
             break;
         if (first_frame)
         {
+            // The console's splash stays up until this first picture; the model
+            // catalogue is read behind the opening that follows it.
             hui::sys::hide_splash_screen();
             app.initialize();
             first_frame = false;

@@ -20,12 +20,28 @@ and uses the public [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk).
 The clean-room application runtime and project-owned source are distributed
 under GPL-3.0-or-later.
 
-The vendored UI subset is GPL-3.0-or-later; its pinned revision and upstream notices
-are retained in [vendor/homebrew-ui](vendor/homebrew-ui/). The Inter, Montserrat,
-and DejaVu font licenses ship beside their native atlases in `assets/fonts`.
-The existing multilingual font's OFL notice is retained and copied into the package.
-RmlUi and FreeType are no longer linked into the app; their legacy files and upstream
-notices remain in the repository. The model execution paths incorporate code or static build
+The interface kit ([ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui),
+GPL-3.0-or-later) and the [ps5-opengl](https://github.com/blackbearreloaded/ps5-opengl) SDK are
+build dependencies fetched at pinned versions; neither is kept in this repository. A release
+contains, compiled or copied from them:
+
+- the kit's renderer and components, and its "glass" and "paper" interface sounds (the
+  author's own, under the project licence);
+- Inter, Montserrat and DejaVu Sans Mono, baked from the kit's `third_party/fonts`; their
+  licences ship beside the baked fonts in `assets/fonts`;
+- [Noto Sans CJK](https://github.com/notofonts/noto-cjk) (Noto Sans SC and KR), Copyright
+  2014-2021 Adobe, SIL Open Font License 1.1, fetched at a pinned commit and baked for
+  Chinese, Japanese and Korean text; its licence ships as `NotoSansCJK-LICENSE.txt`;
+- the ps5-opengl runtime (Mesa and its dependencies); see the SDK's own
+  `THIRD_PARTY_NOTICES.md`.
+
+`assets/fonts/legacy-multilingual` is the bitmap font of the first interface, made from
+Source Han Sans SC, Noto Sans and DejaVu Sans; their licences are in its `licenses/` folder
+and ship with the baked font. `tools/font-baker/bake_list.cpp`, `tools/cjk-ranges.py` and
+`tools/fetch-cjk-fonts.sh` come from
+[ProsperoTV](https://github.com/blackbearreloaded/ProsperoTV) (GPL-3.0-or-later, same author).
+
+The model execution paths incorporate code or static build
 artifacts derived from llama.cpp, stable-diffusion.cpp, ggml, espeak-ng,
 Kokoro, and the Stable Audio compatibility work in a8nova/adreno-llms. Those
 projects retain their respective copyrights and licenses.

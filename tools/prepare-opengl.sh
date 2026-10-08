@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ps5-homebrew-ui - OpenGL SDK link preparation.
+# ProsperoAI - OpenGL SDK link preparation (after ps5-homebrew-ui tools/prepare-opengl.sh).
 # Copyright (C) 2026 BlackBearReloaded
 # SPDX-License-Identifier: GPL-3.0-or-later
 #

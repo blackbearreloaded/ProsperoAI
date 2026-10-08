@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ps5-homebrew-ui - Pinned ps5-opengl SDK download.
+# ProsperoAI - Pinned ps5-opengl SDK download (after ps5-homebrew-ui tools/fetch-opengl-sdk.sh).
 # Copyright (C) 2026 BlackBearReloaded
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -9,9 +9,9 @@
 set -euo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-version=1.0.0
-archive_sha256=f93643c04c843d56143b00951df1f8042ea7706ae9f19e4e9abf158e1ead77c5
-manifest_sha256=f4b91f672be037fbac3f82494f1225deaf4c227a03f37ac3ffa56abb213b943f
+version=1.0.1
+archive_sha256=aaa2e8957f55e1fc0b654dcb35a36e585f7e635d63952da40a28be7f64fde741
+manifest_sha256=52b6b82f32aec7c983680858c50c25c926266d58f7660d79d44fc1c4505d05bc
 url="https://github.com/blackbearreloaded/ps5-opengl/releases/download/v$version/ps5-opengl-sdk-$version.tar.gz"
 
 cache="$root/.deps/ps5-opengl"

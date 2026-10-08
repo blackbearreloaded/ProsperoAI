@@ -1,6 +1,7 @@
 // Host checks for real controller ownership, persistence, and multilingual layout.
 #include "native_app.hpp"
 #include "gfx/font.hpp"
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cstdio>
@@ -26,6 +27,11 @@ unsigned next_session = 0;
 void off_ui()
 {
     assert(std::this_thread::get_id() != ui_thread);
+}
+bool told(prospero::App &app, prospero::Notice notice)
+{
+    const auto notices = app.take_notices();
+    return std::find(notices.begin(), notices.end(), notice) != notices.end();
 }
 void settle(prospero::App &app)
 {
@@ -158,8 +164,10 @@ int main(int argc, char **argv)
         prospero::App app;
         assert(app.initialize());
         settle(app);
-        assert(app.state().models.size() == 500);
+        assert(app.state().models.size() == 500 && app.state().model_counts[0] == 500);
         assert(app.state().ready && app.state().selected_model == 0);
+        assert(app.activity() == prospero::Activity::Idle);
+        assert(told(app, prospero::Notice::ModelReady));
         assert(app.select_model(499));
         settle(app);
         assert(app.state().preferences.model_id == "model-499");
@@ -171,6 +179,8 @@ int main(int argc, char **argv)
         settle(app);
         assert(app.state().messages.size() == 2 && app.state().sessions.size() == 1);
         assert(std::strstr(app.state().messages.back().content, "世界"));
+        assert(app.state().stats_valid && app.state().stats.generated_tokens == 10);
+        assert(told(app, prospero::Notice::ReplyReady));
         assert(app.select_model(12));
         settle(app);
         assert(app.state().messages.empty());
@@ -181,6 +191,7 @@ int main(int argc, char **argv)
         assert(app.send("A question that fails"));
         settle(app);
         assert(app.state().retry_available && app.state().messages.size() == 3);
+        assert(!app.state().stats_valid && told(app, prospero::Notice::GenerationFailed));
         fail_generation = false;
         assert(app.retry());
         settle(app);
@@ -203,6 +214,17 @@ int main(int argc, char **argv)
         assert(app.retry());
         settle(app);
         assert(!app.state().unsaved && generations == previous_generations);
+        // A message whose answer failed is replaced by the next one, never doubled.
+        fail_generation = true;
+        assert(app.send("A first try"));
+        settle(app);
+        assert(app.state().retry_available && app.state().messages.size() == 9);
+        fail_generation = false;
+        assert(app.send("A second try"));
+        settle(app);
+        assert(app.state().messages.size() == 10);
+        assert(std::strcmp(app.state().messages[8].content, "A second try") == 0 &&
+               std::strcmp(app.state().messages[9].role, "assistant") == 0);
         auto preferences = app.state().preferences;
         preferences.reduced_motion = true;
         preferences.accent = 2;
@@ -219,6 +241,7 @@ int main(int argc, char **argv)
         assert(app.open_session(0));
         settle(app);
         assert(!app.can_send() && !app.state().messages.empty());
+        assert(told(app, prospero::Notice::ModelMissing));
         assert(app.delete_session(0));
         settle(app);
         assert(app.state().messages.empty() && saved.empty());
@@ -228,12 +251,16 @@ int main(int argc, char **argv)
     std::string primary{std::istreambuf_iterator<char>(primary_file), {}},
         secondary{std::istreambuf_iterator<char>(fallback_file), {}};
     assert(regular.load(primary) && fallback.load(secondary));
-    regular.set_fallback(&fallback, 5);
+    regular.add_fallback(&fallback, 5);
     assert(regular.has_glyph(0x4e16) && regular.has_glyph(0x754c));
     std::vector<hui::gfx::GlyphQuad> quads;
     const float width = regular.layout("Hello 世界", 0, 0, 28, hui::gfx::Align::left, quads);
     assert(width == regular.measure("Hello 世界", 28));
-    assert(quads.back().texture == 5 && quads.back().range == 0);
+    assert(quads.front().texture == 0 && quads.back().texture == 5 && quads.back().range > 0);
+    // A fallback is asked only for what the face itself lacks.
+    regular.clear_fallbacks();
+    assert(!regular.has_glyph(0x4e16) && regular.has_glyph(0x00e9) && regular.has_glyph(0x0416));
+    regular.add_fallback(&fallback, 5);
     const std::string original = "世界世界世界世界世界世界世界世界";
     std::string joined;
     for (const auto &line : regular.wrap(original, 28, 140))
@@ -242,6 +269,12 @@ int main(int argc, char **argv)
         joined += line;
     }
     assert(original == joined);
+    // Words still break at spaces; only a word wider than the line is cut.
+    const auto words =
+        regular.wrap("one two https://a.very.long.address/that/has/no/spaces three", 28, 220);
+    assert(words.size() >= 4 && words.front() == "one two");
+    for (const auto &line : words)
+        assert(regular.measure(line, 28) <= 220);
     const std::string image_path = std::string(PROSPERO_SETTINGS_PATH) + ".tga";
     unsigned char tga[30]{};
     tga[2] = 2;

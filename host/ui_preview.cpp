@@ -32,11 +32,7 @@ struct Saved
 std::map<std::string, Saved> saved;
 unsigned serial = 0;
 std::string image_fixture;
-std::string read(const std::string &path)
-{
-    std::ifstream file(path, std::ios::binary);
-    return {std::istreambuf_iterator<char>(file), {}};
-}
+bool fail_next_generation = false;
 } // namespace
 extern "C" std::FILE *__real_fopen(const char *, const char *);
 extern "C" std::FILE *__wrap_fopen(const char *path, const char *mode)
@@ -48,7 +44,7 @@ extern "C" std::FILE *__wrap_fopen(const char *path, const char *mode)
 }
 unsigned gpt_runtime_model_count()
 {
-    return std::getenv("PROSPERO_STRESS") ? 500 : 5;
+    return std::getenv("PROSPERO_EMPTY") ? 0 : std::getenv("PROSPERO_STRESS") ? 500 : 5;
 }
 unsigned gpt_runtime_selected_model()
 {
@@ -77,36 +73,64 @@ bool gpt_runtime_select_model(unsigned index)
 }
 int gpt_runtime_prepare()
 {
+    // Long enough for the "Preparing" state to be seen in a capture.
+    std::this_thread::sleep_for(std::chrono::milliseconds(120));
     return 0;
 }
 bool gpt_runtime_context_full()
 {
     return false;
 }
-int gpt_runtime_generate(const gpt_runtime_message_t *, unsigned, const gpt_runtime_settings_t &,
-                         char *output, std::size_t capacity, gpt_runtime_stats_t *stats,
-                         gpt_runtime_progress_fn progress)
+int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
+                         const gpt_runtime_settings_t &, char *output, std::size_t capacity,
+                         gpt_runtime_stats_t *stats, gpt_runtime_progress_fn progress)
 {
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    if (fail_next_generation)
+    {
+        fail_next_generation = false;
+        std::snprintf(output, capacity, "%s", "The model stopped before it could answer.");
+        return 1;
+    }
     if (selected == 2 || selected == 3)
     {
         std::snprintf(output, capacity, "%s",
                       selected == 2 ? "/download0/prosperoai-image-0.tga"
                                     : "/download0/prosperoai-audio.wav");
+        stats->elapsed_microseconds = selected == 2 ? 6400000 : 11800000;
         return 0;
     }
+    const bool everywhere = std::strstr(messages[count - 1].content, "\xE4\xBD\xA0") != nullptr;
     const char *reply =
-        "Start with the things that make us human.\n\nA garden under warm light. A table big "
-        "enough for everyone.\nA window that frames Earth, so home never feels too far "
-        "away.\n\nThe technology keeps you alive. The small rituals make you belong.";
+        everywhere
+            ? "\xE6\x98\x9F\xE6\x98\x9F\xE6\x98\xAF\xE9\x81\xA5\xE8\xBF\x9C\xE7\x9A\x84"
+              "\xE5\xA4\xAA\xE9\x98\xB3\xE3\x80\x82 \xE6\x98\x9F\xE3\x81\xAF\xE9\x81\xA0"
+              "\xE3\x81\x84\xE5\xA4\xAA\xE9\x99\xBD\xE3\x81\xA7\xE3\x81\x99\xE3\x80\x82\n"
+              "\xEB\xB3\x84\xEC\x9D\x80 \xEB\xA8\xBC \xED\x83\x9C\xEC\x96\x91\xEC\x9E\x85"
+              "\xEB\x8B\x88\xEB\x8B\xA4. \xD0\x97\xD0\xB2\xD1\x91\xD0\xB7\xD0\xB4\xD1\x8B "
+              "\xE2\x80\x94 \xD0\xB4\xD0\xB0\xD0\xBB\xD1\x91\xD0\xBA\xD0\xB8\xD0\xB5 "
+              "\xD1\x81\xD0\xBE\xD0\xBB\xD0\xBD\xD1\x86\xD0\xB0.\nLes \xC3\xA9toiles sont des "
+              "soleils lointains. \xCE\xA4\xCE\xB1 \xCE\xAC\xCF\x83\xCF\x84\xCF\x81\xCE\xB1 "
+              "\xCE\xB5\xCE\xAF\xCE\xBD\xCE\xB1\xCE\xB9 \xCE\xAE\xCE\xBB\xCE\xB9\xCE\xBF\xCE\xB9. "
+              "\xD7\x9B\xD7\x95\xD7\x9B\xD7\x91\xD7\x99\xD7\x9D \xE0\xB8\x94\xE0\xB8\xB2\xE0"
+              "\xB8\xA7"
+            : "Start with the things that make us human.\n\nA garden under warm light. A table big "
+              "enough for everyone.\nA window that frames Earth, so home never feels too far "
+              "away.\n\nThe technology keeps you alive. The small rituals make you belong.";
     std::string stream;
     for (const char *at = reply; *at; ++at)
     {
         stream += *at;
-        progress(stream.c_str());
+        // Whole code points only, as the runtime streams them.
+        if ((static_cast<unsigned char>(at[1]) & 0xc0) != 0x80)
+            progress(stream.c_str());
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     std::snprintf(output, capacity, "%s", reply);
+    stats->prompt_tokens = 412;
     stats->generated_tokens = 64;
+    stats->prefill_microseconds = 380000;
+    stats->elapsed_microseconds = 4890000;
     return 0;
 }
 namespace prospero_session
@@ -157,10 +181,11 @@ bool archive_media(const char *id, unsigned index, const char *kind, const char 
 
 int main(int argc, char **argv)
 {
-    if (argc != 4)
+    if (argc != 3)
         return 2;
-    const std::string assets = argv[1], fallback_path = argv[2], output = argv[3];
+    const std::string fonts_directory = argv[1], output = argv[2];
     const bool record = std::getenv("PROSPERO_REEL") != nullptr;
+    const bool empty = std::getenv("PROSPERO_EMPTY") != nullptr;
     const int width = record ? 1280 : 1920, height = record ? 720 : 1080;
     image_fixture = output + "/image-fixture.tga";
     {
@@ -199,22 +224,8 @@ int main(int argc, char **argv)
     hui::gfx::set_glsl_prefix("#version 450 core\n");
     hui::gfx::Renderer renderer;
     assert(renderer.init());
-    hui::gfx::Font regular, semibold, title, mono, fallback;
-    hui::ui::Fonts fonts;
-    auto font = [&](const char *name, hui::gfx::Font &face, hui::ui::FontRef &ref)
-    {
-        assert(face.load(read(assets + "/fonts/" + name)));
-        ref = {&face, renderer.batch().create_font_texture(face)};
-    };
-    font("inter-regular.huifont", regular, fonts.regular);
-    font("inter-semibold.huifont", semibold, fonts.semibold);
-    font("montserrat-medium.huifont", title, fonts.display);
-    font("dejavu-sans-mono.huifont", mono, fonts.mono);
-    assert(fallback.load(read(fallback_path)));
-    const auto fallback_texture = renderer.batch().create_font_texture(fallback);
-    for (auto *face : {&regular, &semibold, &title, &mono})
-        face->set_fallback(&fallback, fallback_texture);
-    fonts.pixel = fonts.hand = fonts.regular;
+    prospero::FontSet fonts;
+    assert(fonts.open(renderer, fonts_directory));
     GLuint target = 0, storage = 0;
     glGenFramebuffers(1, &target);
     glGenRenderbuffers(1, &storage);
@@ -230,6 +241,7 @@ int main(int argc, char **argv)
     hui::ui::Feedback feedback;
     prospero::UiFrame frame;
     frame.glass_texture = renderer.glass_texture();
+    std::map<hui::audio::Cue, unsigned> cues;
     auto render = [&]
     {
         frame.reset();
@@ -249,6 +261,8 @@ int main(int argc, char **argv)
     {
         feedback.clear();
         ui.update(input, 1.0f / 60, feedback);
+        for (const auto &cue : feedback.cues)
+            ++cues[cue.cue];
         if (record && ++frame_number % 3 == 0)
         {
             render();
@@ -257,9 +271,14 @@ int main(int argc, char **argv)
                    recording_pixels.size());
         }
     };
+    auto frames = [&](int count)
+    {
+        for (int i = 0; i < count; ++i)
+            update();
+    };
     auto settle = [&]
     {
-        for (int i = 0; i < 2000; ++i)
+        for (int i = 0; i < 4000; ++i)
         {
             update();
             if (!app.busy())
@@ -267,8 +286,7 @@ int main(int argc, char **argv)
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         assert(!app.busy());
-        for (int i = 0; i < 60; ++i)
-            update();
+        frames(70);
     };
     auto press = [&](hui::Action action, hui::Direction direction = hui::Direction::none)
     {
@@ -276,8 +294,7 @@ int main(int argc, char **argv)
         input.pressed = hui::action_bit(action);
         input.nav = direction;
         update(input);
-        for (int i = 0; i < 40; ++i)
-            update();
+        frames(45);
     };
     auto capture = [&](const char *name)
     {
@@ -297,13 +314,45 @@ int main(int argc, char **argv)
             std::fwrite(rgb.data() + y * 1920 * 3, 1, 1920 * 3, file);
         assert(std::fclose(file) == 0);
     };
+    auto type = [&](const char *value)
+    {
+        for (const char *at = value; *at; ++at)
+        {
+            feedback.clear();
+            ui.type(*at, feedback);
+            update();
+        }
+    };
+
+    frames(40);
+    capture("opening");
     settle();
+    frames(120); // the opening has lifted and the first toast has gone
+    if (empty)
+    {
+        capture("welcome-empty");
+        press(hui::Action::page_next);
+        capture("models-empty");
+        std::remove(image_fixture.c_str());
+        app.shutdown();
+        std::remove(PROSPERO_SETTINGS_PATH);
+        return 0;
+    }
+    frames(200);
     capture("welcome");
     press(hui::Action::page_next);
     capture("models");
+    press(hui::Action::right, hui::Direction::right);
+    press(hui::Action::right, hui::Direction::right);
+    capture("models-image");
     press(hui::Action::confirm);
     capture("switch-model");
     press(hui::Action::back);
+    press(hui::Action::west);
+    capture("search");
+    press(hui::Action::back);
+    press(hui::Action::left, hui::Direction::left);
+    press(hui::Action::left, hui::Direction::left);
     press(hui::Action::page_next);
     capture("settings");
     press(hui::Action::right, hui::Direction::right);
@@ -311,46 +360,88 @@ int main(int argc, char **argv)
     capture("daylight");
     press(hui::Action::left, hui::Direction::left);
     settle();
+    press(hui::Action::back);
+    for (int i = 0; i < 4; ++i)
+        press(hui::Action::down, hui::Direction::down);
+    capture("about");
+    for (int i = 0; i < 4; ++i)
+        press(hui::Action::up, hui::Direction::up);
     press(hui::Action::page_prev);
     press(hui::Action::page_prev);
-    assert(app.send("Imagine a quiet lunar outpost. What makes it feel like home?"));
+
+    // A conversation: the empty page, the wait, the answer as it arrives, the result.
+    press(hui::Action::west);
+    capture("conversation-new");
+    type("Imagine a quiet lunar outpost. What makes it feel like home?");
+    feedback.clear();
+    ui.submit(feedback);
+    frames(6);
+    capture("thinking");
+    for (int i = 0; i < 4000 && app.state().stream.size() < 150; ++i)
+    {
+        update();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    capture("streaming");
     settle();
     ui.scroll(-10000);
     settle();
     capture("conversation");
-    assert(app.send("你好。こんにちは。Привет. Tell me about the stars."));
+    assert(app.send("\xE4\xBD\xA0\xE5\xA5\xBD\xE3\x80\x82\xE3\x81\x93\xE3\x82\x93\xE3\x81\xAB"
+                    "\xE3\x81\xA1\xE3\x81\xAF\xE3\x80\x82\xEC\x95\x88\xEB\x85\x95\xED\x95\x98"
+                    "\xEC\x84\xB8\xEC\x9A\x94. \xD0\x9F\xD1\x80\xD0\xB8\xD0\xB2\xD0\xB5\xD1\x82. "
+                    "Tell me about the stars."));
     settle();
+    frames(20); // the faces for the new scripts are read on the frame after they are seen
     capture("multilingual");
+    fail_next_generation = true;
+    assert(app.send("A question the fixture refuses."));
+    settle();
+    capture("failed");
+    frames(420);
     assert(app.select_model(2));
     settle();
+    capture("toast");
     assert(app.send("An image preview fixture"));
     settle();
     assert(app.state().images.size() == 1);
-    ui.scroll(-10000);
-    settle();
     capture("image");
     assert(app.select_model(3));
     settle();
     assert(app.send("A soft atmosphere for reading"));
     settle();
     capture("audio");
+    press(hui::Action::left, hui::Direction::left);
+    press(hui::Action::down, hui::Direction::down);
+    capture("conversations");
+    press(hui::Action::north);
+    capture("delete");
+    press(hui::Action::back);
+    press(hui::Action::right, hui::Direction::right);
     if (!record)
     {
+        // With reduced motion nothing may move once the page is at rest.
         press(hui::Action::page_next);
         auto preferences = app.state().preferences;
         preferences.reduced_motion = true;
+        preferences.high_contrast = true;
         app.set_preferences(preferences);
         settle();
+        frames(500);
         render();
+        capture("high-contrast");
         std::vector<unsigned char> before(static_cast<std::size_t>(width) * height * 3);
         glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, before.data());
-        for (int i = 0; i < 120; ++i)
-            update();
+        frames(120);
         render();
         glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, recording_pixels.data());
         assert(before == recording_pixels);
         std::fprintf(stderr, "Reduced motion: identical frames after two seconds at rest.\n");
     }
+    std::fprintf(stderr, "Cues asked for:");
+    for (const auto &[cue, count] : cues)
+        std::fprintf(stderr, " %s x%u", hui::audio::cue_name(cue), count);
+    std::fprintf(stderr, "\n");
     std::remove(image_fixture.c_str());
     app.shutdown();
     std::remove(PROSPERO_SETTINGS_PATH);

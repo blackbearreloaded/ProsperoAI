@@ -185,6 +185,7 @@ bool App::start(Job job)
         return false;
     result_ = state_;
     result_.stream.clear();
+    result_.notice = Notice::None;
     job_ = job;
     done_.store(false, std::memory_order_relaxed);
     stream_buffer_[0] = '\0';
@@ -263,6 +264,8 @@ void App::poll()
         }
         result_.revision = state_.revision + 1;
         state_ = std::move(result_);
+        if (state_.notice != Notice::None)
+            notices_.push_back(state_.notice);
         if (job_ == Job::Discover && !state_.models.empty())
         {
             const int saved = find_model(state_, state_.preferences.model_id.c_str());
@@ -282,6 +285,32 @@ void App::poll()
 bool App::generating() const
 {
     return running_ && job_ == Job::Generate;
+}
+Activity App::activity() const
+{
+    if (!running_)
+        return Activity::Idle;
+    switch (job_)
+    {
+    case Job::Discover:
+        return Activity::Starting;
+    case Job::Select:
+        return Activity::PreparingModel;
+    case Job::Open:
+        return Activity::OpeningConversation;
+    case Job::Generate:
+        return Activity::Generating;
+    case Job::Save:
+        return Activity::Saving;
+    default:
+        return Activity::Idle;
+    }
+}
+std::vector<Notice> App::take_notices()
+{
+    std::vector<Notice> notices;
+    notices.swap(notices_);
+    return notices;
 }
 bool App::can_send() const
 {
@@ -326,6 +355,7 @@ bool App::new_session()
     state_.images.clear();
     state_.stream.clear();
     state_.retry_available = false;
+    state_.stats_valid = false;
     state_.status = state_.ready ? "Ready when you are" : "Choose a model to begin";
     ++state_.revision;
     if (!state_.ready && state_.selected_model >= 0)
@@ -345,19 +375,28 @@ bool App::send(const std::string &text)
         ++state_.revision;
         return false;
     }
-    if (state_.messages.size() + 2 > prospero_session::MessageCapacity)
+    // A message that never got its answer (the generation or its save failed) is
+    // replaced by the new one: two user turns in a row break some chat templates.
+    const bool unanswered = state_.retry_available && !state_.messages.empty() &&
+                            std::strcmp(state_.messages.back().role, "user") == 0;
+    if (state_.messages.size() + (unanswered ? 1 : 2) > prospero_session::MessageCapacity)
     {
         state_.status = "This conversation is full. Start a new conversation to continue.";
         ++state_.revision;
         return false;
     }
+    const auto previous = state_.messages;
+    const bool could_retry = state_.retry_available;
+    if (unanswered)
+        state_.messages.pop_back();
     state_.messages.push_back(message("user", text));
     state_.stream.clear();
     state_.retry_available = false;
     state_.status = "Creating on your console...";
     if (!start(Job::Generate))
     {
-        state_.messages.pop_back();
+        state_.messages = previous;
+        state_.retry_available = could_retry;
         return false;
     }
     return true;
@@ -442,6 +481,7 @@ void App::work()
     {
     case Job::Discover:
         result_.models.clear();
+        result_.model_counts = {};
         for (unsigned i = 0, count = gpt_runtime_model_count(); i < count; ++i)
         {
             Model model{gpt_runtime_model_id(i), gpt_runtime_model_name(i),
@@ -452,15 +492,14 @@ void App::work()
                 model.capability = Capability::Audio;
             else if (model.purpose == "text-to-speech")
                 model.capability = Capability::Voice;
+            ++result_.model_counts[static_cast<std::size_t>(model.capability)];
             result_.models.push_back(std::move(model));
         }
         load_preferences(result_.preferences, result_.models);
         refresh_sessions();
         result_.initialized = true;
         result_.status =
-            result_.models.empty()
-                ? "No compatible models installed. Add models to the app's models folder."
-                : "Your library is ready";
+            result_.models.empty() ? "No models are installed yet" : "Your library is ready";
         break;
     case Job::Select:
 #ifndef PROSPERO_HOST
@@ -476,7 +515,9 @@ void App::work()
             result_.messages.clear();
             result_.images.clear();
             result_.retry_available = false;
+            result_.stats_valid = false;
         }
+        result_.notice = result_.ready ? Notice::ModelReady : Notice::ModelFailed;
         result_.status = result_.ready ? "Ready when you are"
                                        : "Model preparation failed. Select the model to retry.";
         break;
@@ -496,6 +537,7 @@ void App::work()
         result_.messages = std::move(messages);
         refresh_images();
         result_.retry_available = false;
+        result_.stats_valid = false;
         const int index = find_model(result_, record.model_id);
         result_.ready = index >= 0 && gpt_runtime_select_model(static_cast<unsigned>(index)) &&
                         gpt_runtime_prepare() == 0;
@@ -505,6 +547,9 @@ void App::work()
             result_.preferences.model_id =
                 result_.models[static_cast<std::size_t>(result_.selected_model)].id;
         }
+        result_.notice = index < 0       ? Notice::ModelMissing
+                         : result_.ready ? Notice::None
+                                         : Notice::ModelFailed;
         result_.status =
             index < 0 ? "This model is missing. Your saved conversation is available to read."
             : result_.ready
@@ -522,7 +567,9 @@ void App::work()
                 result_.session = {};
                 result_.messages.clear();
                 result_.images.clear();
+                result_.stats_valid = false;
             }
+            result_.notice = Notice::ConversationDeleted;
             result_.status = "Conversation deleted";
             refresh_sessions();
         }
@@ -534,6 +581,7 @@ void App::work()
         result_.unsaved = !prospero_session::save(&result_.session, result_.messages.data(),
                                                   static_cast<unsigned>(result_.messages.size()));
         result_.retry_available = result_.unsaved;
+        result_.notice = result_.unsaved ? Notice::SaveFailed : Notice::None;
         result_.status =
             result_.unsaved
                 ? "Could not save. Check storage, then retry before leaving this conversation."
@@ -542,7 +590,7 @@ void App::work()
         break;
     case Job::Preferences:
         if (!save_preferences(result_.preferences))
-            result_.status = "Settings could not be saved. Changes apply until you close the app.";
+            result_.notice = Notice::SettingsNotSaved;
         break;
     case Job::Play:
         result_.status = "No audio in this conversation";
@@ -566,6 +614,8 @@ void App::generate()
     const auto &model = result_.models[static_cast<std::size_t>(result_.selected_model)];
     result_.retry_available = true;
     result_.unsaved = true;
+    result_.stats_valid = false;
+    result_.notice = Notice::SaveFailed;
     if (!result_.session.id[0])
     {
         if (!prospero_session::create(&result_.session, model.id.c_str(), model.name.c_str(),
@@ -604,6 +654,7 @@ void App::generate()
     result_.stream.clear();
     if (status)
     {
+        result_.notice = Notice::GenerationFailed;
         result_.status =
             response[0] ? response : "Generation failed. Your message is saved; you can retry.";
         refresh_sessions();
@@ -630,6 +681,11 @@ void App::generate()
                                               static_cast<unsigned>(result_.messages.size()));
     result_.unsaved = !saved;
     result_.retry_available = !saved;
+    result_.stats_valid = true;
+    result_.stats_kind = model.capability;
+    result_.notice = !saved                                 ? Notice::SaveFailed
+                     : model.capability == Capability::Text ? Notice::ReplyReady
+                                                            : Notice::MediaReady;
     result_.status = !saved ? "Response is shown, but could not be saved. Check available storage."
                      : !archived ? "Created, but the media could not be archived. It may be "
                                    "replaced by the next generation."

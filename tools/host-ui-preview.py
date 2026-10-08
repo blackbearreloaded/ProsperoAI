@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Build and render the actual native frontend using host-only runtime fixtures."""
+"""Build and render the actual native frontend using host-only runtime fixtures.
+
+usage: tools/host-ui-preview.py [output folder] [--reel]
+
+PROSPERO_STRESS=1 fills the library with 500 models; PROSPERO_EMPTY=1 leaves it empty.
+"""
 import os
 from pathlib import Path
 import subprocess
@@ -9,24 +14,33 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build/ui-preview"
 BUILD.mkdir(parents=True, exist_ok=True)
-OUTPUT = Path(sys.argv[1]) if len(sys.argv) > 1 else BUILD / "screenshots"
+arguments = [value for value in sys.argv[1:] if not value.startswith("--")]
+OUTPUT = Path(arguments[0]) if arguments else BUILD / "screenshots"
 OUTPUT.mkdir(parents=True, exist_ok=True)
-FONT = BUILD / "multilingual.huifont"
-converter = ROOT / "tools/convert-ui-font.py"
-source_font = ROOT / "assets/ui/fonts/lvgl-bitmap/multilingual/Radio-24.fnt"
-if not FONT.exists() or FONT.stat().st_mtime < max(converter.stat().st_mtime, source_font.stat().st_mtime):
-    subprocess.run([sys.executable, str(converter), str(source_font), str(FONT)], check=True)
 
-KIT = ROOT / "vendor/homebrew-ui/src"
-sources = [ROOT / "src/native_app.cpp", ROOT / "src/native_ui.cpp", ROOT / "host/ui_preview.cpp"]
-sources.append(ROOT / "host/platform_host.cpp")
-sources.append(ROOT / "src/media_preview.cpp")
-sources += [path for path in KIT.rglob("*.cpp") if "platform" not in path.parts]
+
+def tool(name, *args):
+    return Path(subprocess.run(["bash", str(ROOT / "tools" / name), *args], check=True,
+                               stdout=subprocess.PIPE, text=True).stdout.strip())
+
+
+# The kit at its pinned commit, and the same fonts the console build packages.
+KIT = tool("prepare-ui-kit.sh") / "src"
+FONTS = tool("bake-fonts.sh")
+kit_sources = [KIT / line for line in (ROOT / "ui-kit/sources.txt").read_text().split()
+               if line.endswith(".cpp") and not line.startswith("platform/")]
+sources = [ROOT / "src/native_app.cpp", ROOT / "src/native_ui.cpp",
+           ROOT / "src/native_ui_screens.cpp", ROOT / "src/native_ui_style.cpp",
+           ROOT / "src/font_set.cpp", ROOT / "src/media_preview.cpp",
+           ROOT / "host/ui_preview.cpp", ROOT / "host/platform_host.cpp", *kit_sources]
 cxx = os.environ.get("HOST_CXX", "clang++")
 flags = ["-std=c++20", "-O2", "-g", "-fno-exceptions", "-fno-rtti", "-DGL_GLEXT_PROTOTYPES",
          "-DPROSPERO_HOST", f'-DPROSPERO_SETTINGS_PATH="{BUILD / "settings.cfg"}"',
-         "-I" + str(ROOT / "include"), "-I" + str(KIT)]
-headers_time = max(p.stat().st_mtime for base in (KIT, ROOT / "include") for p in base.rglob("*.hpp"))
+         "-I" + str(ROOT / "include"), "-I" + str(ROOT / "src"), "-I" + str(KIT)]
+flags += os.environ.get("HOST_PREVIEW_CXXFLAGS", "").split()
+headers_time = max(p.stat().st_mtime for base in (KIT, ROOT / "include", ROOT / "src")
+                   for p in base.rglob("*.hpp"))
+
 
 def compile_source(source):
     obj = BUILD / (str(source.relative_to(ROOT)).replace("/", "_") + ".o")
@@ -34,11 +48,13 @@ def compile_source(source):
         subprocess.run([cxx, *flags, "-c", str(source), "-o", str(obj)], check=True)
     return str(obj)
 
+
 with ThreadPoolExecutor(max_workers=int(os.environ.get("BUILD_JOBS", "6"))) as pool:
     objects = list(pool.map(compile_source, sources))
 binary = BUILD / "prospero-ui-preview"
-subprocess.run([cxx, *objects, "-pthread", "-lEGL", "-lGL", "-Wl,--wrap=fopen", "-o", str(binary)], check=True)
-command = [str(binary), str(ROOT / "assets"), str(FONT), str(OUTPUT)]
+subprocess.run([cxx, *os.environ.get("HOST_PREVIEW_CXXFLAGS", "").split(), *objects, "-pthread",
+                "-lEGL", "-lGL", "-Wl,--wrap=fopen", "-o", str(binary)], check=True)
+command = [str(binary), str(FONTS), str(OUTPUT)]
 if "--reel" in sys.argv:
     encoder = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo",
         "-pixel_format", "rgb24", "-video_size", "1280x720", "-framerate", "20", "-i", "-",

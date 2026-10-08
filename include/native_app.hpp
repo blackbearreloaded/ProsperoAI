@@ -4,6 +4,7 @@
 #include "gpt_runtime.hpp"
 #include "session_store.hpp"
 #include "media_preview.hpp"
+#include <array>
 #include <atomic>
 #include <string>
 #include <vector>
@@ -32,9 +33,34 @@ struct Preferences
     bool reduced_motion = false, high_contrast = false;
     std::string model_id;
 };
+// What the last finished job has to tell the player, beyond the status line.
+enum class Notice
+{
+    None,
+    ModelReady,
+    ModelFailed,
+    ModelMissing,
+    ReplyReady,
+    MediaReady,
+    GenerationFailed,
+    SaveFailed,
+    ConversationDeleted,
+    SettingsNotSaved
+};
+// What the worker is busy with, for the indicators.
+enum class Activity
+{
+    Idle,
+    Starting,
+    PreparingModel,
+    OpeningConversation,
+    Generating,
+    Saving
+};
 struct State
 {
     std::vector<Model> models;
+    std::array<unsigned, 4> model_counts{}; // installed models per Capability
     std::vector<prospero_session::Record> sessions;
     std::vector<prospero_session::Message> messages;
     std::vector<std::shared_ptr<const ImagePreview>> images;
@@ -43,7 +69,11 @@ struct State
     int selected_model = -1;
     bool ready = false, initialized = false, retry_available = false, unsaved = false;
     std::string status = "Opening your space...", stream;
+    // Figures of the last answer in the conversation on screen; see stats_valid.
     gpt_runtime_stats_t stats{};
+    bool stats_valid = false;
+    Capability stats_kind = Capability::Text;
+    Notice notice = Notice::None;
     unsigned revision = 0;
 };
 
@@ -67,6 +97,7 @@ class App
     {
         return running_;
     }
+    Activity activity() const;
     bool generating() const;
     bool can_send() const;
     bool select_model(unsigned index);
@@ -77,6 +108,8 @@ class App
     bool retry();
     bool play_audio();
     void set_preferences(Preferences preferences);
+    // The notices of the jobs that finished since the last call, oldest first.
+    std::vector<Notice> take_notices();
 
   private:
     enum class Job
@@ -102,6 +135,7 @@ class App
     Job job_ = Job::Discover;
     unsigned argument_ = 0;
     std::string session_id_;
+    std::vector<Notice> notices_;
     bool running_ = false, preferences_dirty_ = false;
     std::atomic<bool> done_{false};
     std::atomic_flag stream_lock_ = ATOMIC_FLAG_INIT;

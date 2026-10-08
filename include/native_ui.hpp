@@ -1,6 +1,7 @@
 // The production native frontend, shared by the console and host visual checks.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include "font_set.hpp"
 #include "native_app.hpp"
 #include "core/input.hpp"
 #include "gfx/backdrop_spec.hpp"
@@ -13,6 +14,9 @@
 
 namespace prospero
 {
+// One frame, in the order the renderer takes it: the backdrop shader, the
+// scene, and what floats above it. `glass` asks for the scene to be blurred
+// into glass_texture before the overlay is drawn (dialogs are frosted).
 struct UiFrame
 {
     hui::gfx::BackdropSpec backdrop;
@@ -31,7 +35,7 @@ struct UiFrame
 class NativeUI
 {
   public:
-    NativeUI(App &app, const hui::ui::Fonts &fonts, hui::gfx::Renderer &renderer);
+    NativeUI(App &app, FontSet &fonts, hui::gfx::Renderer &renderer);
     ~NativeUI();
     void update(const hui::InputFrame &input, float dt, hui::ui::Feedback &feedback);
     void draw(UiFrame &frame) const;
