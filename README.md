@@ -216,6 +216,10 @@ nothing; a build on `main` is started by hand (**Run workflow**). It:
 6. writes `SHA256SUMS` and uploads both release files; and
 7. publishes those verified files when triggered by a version tag.
 
+A release ZIP built by the workflow can be checked with
+`gh attestation verify PPSA99004.zip -R blackbearreloaded/ProsperoAI` (GitHub CLI); this covers
+releases built by GitHub Actions from now on, not earlier ones.
+
 Every pull request gets an installable build named by its number and commit:
 see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md).
 
