@@ -18,9 +18,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
 </p>
 
-Demo available by clicking the image below.
+![ProsperoAI native model library](docs/images/native-models.png)
 
-[![ProsperoAI conversation and saved sessions](docs/images/prosperoai-demo.png)](https://i.imgur.com/vRqZFqn.mp4)
+The native interface uses [ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui).
+This screenshot uses the production frontend with host fixtures. See the
+[UI guide](docs/NATIVE_UI.md) for controls, implementation details, and validation limits.
 
 > [!WARNING]
 > ProsperoAI is an experimental project for validating generative-AI workloads
@@ -30,7 +32,9 @@ Demo available by clicking the image below.
 
 - Runs supported models locally without an account, cloud API, or conversation upload.
 - Uses native PS5 AGC GPU compute for the model paths; this is not a ROCm port.
-- Switches between Mistral, Qwen, SD-Turbo, Stable Audio, and Kokoro model purposes in Workshop.
+- Searches and filters installed text, image, audio, and speech models in a scrolling library.
+- Uses stable model IDs for selection and saved conversations, with no eight-model catalog limit.
+- Offers Midnight and Daylight themes, animated focus and transitions, reduced motion, and larger text.
 - Stores independent text, image, audio, and speech sessions under `/download0`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
 - Ships without model weights. Users choose and install curated model folders separately.
@@ -113,7 +117,7 @@ generation. Both are functional demonstrations rather than real-time paths.
    intentionally empty `PPSA99004/models/` directory.
 3. Open one of the curated Hugging Face repositories above, download the whole
    repository, and copy its named model folder into `PPSA99004/models/`.
-4. Repeat step 3 for any other models you want available in Workshop.
+4. Repeat step 3 for any other models you want available in Models.
 5. Upload the complete `PPSA99004` directory to `/data/homebrew/`, producing
    `/data/homebrew/PPSA99004/eboot.bin`.
 6. Refresh or restart your homebrew loader, then launch ProsperoAI.
@@ -138,7 +142,7 @@ PPSA99004/
 ```
 
 Keep each downloaded model folder intact. ProsperoAI discovers all valid model
-folders at launch and shows their friendly names and purposes in Workshop. If
+folders at launch and shows their friendly names and purposes in Models. If
 no compatible model is installed, the app opens normally and explains where to
 add one.
 
@@ -149,12 +153,13 @@ title is mounted.
 
 | Input | Action |
 | --- | --- |
-| D-pad / left stick | Select saved sessions or change Workshop settings |
+| D-pad / left stick | Navigate models, sessions, or settings; Left focuses the session rail |
 | Cross | Open a session, activate a control, or write a prompt |
-| Circle | Return to Conversation |
-| Square | Start a new session |
-| Triangle | Delete the selected session or play/replay its generated audio |
-| Options | Switch between Conversation and Workshop |
+| Circle | Close a dialog or return focus to the composer/settings categories |
+| L1 / R1 | Switch between Workspace, Models, and Settings |
+| Square | Start a new session in Workspace; search in Models |
+| Triangle | Filter models, retry a failed job, delete a focused session, or play saved audio |
+| Options | Open the close-app dialog after background work has finished and the conversation is saved |
 | Right stick | Scroll through the current conversation |
 | Physical USB keyboard | Type in the prompt field; Enter sends |
 
@@ -183,7 +188,7 @@ dist/PPSA99004/           complete model-free app folder
 dist/PPSA99004.zip        archived model-free app folder
 ```
 
-The build downloads and verifies the public PS5 Payload SDK and zlib inside the
+The build downloads and verifies the public PS5 Payload SDK, ps5-opengl SDK, and zlib inside the
 ignored `.deps/` directory. It rebuilds the clean-room `libc.prx`
 runtime, compiles the native app through parallel incremental Ninja builds,
 caches compiler results with ccache, signs the executable, validates assets,
@@ -213,7 +218,8 @@ see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md).
 src/                 ProsperoAI UI, sessions, model routing, and GPU runtimes
 src/backends/        Mistral and Qwen architecture-specific AGC programs
 include/             Application interfaces
-assets/              RmlUi documents, styles, fonts, and controller icons
+assets/              Native fonts, interface sounds, and retained legacy source assets
+host/                Deterministic native-frontend capture harness
 sce_sys/             PS5 title metadata, artwork, icon, and selection music
 models/README.txt    Model-free release placeholder and install guidance
 model-tools/         GGUF converter, validated recipes, and porting guide

@@ -179,7 +179,11 @@ bool gpt_ime_init(void)
 void gpt_ime_request(const char *value, gpt_ime_result_fn callback, void *user_data)
 {
     if (active || requested || !module_loaded)
+    {
+        if (callback)
+            callback(nullptr, user_data);
         return;
+    }
     SDL_strlcpy(initial_text, value != nullptr ? value : "", sizeof(initial_text));
     result_callback = callback;
     result_user_data = user_data;
@@ -192,6 +196,8 @@ static void start_requested(void)
     if (sceUserServiceGetForegroundUser(&user_id) < 0)
     {
         requested = false;
+        if (result_callback)
+            result_callback(nullptr, result_user_data);
         return;
     }
     utf8_to_utf16(initial_text, text_buffer, sizeof(text_buffer) / sizeof(text_buffer[0]));
@@ -210,6 +216,8 @@ static void start_requested(void)
     active = sceImeDialogInit(&param, nullptr) == 0;
     started_at = SDL_GetTicks();
     requested = false;
+    if (!active && result_callback)
+        result_callback(nullptr, result_user_data);
 }
 
 void gpt_ime_poll(void)
@@ -232,8 +240,12 @@ void gpt_ime_poll(void)
             utf16_to_utf8(text_buffer, text, sizeof(text));
             result_callback(text, result_user_data);
         }
+        else if (result_callback)
+            result_callback(nullptr, result_user_data);
         sceImeDialogTerm();
     }
+    else if (result_callback)
+        result_callback(nullptr, result_user_data);
     active = false;
 }
 

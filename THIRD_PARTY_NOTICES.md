@@ -5,9 +5,10 @@
 ProsperoAI builds on the
 [PS5 Native App Boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate)
 and the public [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk).
-Its interface uses [RmlUi](https://github.com/mikke89/RmlUi),
-[SDL2](https://github.com/libsdl-org/SDL/tree/SDL2) (John Törnblom's [PS5 port](https://github.com/ps5-payload-dev/SDL)), and
-[FreeType](https://freetype.org/). Model runtimes incorporate work from
+Its native interface uses [ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui)
+and [ps5-opengl](https://github.com/blackbearreloaded/ps5-opengl).
+[SDL2](https://github.com/libsdl-org/SDL/tree/SDL2) (John Törnblom's [PS5 port](https://github.com/ps5-payload-dev/SDL))
+remains for media and system helpers. Model runtimes incorporate work from
 [llama.cpp](https://github.com/ggml-org/llama.cpp),
 [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp),
 [Stable Audio Open Small](https://huggingface.co/stabilityai/stable-audio-open-small),
@@ -19,9 +20,12 @@ and uses the public [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk).
 The clean-room application runtime and project-owned source are distributed
 under GPL-3.0-or-later.
 
-The user interface includes RmlUi, SDL2 (John Törnblom's PS5 port,
-https://github.com/ps5-payload-dev/SDL), FreeType, and their retained upstream
-license material. The model execution paths incorporate code or static build
+The vendored UI subset is GPL-3.0-or-later; its pinned revision and upstream notices
+are retained in [vendor/homebrew-ui](vendor/homebrew-ui/). The Inter, Montserrat,
+and DejaVu font licenses ship beside their native atlases in `assets/fonts`.
+The existing multilingual font's OFL notice is retained and copied into the package.
+RmlUi and FreeType are no longer linked into the app; their legacy files and upstream
+notices remain in the repository. The model execution paths incorporate code or static build
 artifacts derived from llama.cpp, stable-diffusion.cpp, ggml, espeak-ng,
 Kokoro, and the Stable Audio compatibility work in a8nova/adreno-llms. Those
 projects retain their respective copyrights and licenses.

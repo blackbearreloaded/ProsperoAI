@@ -22,6 +22,8 @@ extern "C"
 #ifdef PS5_WRAP_MALLOC
     void *__real_malloc(std::size_t size);
     void *__real_calloc(std::size_t count, std::size_t size);
+    void *__real_realloc(void *address, std::size_t size);
+    std::size_t __real_malloc_usable_size(const void *address);
 #endif
     std::int64_t sceKernelGetDirectMemorySize(void);
     std::int32_t sceKernelAllocateDirectMemory(std::int64_t, std::int64_t, std::size_t, std::size_t,
@@ -46,6 +48,7 @@ struct alignas(std::max_align_t) DirectAllocation
     std::uint64_t magic;
     std::size_t previous_used;
     DirectAllocation *previous;
+    std::size_t requested_size;
     bool released;
 };
 
@@ -54,6 +57,7 @@ struct MappedAllocation
     void *mapping;
     void *address;
     std::size_t mapped_size;
+    std::size_t requested_size;
 };
 
 // ponytail: the generator uses one model-loading/inference thread; add a lock
@@ -121,7 +125,7 @@ struct DirectArenaLock
     }
     const auto aligned = (reinterpret_cast<std::uintptr_t>(mapping) + alignment - 1) &
                          ~(static_cast<std::uintptr_t>(alignment) - 1);
-    *slot = {mapping, reinterpret_cast<void *>(aligned), mapped_size};
+    *slot = {mapping, reinterpret_cast<void *>(aligned), mapped_size, size};
     return slot->address;
 }
 
@@ -184,7 +188,7 @@ bool release_mapped(void *address) noexcept
         return nullptr;
     auto *allocation = reinterpret_cast<DirectAllocation *>(
         static_cast<unsigned char *>(direct_arena) + offset - sizeof(DirectAllocation));
-    *allocation = {direct_allocation_magic, previous_used, direct_tail, false};
+    *allocation = {direct_allocation_magic, previous_used, direct_tail, size, false};
     direct_tail = allocation;
     direct_arena_used = offset + size;
     return static_cast<unsigned char *>(direct_arena) + offset;
@@ -221,6 +225,28 @@ bool release_direct(void *address) noexcept
     if (void *address = malloc(size))
         return address;
     return allocate_fallback(size, alignof(std::max_align_t));
+}
+
+bool owned_size(const void *address, std::size_t *size) noexcept
+{
+    DirectArenaLock lock;
+    for (const auto &allocation : mapped_allocations)
+        if (allocation.address == address && address)
+        {
+            *size = allocation.requested_size;
+            return true;
+        }
+    const auto value = reinterpret_cast<std::uintptr_t>(address);
+    const auto begin = reinterpret_cast<std::uintptr_t>(direct_arena);
+    if (!direct_arena || value < begin + sizeof(DirectAllocation) ||
+        value >= begin + direct_arena_size)
+        return false;
+    const auto *allocation = reinterpret_cast<const DirectAllocation *>(
+        static_cast<const unsigned char *>(address) - sizeof(DirectAllocation));
+    if (allocation->magic != direct_allocation_magic)
+        return false;
+    *size = allocation->requested_size;
+    return true;
 }
 
 [[nodiscard]] void *allocate_aligned(std::size_t size, std::size_t alignment) noexcept
@@ -281,6 +307,35 @@ extern "C" __attribute__((visibility("hidden"))) void *__wrap_calloc(std::size_t
     if (address != nullptr)
         std::memset(address, 0, bytes == 0 ? 1 : bytes);
     return address;
+}
+extern "C" __attribute__((visibility("hidden"))) void *__wrap_realloc(void *address,
+                                                                      std::size_t size)
+{
+    if (!address)
+        return __wrap_malloc(size);
+    std::size_t previous = 0;
+    if (!owned_size(address, &previous))
+        return __real_realloc(address, size);
+    if (!size)
+    {
+        if (!release_mapped(address))
+            release_direct(address);
+        return nullptr;
+    }
+    void *next = __wrap_malloc(size);
+    if (!next)
+        return nullptr; // realloc failure retains the caller's original allocation.
+    std::memcpy(next, address, previous < size ? previous : size);
+    if (!release_mapped(address))
+        release_direct(address);
+    return next;
+}
+
+extern "C" __attribute__((visibility("hidden"))) std::size_t
+__wrap_malloc_usable_size(const void *address)
+{
+    std::size_t size = 0;
+    return !address || owned_size(address, &size) ? size : __real_malloc_usable_size(address);
 }
 #endif
 

@@ -7,19 +7,22 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace prospero_session {
+namespace prospero_session
+{
 
 constexpr unsigned MessageCapacity = 64;
 constexpr unsigned CatalogCapacity = 64;
-constexpr unsigned MessageBytes = 2048;
+constexpr unsigned MessageBytes = 4096;
 
-struct Message {
+struct Message
+{
     char role[12];
     char timestamp[9];
     char content[MessageBytes];
 };
 
-struct Record {
+struct Record
+{
     char id[48];
     char title[72];
     char model_id[48];
@@ -32,15 +35,12 @@ struct Record {
     unsigned context_start;
 };
 
-bool create(Record *record, const char *model_id, const char *model_name,
-            const char *purpose);
+bool create(Record *record, const char *model_id, const char *model_name, const char *purpose);
 bool save(Record *record, const Message *messages, unsigned message_count);
-bool load(const char *id, Record *record, Message *messages,
-          unsigned message_capacity);
+bool load(const char *id, Record *record, Message *messages, unsigned message_capacity);
 unsigned scan(Record *records, unsigned capacity);
 bool erase(const char *id);
-bool archive_media(const char *id, unsigned message_index,
-                   const char *kind, const char *source,
+bool archive_media(const char *id, unsigned message_index, const char *kind, const char *source,
                    char *output, std::size_t output_capacity);
 bool valid_id(const char *id);
 

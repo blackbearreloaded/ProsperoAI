@@ -30,6 +30,10 @@ for command in python3 sha256sum; do
     }
 done
 bash "$root/tools/setup-native-dependencies.sh" >/dev/null
+bash "$root/tools/prepare-opengl.sh"
+python3 "$root/tools/convert-ui-font.py" \
+    "$root/assets/ui/fonts/lvgl-bitmap/multilingual/Radio-24.fnt" \
+    "$root/build/assets/fonts/multilingual.huifont"
 
 param="$root/sce_sys/param.json"
 title_id=$(python3 - "$param" <<'PY'
@@ -97,7 +101,7 @@ ninja_begin "$build/app.ninja"
 target_compiler=$(command -v "${PS5_CLANG:-clang-18}")
 
 mapfile -d '' -t source_paths < <(
-    find "$root/src" -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
+    find "$root/src" "$root/vendor/homebrew-ui/src" -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' \) \
         -print0 | sort -z
 )
 sources=()
@@ -153,7 +157,7 @@ fi
 
 objects=()
 for source in "${sources[@]}"; do
-    [[ $source =~ ^src/[A-Za-z0-9_./-]+\.(c|cc|cpp)$ && -f $root/$source ]] || {
+    [[ $source =~ ^(src|vendor/homebrew-ui/src)/[A-Za-z0-9_./-]+\.(c|cc|cpp)$ && -f $root/$source ]] || {
         echo "invalid source: $source" >&2; exit 2;
     }
     object="$build/obj/$source.o"
@@ -216,40 +220,27 @@ ninja_edge STUB "$common_link_stub" "$sdk_root/bin/prospero-lld" --shared \
     -soname libSceCommonDialog.sprx -o "$common_link_stub" "$common_link_object"
 link_inputs+=("$common_link_stub")
 
+agc_sdk_stub="$root/.deps/ps5-opengl/current/lib/libSceAgc.so"
+agc_link_source="$build/import-stubs/libSceAgc.c"
 agc_link_object="$build/import-stubs/libSceAgc.o"
-agc_link_stub="$sdk_root/target/lib/libSceAgc.so"
-ninja_inputs=("$native/prosperoai_import_stub_agc.c" \
-    "$root/tooling/prospero-clang18" "$target_compiler")
+agc_link_stub="$build/import-stubs/libSceAgc.so"
+python3 "$root/tools/graphics-import-stub.py" "$agc_sdk_stub" "$agc_link_source"
+ninja_inputs=("$agc_link_source" "$root/tooling/prospero-clang18" "$target_compiler")
 ninja_edge CC "$agc_link_object" env PS5_PAYLOAD_SDK="$sdk_root" \
     PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
-    sh "$root/tooling/prospero-clang18" \
-    -std=c11 -O2 -Wall -Wextra -fPIC \
-    -MD -MF "$agc_link_object.d" -c "$native/prosperoai_import_stub_agc.c" \
-    -o "$agc_link_object"
+    sh "$root/tooling/prospero-clang18" -std=c11 -O2 -fPIC \
+    -MD -MF "$agc_link_object.d" -c "$agc_link_source" -o "$agc_link_object"
 ninja_inputs=("$agc_link_object" "$sdk_root/bin/prospero-lld")
 ninja_edge STUB "$agc_link_stub" "$sdk_root/bin/prospero-lld" --shared \
     -soname libSceAgc.prx -o "$agc_link_stub" "$agc_link_object"
-
-agc_driver_link_object="$build/import-stubs/libSceAgcDriver.o"
-agc_driver_link_stub="$sdk_root/target/lib/libSceAgcDriver.so"
-ninja_inputs=("$native/prosperoai_import_stub_agc_driver.c" \
-    "$root/tooling/prospero-clang18" "$target_compiler")
-ninja_edge CC "$agc_driver_link_object" env PS5_PAYLOAD_SDK="$sdk_root" \
-    PS5_CLANG="$target_compiler" USE_CCACHE="${USE_CCACHE:-1}" \
-    sh "$root/tooling/prospero-clang18" \
-    -std=c11 -O2 -Wall -Wextra -fPIC \
-    -MD -MF "$agc_driver_link_object.d" -c "$native/prosperoai_import_stub_agc_driver.c" \
-    -o "$agc_driver_link_object"
-ninja_inputs=("$agc_driver_link_object" "$sdk_root/bin/prospero-lld")
-ninja_edge STUB "$agc_driver_link_stub" "$sdk_root/bin/prospero-lld" --shared \
-    -soname libSceAgcDriver.prx -o "$agc_driver_link_stub" "$agc_driver_link_object"
+agc_driver_link_stub="$root/.deps/ps5-opengl/current/lib/libSceAgcDriver.so"
 
 if (( ${#pacbrew_libs[@]} > 0 )); then
     link_inputs+=(--start-group "${pacbrew_libs[@]}" --end-group)
 fi
 sdk_stubs=()
 for stub in "$sdk_root"/target/lib/*.so; do
-    [[ $stub == "$agc_link_stub" || $stub == "$agc_driver_link_stub" ]] || sdk_stubs+=("$stub")
+    [[ ${stub##*/} == libSceAgc.so || ${stub##*/} == libSceAgcDriver.so ]] || sdk_stubs+=("$stub")
 done
 sdk_stubs+=("$agc_link_stub" "$agc_driver_link_stub")
 ninja_inputs=("$native/ps5-pie.ld" "$native/app-symbols.map" "$sdk_root/bin/prospero-lld")
@@ -263,14 +254,16 @@ if [[ -n ${pacbrew_root:-} ]]; then
 fi
 ninja_edge LINK "$build/llvm-pie.elf" "$sdk_root/bin/prospero-lld" \
     -T "$native/ps5-pie.ld" --eh-frame-hdr --wrap=malloc --wrap=calloc \
-    --wrap=posix_memalign --wrap=free \
+    --wrap=posix_memalign --wrap=free --wrap=realloc --wrap=malloc_usable_size \
+    --wrap=sceAgcInit --wrap=sceSystemServiceHideSplashScreen \
     --version-script "$native/app-symbols.map" \
     -L "$sdk_root/target/lib" -e _start -o "$build/llvm-pie.elf" "${link_inputs[@]}" \
     --as-needed "${sdk_stubs[@]}"
 ninja_inputs=("$build/llvm-pie.elf" "$tool" "$common_link_stub" "${sdk_stubs[@]}")
 ninja_edge CONVERT "$build/eboot.elf" "$tool" link \
     --in "$build/llvm-pie.elf" --out "$build/eboot.elf" \
-    --stub-dir "$sdk_root/target/lib" --stub "$common_link_stub" --module-sdk "$module_sdk" \
+    --stub-dir "$sdk_root/target/lib" --stub "$agc_link_stub" --stub "$agc_driver_link_stub" \
+    --stub "$common_link_stub" --module-sdk "$module_sdk" \
     --companion-sdk "$companion_sdk" --file-name eboot.elf
 ninja_run
 
@@ -286,10 +279,10 @@ cp "$param" "$app/sce_sys/param.json"
 for asset in icon0.png pic0.dds pic1.dds snd0.at9; do
     [[ -f $root/sce_sys/$asset ]] && cp "$root/sce_sys/$asset" "$app/sce_sys/$asset"
 done
-[[ ! -d $root/assets ]] || cp -a "$root/assets" "$app/assets"
-content_version=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["contentVersion"])' "$param")
-grep -Fq '{{PROSPERO_AI_VERSION}}' "$app/assets/ui/main.rml"
-sed -i "s/{{PROSPERO_AI_VERSION}}/$content_version/g" "$app/assets/ui/main.rml"
+mkdir -p "$app/assets"
+cp -a "$root/assets/fonts" "$root/assets/audio" "$app/assets/"
+cp "$root/assets/ui/fonts/lvgl-bitmap/OFL.txt" "$app/assets/fonts/Multilingual-OFL.txt"
+cp "$build/assets/fonts/multilingual.huifont" "$app/assets/fonts/multilingual.huifont"
 mkdir -p "$app/models"
 cp "$root/models/README.txt" "$app/models/README.txt"
 
