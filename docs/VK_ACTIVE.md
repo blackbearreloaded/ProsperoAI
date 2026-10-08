@@ -56,14 +56,21 @@ still changing. For whoever ports the Models downloader once midnight-ui lands:
   (already used for model preparation) and `ui::ToastStack` for completion/failure notices —
   follow that pattern instead of introducing new UI primitives.
 
-## Cold-load time lead (untested)
+## Cold-load time: mmap tried and reverted
 
 `src/gpt_runtime_vulkan.cpp` sets `mp.load_mode = LLAMA_LOAD_MODE_NONE`, which disables mmap and
 forces a full eager read+copy of the ~3.85 GiB of weights before any GPU upload. AGC loads the
-same-size model from the same storage in ~1.5 s, which points at this eager-read path — not RADV
-upload — as the likely cause of the ~60 s Vulkan cold load. Switching to `LLAMA_LOAD_MODE_MMAP`
-is a one-line experiment worth measuring against the existing benchmark recipe before concluding
-anything more structural (e.g. pipelined per-tensor read/upload) is needed.
+same-size model from the same storage in ~1.5 s, which pointed at this eager-read path — not RADV
+upload — as a plausible cause of the ~60 s Vulkan cold load.
+
+Tried on console (test title `PPSA99023`): switching to `LLAMA_LOAD_MODE_MMAP` confirmed the mode
+switch took effect (`load_mode = mmap` in the log), but tensor loading stalled partway through
+layer 31 of 33 and stayed stalled — no progress across repeated klog checks spanning minutes —
+while the kernel logged repeated `FMEM allocation timeout`/`LOW FMEM` warnings. This reads as
+mmap causing memory pressure on this console's RADV/FMEM path, not a speedup. Reverted back to
+`LLAMA_LOAD_MODE_NONE`. The ~60 s eager-load cost stands as a known limitation; a real fix needs
+a different approach (e.g. pipelined per-tensor read/upload, or investigating the FMEM pressure
+itself) rather than a one-line mmap toggle.
 
 ## Evidence
 
