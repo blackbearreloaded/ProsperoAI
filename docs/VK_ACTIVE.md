@@ -19,6 +19,12 @@ Updated: 2026-10-08. Plan: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LO
 - Failed early WIP AGC HTTP requests are not a benchmark baseline. Official upstream binary was subsequently verified to run and generate; its inference code was not modified. Temporary AGC backend diagnostics reverted.
 - Shadow delete is asynchronous, may fail EBUSY during sandbox teardown, and deletes source files too. Wait for completion and source absence before uploading a replacement image. No reboot authorized or used.
 
+## OpenAI API work
+
+- Added Vulkan `/v1/models` and `/v1/chat/completions`, SSE, optional bearer key, usage and portable tool-call grammar. Console HTTP/auth/SSE, required lookup tool/result roundtrip and OpenCode 1.1.36 streaming connection verified. Mistral automatic read-tool choice in OpenCode hallucinated file contents; do not claim reliable autonomous coding.
+- Console test config uses 16384 context via context_size.txt; the benchmark above remains at 4096.
+- Image/audio/speech remain on the existing AGC build; Vulkan media migration is planned.
+
 ## Evidence
 
 - [Benchmark report](VK_BENCHMARK_2026-10-08.md)

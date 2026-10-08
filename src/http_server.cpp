@@ -21,12 +21,21 @@
 #include <cstring>
 #include <ctime>
 #include <new>
+#include <nlohmann/json.hpp>
+#include <string>
+#include <vector>
+#include <atomic>
+#include <cctype>
+#include <stdexcept>
+#include <memory>
+#include <cmath>
 #include <pthread.h>
 
 extern "C"
 {
     int scePthreadCreate(void **thread, const void *attributes, void *(*entry)(void *),
                          void *argument, const char *name);
+    int scePthreadJoin(void *thread, void **result);
     int sceNetInit(void);
     int sceNetPoolCreate(const char *name, int size, int flags);
     int sceNetSocket(const char *name, int domain, int type, int protocol);
@@ -67,7 +76,7 @@ constexpr int kSoReuseAddr = 0x0004;
 
 constexpr int kNetPoolSize = 4 * 1024 * 1024;
 constexpr int kListenBacklog = 4;
-constexpr std::size_t kRequestCapacity = 16384;
+constexpr std::size_t kRequestCapacity = 256 * 1024;
 constexpr std::size_t kResponseTextCapacity = 4096;
 constexpr std::size_t kResponseCapacity = 8192;
 unsigned short kHttpServerPort = 11434;
@@ -301,6 +310,8 @@ struct ConnectionArgs
 {
     NetApi api;
     int sock;
+    void *thread = nullptr;
+    std::atomic<bool> done{false};
 };
 
 void send_all(const NetApi &api, int sock, const char *data, std::size_t length)
@@ -486,48 +497,80 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
     send_json(api, sock, body);
 }
 
+#include "openai_api.inc"
+
 std::size_t read_request(const NetApi &api, int sock, char *buffer, std::size_t capacity)
 {
     std::size_t total = 0;
     const char *header_end = nullptr;
-    while (total + 1 < capacity)
-    {
-        const int received =
-            api.recv(sock, buffer + total, static_cast<unsigned long>(capacity - 1 - total), 0);
-        if (received <= 0)
-            return total;
+    while (total + 1 < capacity) {
+        const int received = api.recv(sock, buffer + total, capacity - 1 - total, 0);
+        if (received <= 0) return 0;
         total += static_cast<std::size_t>(received);
         buffer[total] = '\0';
         header_end = std::strstr(buffer, "\r\n\r\n");
-        if (header_end != nullptr)
-            break;
+        if (header_end) break;
+        if (total > 16384) break;
     }
-    if (header_end == nullptr)
-        return total;
-
+    if (!header_end) {
+        openai_error(api, sock, "431 Request Header Fields Too Large", "invalid_headers", "Incomplete or oversized headers.");
+        return 0;
+    }
     std::size_t content_length = 0;
-    const char *length_header = std::strstr(buffer, "Content-Length:");
-    if (length_header != nullptr)
-        content_length = static_cast<std::size_t>(std::atoi(length_header + 15));
-
-    const std::size_t body_start = static_cast<std::size_t>(header_end - buffer) + 4;
-    const std::size_t wanted = body_start + content_length;
-    while (total < wanted && total + 1 < capacity)
-    {
-        const int received =
-            api.recv(sock, buffer + total, static_cast<unsigned long>(capacity - 1 - total), 0);
-        if (received <= 0)
-            break;
-        total += static_cast<std::size_t>(received);
-        buffer[total] = '\0';
+    bool has_length = false;
+    const char *line = std::strstr(buffer, "\r\n");
+    while (line && line < header_end) {
+        line += 2;
+        const char *end = std::strstr(line, "\r\n");
+        if (!end) return 0;
+        std::string header(line, end);
+        auto colon = header.find(':');
+        if (colon != std::string::npos) {
+            std::string key = header.substr(0, colon), value = header.substr(colon+1);
+            for (char &c : key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (key == "transfer-encoding") {
+                openai_error(api, sock, "400 Bad Request", "unsupported_transfer_encoding", "Use Content-Length; chunked requests are not supported.");
+                return 0;
+            }
+            if (key == "content-length") {
+                auto start = value.find_first_not_of(" \t");
+                auto finish = value.find_last_not_of(" \t");
+                if (start == std::string::npos || has_length) return 0;
+                value = value.substr(start, finish-start+1);
+                content_length = 0;
+                for (char c : value) {
+                    if (c < '0' || c > '9') {
+                        openai_error(api, sock, "400 Bad Request", "invalid_content_length", "Invalid Content-Length."); return 0;
+                    }
+                    if (content_length > capacity / 10) {
+                        openai_error(api, sock, "413 Payload Too Large", "request_too_large", "Request limit is 256 KiB including headers."); return 0;
+                    }
+                    content_length = content_length*10 + (c-'0');
+                }
+                has_length = true;
+            }
+        }
+        line = end;
     }
-    return total;
+    const std::size_t body_start = header_end-buffer+4;
+    if (content_length >= capacity-body_start) {
+        openai_error(api, sock, "413 Payload Too Large", "request_too_large", "Request limit is 256 KiB including headers."); return 0;
+    }
+    const std::size_t wanted = body_start+content_length;
+    while (total < wanted) {
+        const int received = api.recv(sock, buffer+total, wanted-total, 0);
+        if (received <= 0) return 0;
+        total += received;
+    }
+    buffer[wanted] = '\0';
+    return wanted;
 }
 
 void handle_connection(const NetApi &api, int sock)
 {
-    char request[kRequestCapacity];
-    const std::size_t length = read_request(api, sock, request, sizeof(request));
+    auto storage = std::make_unique<char[]>(kRequestCapacity);
+    char *request = storage.get();
+    const std::size_t length = read_request(api, sock, request, kRequestCapacity);
     if (length == 0)
     {
         api.socket_close(sock);
@@ -540,7 +583,15 @@ void handle_connection(const NetApi &api, int sock)
     const char *header_end = std::strstr(request, "\r\n\r\n");
     const char *body = header_end != nullptr ? header_end + 4 : "";
 
-    if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/") == 0)
+    if (!api_authorized(request))
+        openai_error(api, sock, "401 Unauthorized", "invalid_api_key", "A valid bearer API key is required.");
+#ifdef PS5_LLAMA_VULKAN
+    else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/v1/models") == 0)
+        handle_openai_models(api, sock);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/v1/chat/completions") == 0)
+        handle_openai_chat(api, sock, body);
+#endif
+    else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/") == 0)
         send_status(api, sock, "200 OK", "text/html; charset=utf-8", kChatPage);
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/tags") == 0)
         handle_get_tags(api, sock);
@@ -558,7 +609,7 @@ void *connection_worker(void *argument)
 {
     auto *args = static_cast<ConnectionArgs *>(argument);
     handle_connection(args->api, args->sock);
-    delete args;
+    args->done.store(true, std::memory_order_release);
     return nullptr;
 }
 
@@ -594,6 +645,7 @@ void *server_worker(void *)
     log_result("sceNetListen", api.listen(listen_sock, kListenBacklog));
     log_line("HTTP server listening");
 
+    std::vector<ConnectionArgs *> connections;
     for (;;)
     {
         SceNetSockaddrIn client{};
@@ -602,6 +654,18 @@ void *server_worker(void *)
         if (client_sock < 0)
             continue;
 
+        for (auto it = connections.begin(); it != connections.end();) {
+            if ((*it)->done.load(std::memory_order_acquire)) {
+                scePthreadJoin((*it)->thread, nullptr);
+                delete *it;
+                it = connections.erase(it);
+            } else ++it;
+        }
+        if (connections.size() >= 4) {
+            openai_error(api, client_sock, "503 Service Unavailable", "server_busy", "Too many active connections.");
+            api.socket_close(client_sock);
+            continue;
+        }
         auto *args = new (std::nothrow) ConnectionArgs{api, client_sock};
         if (args == nullptr)
         {
@@ -613,7 +677,7 @@ void *server_worker(void *)
         int result = pthread_attr_init(&attributes);
         const bool attributes_initialized = result == 0;
         if (result == 0)
-            result = pthread_attr_setstacksize(&attributes, 256 * 1024);
+            result = pthread_attr_setstacksize(&attributes, 8 * 1024 * 1024);
         void *thread = nullptr;
         if (result == 0)
             result = scePthreadCreate(&thread, &attributes, connection_worker, args,
@@ -622,12 +686,9 @@ void *server_worker(void *)
             pthread_attr_destroy(&attributes);
         if (result == 0)
         {
-            // Deliberately not detached: scePthreadDetach() on this
-            // runtime shim crashes the title outright (bisected on real
-            // hardware). Each connection thread's handle is leaked instead
-            // of joined/detached, which is an acceptable tradeoff for a
-            // low-traffic embedded server.
-            (void)thread;
+            // Join finished workers on the next accept; avoid the broken detach path.
+            args->thread = thread;
+            connections.push_back(args);
         }
         else
         {
@@ -642,6 +703,7 @@ void *server_worker(void *)
 bool prospero_http_server_start(unsigned short port)
 {
     kHttpServerPort = port;
+    load_api_key();
     void *thread = nullptr;
     const int created =
         scePthreadCreate(&thread, nullptr, server_worker, nullptr, "prosperoai-http-server");

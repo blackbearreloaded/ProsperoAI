@@ -140,3 +140,11 @@ Final network verification: http://10.0.0.127:11434/ returned HTTP 200; /api/tag
 ## 2026-10-08 — PR scope cleanup
 
 Removed the Models/Settings tab redesign, model-delete UI/API and shared deletion helper from the branch diff at the user’s request. Restored the original Conversation/Workshop console layout and pre-redesign web chat. Retained HTTP networking, generation timing and the 8 MiB warmup stack fix. The rebuilt Vulkan folder compiles, links and signs; Python tooling tests pass. Hardware performance figures above apply to the previously tested binary; the UI-restoration rebuild has not been redeployed.
+
+## 2026-10-08 — OpenAI-compatible API and OpenCode
+
+Added Vulkan /v1/models and /v1/chat/completions, SSE text deltas, usage/finish reasons, optional bearer key on all routes, bounded request parsing, worker joining and configurable context (512–16384; default 4096). Tools use a portable schema prompt and GBNF envelope/name constraints with OpenAI tool-call IDs and tool-result history; this is not native Jinja tool templating or full argument-schema validation.
+
+PS5 PPSA99023: /v1/models/auth, non-streaming completion, SSE usage/DONE and required lookup(query=Vulkan) followed by tool result and final answer verified. OpenCode 1.1.36 direct streaming returned API_OK. Automatic read-tool choice on Mistral 7B hallucinated file contents; do not claim reliable coding-agent behavior. API tests used context_size.txt=16384, separate from the 4096-token benchmark. Temporary test key stored only outside Git. Results: /tmp/prospero-openai-console-results.json and /tmp/prospero-opencode-test/. Existing AGC build retained for media; image/audio/speech Vulkan migration planned. User requested akandr/bc250 reference as related Linux APU background, not PS5 evidence.
+
+Additional client check: OpenCode read roundtrip succeeded via a diagnostic proxy explicitly setting tool_choice=required on the first request. OpenCode executed read(filePath=/tmp/prospero-opencode-test/fixture.txt), received the real file result and answered PROSPERO_TOOL_OK. This does not change the automatic-choice limitation above. Diagnostic proxy stopped after testing.

@@ -98,7 +98,14 @@ bool prepare() {
     model = llama_model_load_from_file(files[selected].path.c_str(), mp);
     if (!model) return false;
     auto cp = llama_context_default_params();
-    cp.n_ctx = std::min<uint32_t>(4096, llama_model_n_ctx_train(model));
+    unsigned requested_context = 4096;
+    if (FILE *config = std::fopen("/app0/context_size.txt", "r")) {
+        unsigned value = 0;
+        if (std::fscanf(config, "%u", &value) == 1 && value >= 512 && value <= 16384)
+            requested_context = value;
+        std::fclose(config);
+    }
+    cp.n_ctx = std::min<uint32_t>(requested_context, llama_model_n_ctx_train(model));
     cp.n_batch = 256;
     cp.n_ubatch = 256;
     cp.n_threads = 4;
@@ -146,6 +153,15 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
     if (stats) *stats = {};
     context_full = false;
     try {
+        if (settings.model_id) {
+            scan_models();
+            auto found = std::find_if(files.begin(), files.end(), [&](const ModelFile &file) {
+                return file.id == settings.model_id;
+            });
+            if (found == files.end()) { std::snprintf(output, capacity, "Requested model is not installed."); return 1; }
+            unsigned index = static_cast<unsigned>(found - files.begin());
+            if (index != selected) { release_model(); selected = index; }
+        }
         if (!prepare()) { std::snprintf(output, capacity, "Unable to load a GGUF model on Vulkan."); return 1; }
         std::string prompt;
         const char *tmpl = llama_model_chat_template(model, nullptr);
@@ -185,7 +201,18 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
             pos += batch_count;
         }
         if (stats) { stats->prompt_tokens = n; stats->prefill_microseconds = ggml_time_us() - start; }
-        llama_sampler *sampler = llama_sampler_init_greedy();
+        llama_sampler *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+        if (settings.grammar) {
+            auto *grammar = llama_sampler_init_grammar(vocab, settings.grammar, "root");
+            if (!grammar) { llama_sampler_free(sampler); return 1; }
+            llama_sampler_chain_add(sampler, grammar);
+        }
+        if (settings.temperature > 0) {
+            llama_sampler_chain_add(sampler, llama_sampler_init_top_k(40));
+            llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.95f, 1));
+            llama_sampler_chain_add(sampler, llama_sampler_init_temp(settings.temperature));
+            llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+        } else llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
         std::size_t used = 0;
         int result = 0;
         for (unsigned i = 0; i < limit; ++i) {
@@ -194,11 +221,11 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
             char piece[1024];
             int length = llama_token_to_piece(vocab, token, piece, sizeof(piece), 0, false);
             if (length < 0) { result = 1; break; }
-            if (used + length >= capacity) break;
+            if (used + length >= capacity) { if (stats) stats->output_limit_reached = true; break; }
             std::memcpy(output + used, piece, length);
             used += length;
             output[used] = 0;
-            if (stats) ++stats->generated_tokens;
+            if (stats) { ++stats->generated_tokens; stats->output_limit_reached = i + 1 == limit; }
             if (progress) progress(output);
             if (i + 1 < limit) {
                 auto batch = llama_batch_get_one(&token, 1);

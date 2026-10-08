@@ -37,7 +37,7 @@ else
                 sh "$root/tooling/prospero-clang18" -std=c++20 -O2 -fexceptions -fcxx-exceptions -frtti \
                 -Wall -Wextra -ffunction-sections -fdata-sections -DPS5_LLAMA_VULKAN \
                 -DSDL_MAIN_HANDLED -DSDL_STATIC_LIB -DUSING_GENERATED_CONFIG_H -DRMLUI_STATIC_LIB -DITLIB_FLAT_MAP_NO_THROW \
-                -I "$root/include" -I "$root/vendor/ps5/sdl/include" -I "$root/vendor/ps5/sdl/include/SDL2" \
+                -I "$root/.deps/llama.cpp/vendor" -I "$root/include" -I "$root/vendor/ps5/sdl/include" -I "$root/vendor/ps5/sdl/include/SDL2" \
                 -I "$root/vendor/ps5/rmlui/include" -I "$root/.deps/llama.cpp/include" -I "$root/.deps/llama.cpp/ggml/include" \
                 -MD -MF "$object.d" -c "$root/src/$name.cpp" -o "$object"
             app_objects+=("$object")

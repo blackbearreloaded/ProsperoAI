@@ -14,6 +14,9 @@ struct gpt_runtime_message_t {
 struct gpt_runtime_settings_t {
     unsigned response_style;
     unsigned max_output_tokens;
+    float temperature = 0;
+    const char* model_id = nullptr; // Select atomically with Vulkan generation.
+    const char* grammar = nullptr; // Optional GBNF constraint (Vulkan only).
 };
 
 struct gpt_runtime_stats_t {
@@ -22,6 +25,7 @@ struct gpt_runtime_stats_t {
     unsigned reused_tokens;
     std::uint64_t prefill_microseconds;
     std::uint64_t elapsed_microseconds;
+    bool output_limit_reached = false;
 };
 
 using gpt_runtime_progress_fn = void (*)(const char* text);
