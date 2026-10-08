@@ -9,6 +9,8 @@
 #define PS5_PRENORMALIZED_LOGITS 1
 #define PS5_BACKEND_PREFIX qwen35
 
+#define PS5_DIRECT_MAP_DIAGNOSTIC 1
+
 #include "model_backend_prefix.h"
 #include "chat_prompt_backend.inc"
 #include "token_step_backend.inc"

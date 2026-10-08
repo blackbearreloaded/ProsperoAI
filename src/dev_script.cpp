@@ -260,7 +260,7 @@ void DevScript::update(float seconds, App &app, NativeUI &ui, hui::InputFrame &i
     }
     else if (step.verb == "expect")
     {
-        // What must be true now for the rest of the run to mean anything.
+        // What must be true now for the run to count as passed.
         const std::size_t space = step.argument.find(' ');
         const std::string what = step.argument.substr(0, space);
         const std::string value =
@@ -274,18 +274,22 @@ void DevScript::update(float seconds, App &app, NativeUI &ui, hui::InputFrame &i
                   state.models[static_cast<std::size_t>(state.selected_model)].id.find(value) !=
                       std::string::npos;
         else if (what == "answer")
-            met = answered && !last.empty();
+            // "<unk>" is what a text model writes once its numbers have gone wrong.
+            met = answered && !last.empty() && last.find("<unk>") == std::string::npos;
         else if (what == "image")
             met = answered && !state.images.empty() && last.find(".tga") != std::string::npos;
         else if (what == "audio")
             met = answered && last.find(".wav") != std::string::npos;
         if (!met)
         {
+            // Recorded, and the run goes on: the kinds of model do not depend on
+            // each other, and a run on a console is too dear to end at the first.
             status(app);
-            fail("not as expected");
-            return;
+            ++unmet_;
+            report("expect %s: NO", step.argument.c_str());
         }
-        report("expect %s: yes", step.argument.c_str());
+        else
+            report("expect %s: yes", step.argument.c_str());
         done = true;
     }
     else if (step.verb == "press")
@@ -361,7 +365,10 @@ void DevScript::update(float seconds, App &app, NativeUI &ui, hui::InputFrame &i
             status(app);
             // The app's storage is only readable from a PC while it runs: say that
             // the report is complete, then stay up long enough for it to be copied.
-            report("%s  closing in %.0f s", failed_ ? "RESULT: FAILED" : "RESULT: COMPLETED",
+            if (unmet_ != 0)
+                report("%u expectation(s) not met", unmet_);
+            report("%s  closing in %.0f s",
+                   failed_ || unmet_ != 0 ? "RESULT: FAILED" : "RESULT: COMPLETED",
                    static_cast<double>(step.number));
         }
         if (step_clock_ >= step.number && !app.busy())

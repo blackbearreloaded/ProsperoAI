@@ -57,7 +57,7 @@ class DevScript
     bool loaded_ = false, quit_ = false, failed_ = false, entered_ = false;
     float clock_ = 0, step_clock_ = 0, limit_ = 300, stalled_ = 0;
     // Frame times since the last status line.
-    unsigned frames_ = 0, slow_ = 0;
+    unsigned frames_ = 0, slow_ = 0, unmet_ = 0;
     float frame_sum_ = 0, frame_worst_ = 0;
 };
 } // namespace prospero

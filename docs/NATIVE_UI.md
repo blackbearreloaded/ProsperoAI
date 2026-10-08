@@ -176,14 +176,15 @@ The same script plays against the PC stand-ins with
 | `press cross\|circle\|square\|triangle\|options\|l1\|r1\|up\|down\|left\|right` | One press |
 | `type <text>` | USB-keyboard typing, a character a frame |
 | `backspace [count]`, `submit`, `scroll <pixels>` | Backspace, Enter, and the right stick |
-| `expect model <part of its id>\|answer\|image\|audio` | Fails the run unless that model is active and ready, or the last answer is of that kind |
+| `expect model <part of its id>\|answer\|image\|audio` | Notes whether that model is active and ready, or the last answer is of that kind (a text answer with `<unk>` in it is not one); an unmet one fails the run, which goes on |
 | `shot <name>` | Saves the frame as `<name>.bmp` |
 | `status` | Writes the state, the last answer's figures and the frame times since the last status |
 | `quit [seconds]` | Writes the result, stays up that long, then closes the app |
 
-A step that fails (a wait that runs out, a model that is not prepared, an `expect` that is
-not met) ends the run at once: the report says `RESULT: FAILED` and the app closes after
-the `quit` step's wait.
+A wait that runs out, or a model that is not prepared, ends the run at once; an `expect`
+that is not met is written down and the run goes on, so that one launch says as much as
+it can. Either way the report ends with `RESULT: FAILED` and the app closes after the
+closing step's delay, as it does after `RESULT: COMPLETED`.
 
 ## Not verified on a console
 

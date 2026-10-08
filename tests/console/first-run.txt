@@ -6,7 +6,7 @@
 #
 # It expects one model of each kind, found by these search words: "mistral" (text),
 # "sd-turbo" (image), "stable-audio" (sound) and "kokoro" (voice). A model that is not
-# installed makes its step fail, which ends the run early and says so.
+# installed fails its "expect" lines; the run goes on to the other kinds and ends FAILED.
 limit 1500
 
 # The opening, then the saved model (or the first one) is prepared behind it.
