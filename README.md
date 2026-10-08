@@ -193,8 +193,9 @@ downloaded by the app build.
 
 ## GitHub Actions
 
-The [Build workflow](.github/workflows/build.yml) runs on pushes to `main`,
-pull requests, release tags, and manual dispatch. It:
+The [Build workflow](.github/workflows/build.yml) runs on pull requests,
+version tags (`NN.NNN.NNN`), and manual dispatch. A push to `main` builds
+nothing; a build on `main` is started by hand (**Run workflow**). It:
 
 1. restores dependency and ccache data;
 2. validates source, metadata, presentation assets, and the executable writer;

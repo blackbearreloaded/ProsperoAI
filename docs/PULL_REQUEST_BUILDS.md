@@ -7,7 +7,7 @@ on a console before merging.
 
 ## What a pull request produces
 
-| | Pull request | Push to `main`, tag, manual run |
+| | Pull request | Tag, or a run started by hand |
 | --- | --- | --- |
 | Artifact name | `ProsperoAI-PR<number>-<commit>` | `prosperoai-release-<commit>` |
 | `<commit>` | First seven characters of the pull request's own head commit | The full commit that was built |
@@ -61,8 +61,8 @@ BUILD_LABEL="pacing test 2" make app
 
 ## Changing the names
 
-The pull-request name follows the repository's name by itself. The name used for pushes
-and tags, `prosperoai-release-<commit>`, appears twice in the workflow (the "Name this
+The pull-request name follows the repository's name by itself. The name used for tags
+and runs started by hand, `prosperoai-release-<commit>`, appears twice in the workflow (the "Name this
 build" step, and the release job's download); change both together.
 
 Pull-request runs have a read-only token and no secrets, including for forks. Do not move
