@@ -44,9 +44,11 @@ Use `tools/ps5ctl.py`. It covers status, payloads, FTP, title removal, klog, she
 port 2323), process list, launch and screenshots.
 
 - Ports: payload 9021, FTP 2120, klog 3232, shsrv 2323, P5 Manager 3001 (remote play).
-- Never commit a real console IP. Write `<PS5-IP>` (e.g. `http://<PS5-IP>:11434/`) in docs,
-  examples, and code defaults (`PS5_HOST`, `P5_MANAGER`); set the real address only in your own
-  shell environment, never in a tracked file.
+- Never commit a real console IP. In docs and usage text, write `<PS5-IP>` (e.g.
+  `http://<PS5-IP>:11434/`). In code, the address is a variable, not a default: `PS5_HOST` is a
+  required environment variable with no fallback value (`tools/ps5ctl.py` exits with a clear
+  message if it's unset); don't hardcode any address, real or placeholder, as a code default.
+  Set the real address only in your own shell environment, never in a tracked file.
 - Screenshot before every confirming press (Cross) in the UI. Keep a screenshot in
   `~/radv_title/` or the scratchpad, and read it before pressing.
 - `kill`, `rm`, `launch` and `title rm` are destructive. Use `--yes` only after the user has

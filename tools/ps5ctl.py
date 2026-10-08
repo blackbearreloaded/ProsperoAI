@@ -14,9 +14,10 @@
   ps5ctl.py ps                          list processes through shsrv
   ps5ctl.py launch TITLE_ID [--yes]     start a title through shsrv (launch)
 
-Hosts and ports come from the environment: PS5_HOST (<PS5-IP>), PS5_PAYLOAD_PORT (9021),
-PS5_FTP_PORT (2120), PS5_KLOG_PORT (3232), P5_MANAGER (http://<PS5-IP>:3001),
-P5_SESSION (Remote Play session id, needed for shot).
+Hosts and ports come from the environment: PS5_HOST (required, your console's address,
+e.g. <PS5-IP>), PS5_PAYLOAD_PORT (9021), PS5_FTP_PORT (2120), PS5_KLOG_PORT (3232),
+P5_MANAGER (defaults to http://$PS5_HOST:3001), P5_SESSION (Remote Play session id,
+needed for shot).
 
 Deleting a title from /data/homebrew removes its files only. The console's title registration
 is kept by the system until the title is deleted from the console UI, so re-install after a
@@ -32,13 +33,16 @@ import sys
 import time
 import urllib.request
 
-HOST = os.environ.get("PS5_HOST", "<PS5-IP>")
+HOST = os.environ.get("PS5_HOST")
+if not HOST:
+    sys.exit("PS5_HOST is not set. Export it to your console's address, e.g. "
+             "PS5_HOST=192.168.1.42")
 PAYLOAD_PORT = int(os.environ.get("PS5_PAYLOAD_PORT", "9021"))
 FTP_PORT = int(os.environ.get("PS5_FTP_PORT", "2120"))
 KLOG_PORT = int(os.environ.get("PS5_KLOG_PORT", "3232"))
 SHSRV_PORT = int(os.environ.get("PS5_SHSRV_PORT", "2323"))
 SHSRV_PROMPT = b"/$ "
-MANAGER = os.environ.get("P5_MANAGER", "http://<PS5-IP>:3001").rstrip("/")
+MANAGER = os.environ.get("P5_MANAGER", f"http://{HOST}:3001").rstrip("/")
 SESSION = os.environ.get("P5_SESSION", "")
 HOMEBREW = "/data/homebrew"
 
