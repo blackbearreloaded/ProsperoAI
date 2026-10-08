@@ -23,7 +23,7 @@
 The interface is built with [ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui),
 fetched at a pinned commit when the app is built. This picture is the production frontend
 drawn on a PC with stand-in models. See the [UI guide](docs/NATIVE_UI.md) for the pages,
-how it is built, and what has not run on a console yet.
+how it is built, and what a run on a console showed.
 
 > [!WARNING]
 > ProsperoAI is an experimental project for validating generative-AI workloads

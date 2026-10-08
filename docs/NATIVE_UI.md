@@ -107,6 +107,19 @@ its fallback allocations, so Mesa never passes a mapped allocation to the libc h
 `src/runtime_shims.c` carries the libc entry points Mesa needs and the delayed splash
 release. The title exits through the system service after releasing its resources.
 
+The two clients also share the address space, which a console run, not a PC, showed:
+
+- The OpenGL runtime needs a heap of its own. The malloc family first asks a 192 MiB
+  region owned by the app (`tooling/native/app_cpp_runtime.cpp`); larger requests, and
+  those of other threads above 2 MiB, take the paths the model runtimes always had.
+- The model runtimes reach their GPU work through one address range, where the 1 GiB
+  scratch area must sit. It is mapped before the display opens
+  (`ps5_agc_backend_reserve_memory`), and the OpenGL runtime's pool lands right behind it.
+- A text model takes the address the scratch area has just left for an area several times
+  larger. It asks for that address as a starting point, never as a fixed mapping: a fixed
+  one replaced the graphics pool, which garbled the answer and ended the app at the next
+  change of model.
+
 Generated images decode off the rendering thread. TGA headers, dimensions and payloads are
 checked; previews are downsampled to at most 1024 pixels on their longest side. Textures
 upload for visible images, at most one per frame, and are released when the conversation
@@ -186,9 +199,31 @@ that is not met is written down and the run goes on, so that one launch says as 
 it can. Either way the report ends with `RESULT: FAILED` and the app closes after the
 closing step's delay, as it does after `RESULT: COMPLETED`.
 
-## Not verified on a console
+## On a console
 
-Nothing in this interface has run on hardware yet: start-up, controller feel, the system
-keyboard over OpenGL, graphics and inference sharing the GPU and memory, the time the
-fallback faces take to load, sound by ear and sustained frame rate all still need a
-console run.
+`tests/console/first-run.txt` completed on one PS5 on 8 October 2026 (build c7eb83e):
+start-up behind the splash, every page and dialog, the four kinds of model one after the
+other in one session, and the app's own way out, with nothing added to the console's error
+history. The pictures the run saved match the PC previews.
+
+| Model | In that run | Published for the first interface |
+| --- | --- | --- |
+| Mistral 7B Instruct v0.3 Q4_0 | Ready 1.7 s after it was chosen; a nine-token answer 0.64 s after sending | About 1.4-1.5 s load |
+| SD-Turbo FP16 | 73.9 s | About 76 s |
+| Kokoro 82M FP16 | 2.2 s of speech in 90 s | 1.98 s in about 79 s |
+| Stable Audio Open Small FP16 | 407 s | About 62 s |
+
+At rest a frame takes 16.6 ms.
+
+Still open:
+
+- **Stable Audio took six and a half times the published time** (conditioning 28 s,
+  diffusion 123 s, decoder 234 s). The published figure was measured with the first
+  interface; no run has compared the two interfaces on the same console yet, so whether
+  this interface costs the sound model that time is not known.
+- **The interface and the models share the GPU.** While a model computes, single frames
+  arrive late: one of 0.5 s during a text prefill, one of 2.7 s during the image, 0.3 s at
+  worst during the sound; 2 to 4 % of the frames of an image or a sound take more than
+  20 ms.
+- Not exercised by a script: the system keyboard over OpenGL, the controller in the hand,
+  the sounds by ear, and the time the fallback faces take to load.
