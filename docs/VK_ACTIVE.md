@@ -3,7 +3,7 @@
 Volatile by design. Keep this file short. The plan is in [VK_PLAN.md](VK_PLAN.md); run records
 are in [VK_LOG.md](VK_LOG.md).
 
-_Updated: 2026-10-08_
+_Updated: 2026-10-08 (later)_
 
 ## Now
 
@@ -27,20 +27,43 @@ Open hypothesis: something in this console's environment that Mihawk's validated
 has and this one doesn't — a loader component, a kernel patch, or a sandbox/entitlement check his
 docs don't document as a prerequisite because he's never run into a console that lacks it.
 
+**New evidence (2026-10-08, after a console wake):** klog finally showed the system's own crash
+pipeline instead of just the sentinel toast. Launching `PPSA99019` now reliably produces, in
+order: `[CRS][coredump_seq] canKill=true` / `canContinue=false` / `killing app (appId=...) ...`,
+then `[SceLncService] BlockingKill() appId=..., titleId=PPSA99019, is_coredumpFinished={0},
+forceKill={1}`, then `[CRS][coredump_seq] done`, and separately (on the registration-replace path)
+`CrashReportSequencerReporter` events with `crashErrorCode=SCE_SHELL_UTIL_ERROR_APPLICATION_CRASH`
+and a coredump written to `/devlog/system/sce_coredumps.0/<title>_<timestamp>/` before a cleaner
+deletes it within roughly a second. **This confirms the process is actually crashing (a real
+signal/trap), not being refused a launch slot** — `CRS` (Crash Report Sequencer) only runs for an
+app that started and faulted. Two attempts to race the cleaner and grab the coredump directory
+over FTP both missed it (one `nlst` loop never saw it populate in 8.7s; path confirmed reachable
+and otherwise empty: `/devlog/system/sce_coredumps.0`).
+
+Also notable: `/data/homebrew` on this console now holds unrelated content that wasn't there in
+the 10-05/06 session (`PPSA99008` = Lapy JB Daemon, `PPSA99169` = PS5 RetroArch **with a populated
+`radv-shader-cache/` folder**, `PPSA99203`/`PPSA99109` unidentified). A RADV-linked title
+(RetroArch) with evidence of actually having rendered something on this console means **RADV
+itself works here** — the gap is specific to how our/Mihawk's minimal smoke title starts, not to
+RADV support on this hardware/firmware in general. Worth inspecting RetroArch's eboot (NEEDED
+list, link flags via `make inspect` equivalent) as a second known-good reference alongside
+ProsperoAI's AGC build.
+
 ## Next, in order
 
-1. Check what differs at the process level right as it dies: attach `ps5dbg`/`ps5debug-NG` style
-   inspection if feasible, or at minimum capture `procstat`-equivalent output in the instant
-   between launch and termination (current tooling is too slow — `agent status` after a sleep
-   always sees it already gone).
-2. Ask Mihawk's docs (or upstream) directly whether a specific payload/loader
+1. **Grab a coredump before the cleaner deletes it.** The directory
+   (`/devlog/system/sce_coredumps.0/<title>_<ts>/`) exists for under ~1s. A tighter race (parallel
+   poller started *before* the launch command is even sent, or using `MLSD`/raw FTP without
+   `ftplib`'s per-call overhead) might catch it. If caught, the dump's register state (PC/LR) or
+   signal number would say exactly where/why it faults.
+2. Compare PS5 RetroArch's RADV eboot (`/data/homebrew/PPSA99169/eboot.bin`) against ours: NEEDED
+   list, FSELF header, and — if obtainable — how it links RADV. It is proof that a RADV title
+   *can* run on this console, so its differences from our/Mihawk's smoke title are the most
+   direct remaining lead.
+3. Ask Mihawk's docs (or upstream) directly whether a specific payload/loader
    (HEN/etaHEN/kstuff version) is a documented prerequisite for a *custom* title to pass
    `LaunchFlow`, as opposed to a pre-registered retail/homebrew one. `/data/etaHEN` does not exist
    on this console; unclear if that matters for a `.ffpfsc`-registered title.
-3. If (1) and (2) don't resolve it: try a title built by *this console's own working pipeline*
-   (ProsperoAI's `tools/build.sh`) with nothing but a `radv_GetInstanceProcAddr` call added, so
-   the only variable left is "does RADV's static initializers alone crash it" vs. "does this
-   console's loader reject any RADV-linked title regardless of who built it".
 
 ## Last verified runs
 

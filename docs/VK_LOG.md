@@ -42,3 +42,25 @@ questions belong in [VK_ACTIVE.md](VK_ACTIVE.md), not here.
 - Introduced this plan/active/log structure (`docs/VK_PLAN.md`, `docs/VK_ACTIVE.md`,
   `docs/VK_LOG.md`), modeled on `.deps/mihawk-vulkan-review/AGENTS.md`'s read order and volatility
   contract, so a session can resume without re-deriving the above.
+
+## 2026-10-08 (after console wake)
+
+- Console had gone to standby since the earlier session today; woken via P5 Manager
+  (`/api/remoteplay/wake`). Jailbroken payload loader (9021) and FTP (2120) survived standby; the
+  control payload (`ps5vkctl`, 9111) and klog server (3232) did not and were resent.
+- `/data/homebrew` content had changed entirely since the 10-05/06 session: our test packages
+  (`PPSA99004`, `PPSA99014`..`PPSA99021`) are gone; new content includes `PPSA99008` (Lapy JB
+  Daemon), `PPSA99169` (PS5 RetroArch, with a populated `radv-shader-cache/`), and two
+  unidentified folders (`PPSA99203`, `PPSA99109`). Re-uploaded and re-registered `PPSA99019`
+  (RADV Build) from the local `.ffpfsc` built on 10-06; it registered and launched the same as
+  before.
+- With klog capturing cleanly this time, caught the system's own crash-handling sequence for the
+  first time: `[CRS][coredump_seq]` kill sequence, `SceLncService BlockingKill()`, and (on another
+  attempt, during re-registration) `CrashReportSequencerReporter` events with
+  `crashErrorCode=SCE_SHELL_UTIL_ERROR_APPLICATION_CRASH` and a coredump path under
+  `/devlog/system/sce_coredumps.0/`. This confirms a real crash (signal/trap) rather than a
+  launch-permission refusal. Two FTP races to grab the coredump directory before its cleaner
+  deletes it (roughly 1s window) both missed; the path itself is reachable and otherwise empty.
+- Found `PPSA99169` (PS5 RetroArch) has a non-empty `radv-shader-cache/`, meaning a RADV-linked
+  title has actually rendered something on this exact console — RADV support itself is not the
+  blocker; something specific to the minimal smoke title's startup is.
