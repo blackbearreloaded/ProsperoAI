@@ -20,9 +20,10 @@
 
 ![ProsperoAI native model library](docs/images/native-models.png)
 
-The native interface uses [ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui).
-This screenshot uses the production frontend with host fixtures. See the
-[UI guide](docs/NATIVE_UI.md) for controls, implementation details, and validation limits.
+The interface is built with [ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui),
+fetched at a pinned commit when the app is built. This picture is the production frontend
+drawn on a PC with stand-in models. See the [UI guide](docs/NATIVE_UI.md) for the pages,
+how it is built, and what has not run on a console yet.
 
 > [!WARNING]
 > ProsperoAI is an experimental project for validating generative-AI workloads
@@ -34,7 +35,9 @@ This screenshot uses the production frontend with host fixtures. See the
 - Uses native PS5 AGC GPU compute for the model paths; this is not a ROCm port.
 - Searches and filters installed text, image, audio, and speech models in a scrolling library.
 - Uses stable model IDs for selection and saved conversations, with no eight-model catalog limit.
-- Offers Midnight and Daylight themes, animated focus and transitions, reduced motion, and larger text.
+- Offers Midnight and Daylight themes, a living backdrop, interface sounds, notices, reduced motion,
+  high contrast, and larger text.
+- Draws answers in Latin, Greek, Cyrillic, Chinese, Japanese and Korean with scalable faces.
 - Stores independent text, image, audio, and speech sessions under `/download0`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
 - Ships without model weights. Users choose and install curated model folders separately.
@@ -153,15 +156,17 @@ title is mounted.
 
 | Input | Action |
 | --- | --- |
-| D-pad / left stick | Navigate models, sessions, or settings; Left focuses the session rail |
-| Cross | Open a session, activate a control, or write a prompt |
-| Circle | Close a dialog or return focus to the composer/settings categories |
+| D-pad / left stick | Move through models, conversations, or settings; Left reaches the conversation list |
+| Cross | Start or open a conversation, write or send a prompt, choose a model, change a setting |
+| Circle | Close a dialog, leave the conversation list, or return to the settings categories |
 | L1 / R1 | Switch between Workspace, Models, and Settings |
-| Square | Start a new session in Workspace; search in Models |
-| Triangle | Filter models, retry a failed job, delete a focused session, or play saved audio |
-| Options | Open the close-app dialog after background work has finished and the conversation is saved |
+| Square | Start a new conversation in Workspace; search in Models |
+| Triangle | Step through the model kinds, retry a failed answer, delete the focused conversation, or play saved audio |
+| Options | Ask to close the app, once nothing is running and the conversation is saved |
 | Right stick | Scroll through the current conversation |
-| Physical USB keyboard | Type in the prompt field; Enter sends |
+| Physical USB keyboard | Type in the prompt field or the model search; Enter sends |
+
+The row at the bottom right of every page names what the buttons do there.
 
 Each conversation is an independent session. Text and metadata are saved under
 `/download0/ProsperoAI/sessions/`; generated image and audio files live inside
@@ -188,9 +193,10 @@ dist/PPSA99004/           complete model-free app folder
 dist/PPSA99004.zip        archived model-free app folder
 ```
 
-The build downloads and verifies the public PS5 Payload SDK, ps5-opengl SDK, and zlib inside the
-ignored `.deps/` directory. It rebuilds the clean-room `libc.prx`
-runtime, compiles the native app through parallel incremental Ninja builds,
+The build downloads and verifies the public PS5 Payload SDK, the ps5-opengl SDK, the
+ps5-homebrew-ui interface kit, the Noto Sans faces for Chinese, Japanese and Korean, and zlib
+inside the ignored `.deps/` directory. It bakes the interface fonts, rebuilds the clean-room
+`libc.prx` runtime, compiles the native app through parallel incremental Ninja builds,
 caches compiler results with ccache, signs the executable, validates assets,
 and assembles the release. Set `USE_CCACHE=0` to disable the cache or
 `BUILD_JOBS=<count>` to limit parallel compilation. Model weights are never
@@ -218,7 +224,8 @@ see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md).
 src/                 ProsperoAI UI, sessions, model routing, and GPU runtimes
 src/backends/        Mistral and Qwen architecture-specific AGC programs
 include/             Application interfaces
-assets/              Native fonts, interface sounds, and retained legacy source assets
+assets/              The last-resort bitmap font (other fonts and sounds come from the kit)
+ui-kit/              Which kit sources are compiled, and the patch laid over the fetched kit
 host/                Deterministic native-frontend capture harness
 sce_sys/             PS5 title metadata, artwork, icon, and selection music
 models/README.txt    Model-free release placeholder and install guidance

@@ -1,137 +1,154 @@
 # Native UI
 
-ProsperoAI uses the `ps5-homebrew-ui` renderer and components at revision
-`4bd942579dd981b3df9c740438489ca6a614ddc0`. The approved Midnight / Amber design
-is implemented in `src/native_ui.cpp`. The console entry point is `src/main.cpp`.
-The old RmlUi document renderer and bitmap-font engine are removed from the build.
-SDL remains for the existing media decoder, input clock, and system-keyboard helpers.
+ProsperoAI's interface is drawn with OpenGL through
+[ps5-homebrew-ui](https://github.com/blackbearreloaded/ps5-homebrew-ui), fetched at a
+pinned commit when the app is built ([ui-kit/README.md](../ui-kit/README.md)). The old
+RmlUi document renderer, its bitmap-font engine and FreeType are gone from the
+repository. SDL remains for the media decoder, the input clock and the system-keyboard
+helpers.
 
-These are captures of the production frontend with deterministic host fixtures,
-not console captures or model-inference results:
+These pictures are the production frontend drawn on a PC with stand-in models and
+storage. They are not console captures and show no real model output.
 
+![Opening page](images/native-welcome.png)
 ![Model library](images/native-models.png)
 ![Conversation workspace](images/native-workspace.png)
 ![Daylight settings](images/native-daylight.png)
 
-## Screens and input
+## Pages and controls
 
-- **Workspace:** saved conversations, streamed text, image previews, and saved audio.
-  Cross writes a message or sends the current USB-keyboard draft. The system keyboard's
-  Send action submits its text; Cancel returns to the app. Square starts a conversation.
-  Left focuses the session rail; Right or Circle returns to the composer. Up/Down and
-  the existing scroll inputs move through the response. Triangle retries a failed job
-  or plays the latest saved audio. A focused session can be deleted with Triangle,
-  after a confirmation dialog.
-- **Models:** a scrolling, virtualized model grid. Square opens search; a USB keyboard
-  can also type a query directly. Triangle cycles capability filters. Cross confirms a
-  model change. The selected model and installed model IDs come from the runtime.
-- **Settings:** appearance, text-generation defaults, interface volume, reduced motion,
-  high contrast, and larger reading text. Circle focuses the categories; Up/Down changes
-  category, and Cross/Right enters its controls. Changes apply immediately and save in
-  the background.
-- L1/R1 change screens. Options opens the close dialog when background work has finished
-  and the conversation has been saved.
+L1 and R1 change page. Options asks to close the app once nothing is running and the
+conversation is saved. The row at the bottom right always names what the buttons do on
+the page, and a dialog shows its own.
 
-The frontend uses the framework's spring focus, scrolling, card lift, staggered arrivals,
-tab indicator, native dialog transitions, blur, and sound cues. Screen entrances fade
-and rise over 420 ms. Procedural artwork uses the native draw list. Reduced motion
-disables ambient movement and snaps component motion according to the kit's policy.
-Both Midnight and Daylight apply to the entire interface, with Amber, Mist, and Sage accents.
+| Page | What it does |
+| --- | --- |
+| **Workspace** | Opens on a welcome page that says what is installed. Cross starts a conversation: with an empty prompt it opens the system keyboard (whose Done sends), with a typed one it sends. Square starts a new conversation. Left moves to the conversation list, where Cross opens one and Triangle deletes it after a confirmation. Triangle retries a failed answer or plays the latest saved audio. The right stick or Up and Down scroll. |
+| **Models** | The model under the focus leads the page; the grid below scrolls over any number of models. Square searches (a USB keyboard types straight into the search), Triangle steps through the kinds, Cross chooses a model after a confirmation. |
+| **Settings** | Appearance (Midnight or Daylight, three accents), Generation, Sound, Accessibility (reduced motion, high contrast, reading size) and About (version and credits). Circle returns to the categories. Changes apply at once and are saved in the background. |
+
+## What the player sees and hears
+
+- **An opening.** The console's splash stays up until the first frame; then the mark draws
+  itself in while the model catalogue is read, and the page arrives underneath.
+- **A backdrop that follows the app.** A slow cloud shader behind every page takes the
+  accent colour and the colour of the model in focus (conversation, image, sound and voice
+  each have one). Panels are tinted glass over it; dialogs blur what is behind them.
+- **State that is always visible.** A chip in the header names the active model and what it
+  is doing (Ready, Preparing, Creating). The model being prepared shows it on its card.
+- **Answers that arrive.** A new message fades in; while the model thinks its row shows
+  three dots, then the text with a caret; the line above the prompt counts the seconds.
+  When a text answer is done the same line shows tokens, tokens per second and context
+  size, as the first interface did; for media it shows the time taken.
+- **Notices.** Things that finish out of sight (a model that became ready, an answer that
+  completed while another page was open, a failure, a conversation deleted) arrive as a
+  notice in the top right corner and leave by themselves.
+- **Sound.** Every move, confirmation, refusal, page change, switch and dialog has a cue
+  from the kit's "glass" set, placed in the stereo field by where it happened. The app adds
+  a chime when it opens, one when a text answer is ready, a longer one for an image or a
+  sound, and a typing tick for the USB keyboard. The Sound setting scales all of them.
+- **Reduced motion** stops the backdrop, the idle movement and the entrances; the host
+  check below proves a page at rest then never changes. **High contrast** closes the
+  panels, removes the backdrop's clouds and strengthens lines and secondary text.
+
+Controller rumble is not used: the app's controller layer has no rumble call yet.
 
 ## State and model scalability
 
-`native_app.cpp` owns the application state. One worker serializes model discovery,
-model selection/preparation, inference, media decoding, session persistence, and settings
-writes. The renderer does not access the runtime or filesystem. Worker results are
-published with release/acquire synchronization and consumed on the rendering thread.
-Streaming updates are coalesced and copied without blocking the render thread.
+`native_app.cpp` owns the application state. One worker serializes model discovery, model
+selection and preparation, inference, media decoding, session persistence and settings
+writes. The renderer does not touch the runtime or the filesystem. Worker results are
+published with release/acquire synchronization and consumed on the rendering thread;
+streamed text is coalesced and copied without blocking either side. Each finished job can
+leave one notice (`App::take_notices`), which the interface turns into a sound or a toast.
 
-Model discovery reads every directory batch and stores descriptors in a vector; the
-former eight-model limit is removed. The grid draws visible cards, and search/filter
-operate on descriptors rather than hard-coded model names or positions. Saved preferences
-and conversations reference stable model IDs. The legacy numeric preference file is
-read and migrated to the version-2 key/value format on the next save.
+Model discovery reads every directory batch into a vector; there is no eight-model limit.
+The grid draws visible cards only, and search and filters work on descriptors, not on
+hard-coded names or positions. Saved preferences and conversations refer to stable model
+IDs. The legacy numeric preference file is read and migrated on the next save.
 
-Text, image, audio, and speech capabilities map to the existing runtime adapters. Adding
-a compatible installed model does not require a frontend change. Adding a new model
-architecture still requires a runtime adapter; a matching filename alone does not make
-an unsupported architecture usable. One model job runs at a time. No unmeasured RAM or
-VRAM estimates are shown, and selecting a media model is not represented as fully loading
-its weights before the runtime does so.
+Text, image, audio and speech map to the existing runtime adapters. A compatible installed
+model needs no frontend change; a new architecture still needs a runtime adapter. One
+model job runs at a time. No unmeasured memory estimates are shown.
 
-Conversations restore their recorded model. A missing model leaves a conversation readable.
-Generation failure preserves the user's message for retry. Failed saves retain the in-memory
-conversation and prevent model/session changes; retrying an unsaved response saves it
-without generating a duplicate. Conversation storage keeps its existing 64-message ceiling,
-reserving a slot for the assistant response. The session rail shows the storage layer's
-64 most recently updated sessions. Older sessions are retained on disk. Message storage
-now accommodates the runtime's complete 4095-byte response buffer.
+Conversations restore their recorded model; a missing model leaves the conversation
+readable. A failed generation keeps the message for a retry, and sending something else
+instead replaces that unanswered message (two user turns in a row would break some chat
+templates). A failed save keeps the conversation in memory and blocks model and session
+changes until a retry saves it, without generating again. A conversation holds 64
+messages and the list shows the 64 most recent ones; older ones stay on disk.
+
+## Text in any language
+
+The four faces of the interface (Inter Regular and SemiBold, Montserrat Medium, DejaVu
+Sans Mono) are baked at build time by the kit's own baker with its European alphabet, so
+accented Latin, Greek and Cyrillic are drawn in the same face as the sentence around them.
+Three more faces stand behind them as fallbacks (`src/font_set.cpp`) and are read from
+disk only when a text first needs them:
+
+| Face | Covers | Source |
+| --- | --- | --- |
+| `noto-sans-east-asian` | Chinese and Japanese: GB 2312, Big5, JIS X 0208, kana, full-width forms | Noto Sans SC, fetched and baked at build time |
+| `noto-sans-korean` | Hangul and compatibility jamo | Noto Sans KR, the same way |
+| `legacy-multilingual` | What the first interface's bitmap font has that the others do not: Arabic, Hebrew, Thai, Devanagari and other glyphs, drawn unshaped | `assets/fonts/legacy-multilingual` |
+
+The first two are large (26 MB and 16 MB), which is why they are loaded on demand; the
+frame that reads one is a long one (about 70 ms on a PC, not measured on a console).
+There is no shaping engine: Arabic and Indic text is drawn as isolated glyphs from left to
+right, exactly as before. Long text without spaces wraps between code points.
 
 ## Graphics and media integration
 
-OpenGL is initialized before inference. `agc_lifecycle.cpp` makes the process-wide AGC
+OpenGL starts before inference. `agc_lifecycle.cpp` makes the process-wide AGC
 initialization shared between the two clients. Link-only AGC import declarations combine
-the graphics SDK's exports with the inference wait-command declaration. These stubs are
-not included in the app package.
+the graphics SDK's exports with the inference wait-command declaration; these stubs are
+not packaged. The application allocator implements `realloc` and `malloc_usable_size` for
+its fallback allocations, so Mesa never passes a mapped allocation to the libc heap.
+`src/runtime_shims.c` carries the libc entry points Mesa needs and the delayed splash
+release. The title exits through the system service after releasing its resources.
 
-The existing application allocator now implements `realloc` and `malloc_usable_size` for
-its fallback allocations, so Mesa does not pass a mapped allocation to the libc heap.
-The framework's libc shims and delayed splash release are included. The title exits through
-the system service after UI/audio resources have been released.
+Generated images decode off the rendering thread. TGA headers, dimensions and payloads are
+checked; previews are downsampled to at most 1024 pixels on their longest side. Textures
+upload for visible images, at most one per frame, and are released when the conversation
+changes. Saved audio uses the existing player; interface cues use the kit's mixer.
 
-Generated images decode off the rendering thread. TGA headers, dimensions, and payloads
-are checked; previews are downsampled to at most 1024 pixels on their longest side. Texture
-uploads happen for visible images, at most one per update. Textures are released when the
-conversation changes. Saved audio uses the existing player, while interface cues use the
-framework mixer and their own volume setting.
-
-The bundled multilingual bitmap atlas is converted at build time to a coverage `.huifont`.
-The four display fonts share this fallback atlas, preserving 17,854 fallback glyphs.
-Measurement, wrapping, and rendering use the same resolved face and metrics. Long strings
-without spaces wrap at UTF-8 codepoint boundaries. This preserves the existing glyph
-coverage; it does not introduce bidirectional layout or complex-script shaping.
+A diagnostic log is off by default. A file named `dev/log.txt` in the install folder turns
+it on; it is written to `/download0/ProsperoAI/logs/app.log`.
 
 ## Build and verification
-
-The normal Linux/WSL build remains:
 
 ```sh
 BUILD_JOBS=6 make app
 ```
 
-This fetches and verifies the framework's pinned OpenGL SDK, converts the fallback font,
-builds the native frontend and existing inference adapters, and assembles the app folder.
-The package includes the new fonts and sound cues; obsolete RmlUi assets are not packaged.
+fetches and verifies the OpenGL SDK and the kit, bakes the fonts, builds the frontend and
+the inference adapters, and assembles the app folder with the fonts and sounds it needs.
 Model weights are not included.
 
-Host checks and production-frontend captures:
+Host checks and pictures of the production frontend:
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_native_controller.py' -v
 python3 tools/host-ui-preview.py
 PROSPERO_STRESS=1 python3 tools/host-ui-preview.py build/ui-preview/stress
+PROSPERO_EMPTY=1 python3 tools/host-ui-preview.py build/ui-preview/empty
 python3 tools/host-ui-preview.py build/ui-preview/reel --reel
 ```
 
-The preview requires Clang, Mesa EGL/OpenGL, Python/Pillow, and FFmpeg for a reel. It compiles
-the production controller and frontend with deterministic runtime and storage fixtures.
-It does not run model inference, connect to a console, or deploy anything. Its images and
-reels are host captures, not evidence of console boot or console frame rate.
+The preview needs Clang, Mesa EGL/OpenGL, Python with Pillow, and FFmpeg for a reel. It
+compiles the production controller and frontend against stand-in runtime and storage, and
+walks every page, dialog and state. It runs no inference and touches no console.
 
-The checks cover 500 model descriptors, real discovery across multiple directory batches,
+The checks cover 500 model descriptors, discovery across several directory batches,
 serialized runtime ownership, switching, session restore, missing models, persistence,
-generation retry, save retry, multilingual layout, bounded image decoding, fallback
-allocator resizing, and concurrent AGC initialization.
-The host renderer also verifies that reduced-motion library frames remain identical
-after two seconds at rest. The 500-model catalog uses 22 draw calls normally and 49
-with the blurred dialog in the captured host run; these are not console frame-rate results.
+generation retry, save retry, the replaced unanswered message, notices, fallback faces
+and their metrics, wrapping at spaces and between code points, bounded image decoding,
+allocator resizing and concurrent AGC initialization. The preview reports no OpenGL error
+on any page and that a reduced-motion page at rest is identical two seconds later.
 
-## Upstream changes
+## Not verified on a console
 
-The vendored component/renderer subset includes upstream license notices. Local changes
-add a fallback face to `gfx::Font`, coverage-atlas rendering, per-glyph texture selection,
-and codepoint wrapping for long unbroken text. These are localized under `gfx/`; application
-behavior and styling remain outside the vendor directory.
-
-Hardware boot, controller feel, native IME behavior, mixed graphics/inference scheduling,
-and sustained frame rate still need a separately authorized console validation run.
+Nothing in this interface has run on hardware yet: start-up, controller feel, the system
+keyboard over OpenGL, graphics and inference sharing the GPU and memory, the time the
+fallback faces take to load, sound by ear and sustained frame rate all still need a
+console run.
