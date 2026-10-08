@@ -104,7 +104,7 @@ The clang static libraries (`clangBasic`, `clangAST`, ...) are built from the LL
 The console needs a homebrew FTP server listening on `FTP_PORT` (the tested setup uses port 2120).
 
 ```bash
-export PS5_HOST=10.0.0.127 FTP_PORT=2120 DEPLOY_FORMAT=ffpfsc USE_CCACHE=0
+export PS5_HOST=<PS5-IP> FTP_PORT=2120 DEPLOY_FORMAT=ffpfsc USE_CCACHE=0
 bash tools/deploy.sh
 ```
 

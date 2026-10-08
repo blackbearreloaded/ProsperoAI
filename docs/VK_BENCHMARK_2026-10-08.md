@@ -30,7 +30,7 @@ RADV reported 11712 MiB (11.4375 GiB) total heap and 11573.98 MiB free before mo
 
 ## Network access
 
-Current Vulkan app serves http://10.0.0.127:11434/ while running. Final read-only verification returned HTTP 200; /api/tags lists Mistral-7B-Instruct-v0.3.Q4_0.gguf.
+Current Vulkan app serves http://<PS5-IP>:11434/ while running. Final read-only verification returned HTTP 200; /api/tags lists Mistral-7B-Instruct-v0.3.Q4_0.gguf.
 
 ## Development workflow
 

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Compare two inference backends behind the same Ollama-style API.
 
-  tools/bench_backend.py --name agc --url http://10.0.0.127:11434 --model qwen35-9b
-  tools/bench_backend.py --name llama --url http://10.0.0.127:8080 --model qwen35-9b
+  tools/bench_backend.py --name agc --url http://<PS5-IP>:11434 --model qwen35-9b
+  tools/bench_backend.py --name llama --url http://<PS5-IP>:8080 --model qwen35-9b
 
 Each run sends the same prompt with a fixed output limit and records server-reported
 generated tokens, decode time and wall time. Results go to a JSON file so the two backends can

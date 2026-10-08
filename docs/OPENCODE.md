@@ -41,7 +41,7 @@ by default, matching the server's unauthenticated default above:
       "npm": "@ai-sdk/openai-compatible",
       "name": "PS5 ProsperoAI",
       "options": {
-        "baseURL": "http://10.0.0.127:11434/v1"
+        "baseURL": "http://<PS5-IP>:11434/v1"
       },
       "models": {
         "Mistral-7B-Instruct-v0.3.Q4_0.gguf": {

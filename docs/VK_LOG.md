@@ -145,7 +145,7 @@ Vulkan aligned to context capacity 4096 and same default UI system/user text as 
 
 Final console state: Vulkan folder /data/homebrew/PPSA99023, pid192 running. Temporary auto_chat.txt removed, so ordinary launches do not automatically benchmark. Original PPSA99004 untouched. No-change Vulkan folder build measured 3.776 s. Host integration tests 2 passed, shell syntax and Python compilation passed, benchmark arithmetic validated with mocked response including first-token accounting, git diff --check clean. No commit or push.
 
-Final network verification: http://10.0.0.127:11434/ returned HTTP 200; /api/tags exposes loaded Mistral GGUF. Final screenshot confirms llama.cpp Vulkan / RADV, model loaded, HTTP server listening.
+Final network verification: http://<PS5-IP>:11434/ returned HTTP 200; /api/tags exposes loaded Mistral GGUF. Final screenshot confirms llama.cpp Vulkan / RADV, model loaded, HTTP server listening.
 
 ## 2026-10-08 — PR scope cleanup
 
