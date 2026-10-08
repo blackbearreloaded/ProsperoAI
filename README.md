@@ -225,7 +225,7 @@ src/                 ProsperoAI UI, sessions, model routing, and GPU runtimes
 src/backends/        Mistral and Qwen architecture-specific AGC programs
 include/             Application interfaces
 assets/              The last-resort bitmap font (other fonts and sounds come from the kit)
-ui-kit/              Which kit sources are compiled, and the patch laid over the fetched kit
+ui-kit/              Which sources of the fetched interface kit are compiled
 host/                Deterministic native-frontend capture harness
 sce_sys/             PS5 title metadata, artwork, icon, and selection music
 models/README.txt    Model-free release placeholder and install guidance

@@ -7,15 +7,16 @@
 #        tools/prepare-ui-kit.sh --kit     (prints the kit checkout: fonts, sounds, font baker)
 #
 # The kit (https://github.com/blackbearreloaded/ps5-homebrew-ui) is a build
-# dependency, not part of this repository. Its pinned commit is fetched once
-# into .deps/ui-kit/checkout; its src/ is copied to .deps/ui-kit/stage with
-# the patches of ui-kit/patches applied (see ui-kit/README.md). UI_KIT_DIR
-# names a local checkout to use instead, for work on both at once.
+# dependency, not part of this repository: nothing of it is copied or patched
+# here. Its pinned commit is fetched once into .deps/ui-kit/checkout and its
+# src/ is staged in .deps/ui-kit/stage, where every build compiles it from
+# (see ui-kit/README.md). UI_KIT_DIR names a local checkout to use instead, for
+# work on both at once.
 
 set -euo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-commit=72e1c68f9b329562467cff9c01de3c039c570cc9
+commit=f775c31d9b9809be7f26a4b6da1b1ddb28428652
 url=https://github.com/blackbearreloaded/ps5-homebrew-ui.git
 
 cache="$root/.deps/ui-kit"
@@ -48,20 +49,13 @@ if [[ ${1:-} == --kit ]]; then
     exit 0
 fi
 
-# Staged again only when the kit or what is laid over it changed.
-stamp=$( { printf '%s\n' "$identity"; cd "$root/ui-kit" && find . -type f -print0 | sort -z |
-    xargs -0 sha256sum; } | sha256sum | cut -d' ' -f1)
+# Staged again only when the kit or the list of what is compiled changed.
+stamp=$( { printf '%s\n' "$identity"; sha256sum < "$root/ui-kit/sources.txt"; } |
+    sha256sum | cut -d' ' -f1)
 if [[ ! -f $stage/.stamp || $(< "$stage/.stamp") != "$stamp" ]]; then
     rm -rf -- "$stage.tmp"
     mkdir -p "$stage.tmp"
     cp -a -- "$kit/src" "$stage.tmp/src"
-    for patch in "$root"/ui-kit/patches/*.patch; do
-        [[ -f $patch ]] || continue
-        patch --quiet --directory "$stage.tmp/src" --strip 1 --no-backup-if-mismatch < "$patch" || {
-            echo "ui-kit/patches/${patch##*/} does not apply to the pinned kit" >&2
-            exit 2
-        }
-    done
     while IFS= read -r relative; do
         [[ -z $relative || $relative == \#* ]] && continue
         [[ $relative =~ ^[A-Za-z0-9_./-]+\.cpp$ && $relative != *..* && -f $stage.tmp/src/$relative ]] || {
