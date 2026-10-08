@@ -2,6 +2,8 @@
 
 #include "gpt_runtime.hpp"
 #include "model_metadata.hpp"
+#include <algorithm>
+#include <vector>
 
 #if defined(PS5_MEDIA_AUDIO) && !defined(PS5_DUAL_BACKEND)
 #error "PS5 media routing requires the universal model backend"
@@ -90,7 +92,7 @@ extern "C"
 #include <atomic>
 #include <cstdio>
 #include <cstring>
-#include <sys/dirent.h>
+#include <dirent.h>
 
 namespace
 {
@@ -117,8 +119,6 @@ void log_gpu_timing()
     sceKernelDebugOutText(0, line);
 }
 #endif
-
-constexpr unsigned kMaximumModels = 8;
 
 enum class RuntimeArchitecture : unsigned
 {
@@ -250,7 +250,7 @@ struct ModelIdentityHeader
 };
 static_assert(sizeof(ModelIdentityHeader) == 48, "P5LM identity header layout changed");
 
-RuntimeModel models[kMaximumModels]{};
+std::vector<RuntimeModel> models;
 alignas(16) char directory_entries[0x40000];
 unsigned model_count;
 unsigned selected_model;
@@ -326,8 +326,8 @@ bool architecture_supported(RuntimeArchitecture architecture)
 void add_model(const char *id, const char *name, const char *purpose, const char *root,
                const char *model_file, const char *tokenizer_file, RuntimeArchitecture architecture)
 {
-    if (model_count >= kMaximumModels || !valid_model_id(id) || !name || !*name || !purpose ||
-        !*purpose || !root || !*root || !architecture_supported(architecture))
+    if (!valid_model_id(id) || !name || !*name || !purpose || !*purpose || !root || !*root ||
+        !architecture_supported(architecture))
         return;
 #ifdef PS5_MEDIA_AUDIO
     if (architecture == RuntimeArchitecture::StableAudio)
@@ -387,7 +387,9 @@ void add_model(const char *id, const char *name, const char *purpose, const char
     for (unsigned i = 0; i < model_count; ++i)
         if (std::strcmp(models[i].id, id) == 0)
             return;
-    RuntimeModel &model = models[model_count++];
+    models.emplace_back();
+    model_count = static_cast<unsigned>(models.size());
+    RuntimeModel &model = models.back();
     std::snprintf(model.id, sizeof(model.id), "%s", id);
     std::snprintf(model.name, sizeof(model.name), "%s", name);
     std::snprintf(model.purpose, sizeof(model.purpose), "%s", purpose);
@@ -446,13 +448,8 @@ RuntimeArchitecture directory_architecture(const char *purpose, const char *runt
 
 void sort_models()
 {
-    for (unsigned i = 1; i < model_count; ++i)
-        for (unsigned j = i; j > 0 && std::strcmp(models[j - 1].id, models[j].id) > 0; --j)
-        {
-            const RuntimeModel swap = models[j - 1];
-            models[j - 1] = models[j];
-            models[j] = swap;
-        }
+    std::sort(models.begin(), models.end(), [](const RuntimeModel &a, const RuntimeModel &b)
+              { return std::strcmp(a.id, b.id) < 0; });
 }
 
 // The model list is read by the UI thread and by the HTTP thread. Short list reads and
@@ -484,19 +481,18 @@ void load_models()
     if (directory >= 0)
     {
         std::memset(directory_entries, 0, sizeof(directory_entries));
-        directory_bytes =
-            sceKernelGetdents(directory, directory_entries, sizeof(directory_entries));
-        if (directory_bytes > 0)
+        while ((directory_bytes =
+                    sceKernelGetdents(directory, directory_entries, sizeof(directory_entries))) > 0)
         {
             int offset = 0;
-            while (model_count < kMaximumModels &&
-                   offset + static_cast<int>(offsetof(dirent, d_name)) + 1 <= directory_bytes)
+            while (offset + static_cast<int>(offsetof(dirent, d_name)) + 1 <= directory_bytes)
             {
                 const auto *entry = reinterpret_cast<const dirent *>(directory_entries + offset);
                 const int name_offset = static_cast<int>(offsetof(dirent, d_name));
                 if (entry->d_reclen <= name_offset || offset + entry->d_reclen > directory_bytes)
                     break;
-                if (valid_model_id(entry->d_name))
+                if (std::memchr(entry->d_name, '\0', entry->d_reclen - name_offset) &&
+                    valid_model_id(entry->d_name))
                 {
                     char model_file[192];
                     char tokenizer_file[192];

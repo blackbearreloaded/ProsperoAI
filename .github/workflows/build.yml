@@ -51,6 +51,17 @@ jobs:
             .deps/pacbrew
           key: deps-${{ runner.os }}-${{ runner.arch }}-ubuntu24-python313-${{ hashFiles('tools/setup-*-dependencies.sh') }}
 
+      # The interface kit at its pinned commit, the Noto Sans faces and the fonts baked
+      # from both. The scripts check what they find, so a stale entry is only slower.
+      - name: Restore interface kit and baked fonts
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .deps/ui-kit/checkout
+            .deps/fonts
+            build/fonts
+          key: interface-${{ runner.os }}-${{ hashFiles('tools/prepare-ui-kit.sh', 'tools/bake-fonts.sh', 'tools/fetch-cjk-fonts.sh', 'tools/cjk-ranges.py', 'tools/convert-ui-font.py', 'tools/font-baker/**', 'assets/fonts/**') }}
+
       - name: Restore compiler cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:

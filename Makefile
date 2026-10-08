@@ -46,10 +46,9 @@ RUNTIME := runtime/libc.prx
 RUNTIME_INPUTS := tools/rebuild-libc.sh tools/build-host-tools.sh tools/ninja-build.sh \
 	$(wildcard tooling/native/*.cpp tooling/native/*.hpp) \
 	$(wildcard tooling/native/runtime/*.txt)
-APP_DEFINITIONS += SDL_MAIN_HANDLED SDL_STATIC_LIB USING_GENERATED_CONFIG_H RMLUI_STATIC_LIB ITLIB_FLAT_MAP_NO_THROW
-APP_CXXFLAGS += -frtti
-APP_INCLUDE_PATHS += .deps/llama.cpp/vendor include vendor/ps5/sdl/include vendor/ps5/sdl/include/SDL2 vendor/ps5/rmlui/include
-APP_STATIC_ARCHIVES += vendor/ps5/sdl/lib/libSDL2.a vendor/ps5/rmlui/lib/librmlui.a vendor/ps5/freetype/lib/libfreetype.a vendor/ps5/sdk/lib/libunwind.a vendor/ps5/sdk/lib/libcxx.a vendor/ps5/sdk/lib/libcxxabi.a
+APP_DEFINITIONS += SDL_MAIN_HANDLED SDL_STATIC_LIB USING_GENERATED_CONFIG_H GL_GLEXT_PROTOTYPES
+APP_INCLUDE_PATHS += include vendor/ps5/sdl/include vendor/ps5/sdl/include/SDL2 .deps/ui-kit/stage/src build/generated .deps/ps5-opengl/current/include
+APP_STATIC_ARCHIVES += vendor/ps5/sdl/lib/libSDL2.a .deps/ps5-opengl/libps5opengl-group.a
 
 .PHONY: all app build init doctor test test-deps test-unit test-integration libc deps deps-status llama-vulkan radv pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg ffpfsc packages deploy undeploy clean distclean help
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Exercise the actual HTTP handlers with fragmented I/O and deterministic inference.
 #define PS5_LLAMA_VULKAN
-#include "../src/http_server.cpp"
+#include "../vulkan/http_server.cpp"
 #include <iostream>
 #include <iterator>
 static std::string input, wire;

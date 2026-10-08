@@ -13,13 +13,12 @@ class HttpApiTests(unittest.TestCase):
     def setUpClass(cls):
         cls.scratch = tempfile.TemporaryDirectory(prefix="prospero-http-")
         tmp = Path(cls.scratch.name)
-        (tmp / "gpt_app.hpp").write_text("#pragma once\nclass ProsperoAiApp { public: static void SetExternalStatus(const char*) {} };\n")
         cls.binary = tmp / "http-test"
         compiler = shutil.which("clang++") or shutil.which("g++")
         if not compiler or not (ROOT / ".deps/llama.cpp/vendor/nlohmann/json.hpp").exists():
             raise unittest.SkipTest("C++ compiler and make deps required")
         subprocess.run([compiler, "-std=c++20", "-O1", "-pthread", "-ffunction-sections", "-fdata-sections",
-                        "-Wl,--gc-sections", "-I"+str(tmp), "-I"+str(ROOT / "include"),
+                        "-Wl,--gc-sections", "-I"+str(ROOT / "vulkan"), "-I"+str(ROOT / "include"),
                         "-I"+str(ROOT / ".deps/llama.cpp/vendor"),
                         str(ROOT / "tests/http_api_harness.cpp"), "-o", str(cls.binary)], check=True)
 

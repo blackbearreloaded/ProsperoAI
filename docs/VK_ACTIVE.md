@@ -2,7 +2,58 @@
 
 Updated: 2026-10-08. Plan: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
 
-## Verified on PS5 FW 12.70
+## Status after the midnight-ui merge (current)
+
+Upstream `main` merged PR #6 ("midnight-ui"): RmlUi is gone, replaced by a native
+SDL/EGL/OpenGL UI (`src/native_app.cpp`, `src/native_ui*.cpp`). This branch has been merged
+onto that `main` (not just rebased — real content and modify/delete conflicts, not a stale
+diff): `src/gpt_app.cpp`/`include/gpt_app.hpp`/`assets/ui/main.rml`/`assets/ui/styles/app.rcss`
+are gone, taking main's deletion. `include/gpt_runtime.hpp` carries both sides' additions
+(main's `gpt_runtime_prepare`/`gpt_runtime_context_full`, already called from
+`src/native_app.cpp`, plus this branch's `temperature`/`model_id`/`grammar`/
+`output_limit_reached`/`gpt_runtime_refresh_models`). The Vulkan-only files
+(`gpt_runtime_vulkan.cpp`, `model_downloader_ps5.*`, `http_server.*`, `openai_api.inc`) moved
+from `src/` to a new top-level `vulkan/` directory, because `tools/build.sh` now globs every
+`.c`/`.cc`/`.cpp` under `src/` unconditionally (no exclusion mechanism) — leaving them in `src/`
+would make the default AGC build try to compile `gpt_runtime_vulkan.cpp` alongside
+`gpt_runtime.cpp`, a duplicate-symbol link failure. `http_server.cpp`'s only RmlUi dependency
+(`ProsperoAiApp::SetExternalStatus`, a cross-thread status bridge) was replaced with a small
+self-contained mutex-guarded status holder in the same file — not yet wired into the new UI's
+display, since that was debug-only diagnostics, not user-facing behavior.
+
+**Verified: `make app` builds, signs and zips the AGC/native-UI app end to end** after the
+merge — the default path is intact. `make test` passes all 17 host tests (2 of
+`test_native_controller.py`'s cases fail with the system default `clang++`, which resolves to
+clang-14 here and is missing its ASan runtime libs; `HOST_CXX=clang++-18` passes all three —
+a pre-existing host toolchain gap, not a regression from this merge).
+
+`tools/build.sh` gained three additive, default-empty hooks for the Vulkan variant to use:
+`APP_EXTRA_SOURCES`/`APP_EXCLUDE_SOURCES` (add/remove sources from the auto-discovered list)
+and `APP_EXTRA_LINK_FLAGS` (raw linker arguments). Confirmed these are no-ops for the default
+build (`make app` output unchanged).
+
+**Blocked: linking the Vulkan backend into the new binary.** The RADV archive
+(`libvulkan_radeon.ps5.a`, from Mihawk's reference project) was never linked as an addition to
+an ordinary PS5 binary — `tools/radv-link.sh`'s `radv_link_recipe` links an entire *separate*
+runtime foundation with it: Mihawk's own `libps5platform.a` (a parallel libc with `ps5_`-prefixed
+replacements for dozens of functions), his own linker script (`ps5-pie-unwind.ld`), and a long
+`--defsym`/`--wrap` list redirecting standard libc calls into that platform layer. The old
+RmlUi-era Vulkan build worked because RmlUi rendered through SDL's *software* renderer — RADV
+was the only thing touching the GPU, so the whole binary could link through Mihawk's foundation
+exclusively. The new native UI renders through real OpenGL (`tools/build.sh`'s own
+`ps5-pie.ld`/`app-symbols.map`/our `runtime_support.cpp` shims — a different, standard
+ps5-payload-sdk foundation). Putting OpenGL rendering and RADV compute in one binary means
+reconciling two runtime foundations that each assume they own the whole libc/platform layer —
+real, uncertain linking work (likely a custom combined linker script and a smaller, deliberate
+defsym list, not a blind merge of both recipes), not a file-list fix. This is the same class of
+problem as the RADV crash investigation below, and matches midnight-ui's own PR description
+flagging "graphics and inference sharing the GPU" as unverified. **Next**: scope this as its own
+task — a minimal probe binary (OpenGL triangle + RADV device init in one process) before
+retrying the full app, mirroring the "check the minimal case before the feature case" rule
+below.
+
+## Verified on PS5 FW 12.70 (pre-midnight-ui; the binary described below no longer exists in
+this form, but the RADV/Vulkan findings still hold)
 
 - Full ProsperoAI Vulkan UI/HTTP app runs from folder `/data/homebrew/PPSA99023`; pid 192 confirmed after final benchmark. Original PPSA99004 untouched. Temporary auto_chat.txt removed after testing.
 - RADV NAVI21 device discovery succeeds, Vulkan 1.4.354. Pinned llama.cpp cb7934c52ca8710994b2ecc19775ebefcfdb8d01 cross-build works; Mistral offloads all 33 layers.
