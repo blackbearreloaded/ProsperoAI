@@ -204,6 +204,9 @@ pull requests, release tags, and manual dispatch. It:
 6. writes `SHA256SUMS` and uploads both release files; and
 7. publishes those verified files when triggered by a version tag.
 
+Every pull request gets an installable build named by its number and commit:
+see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md).
+
 ## Project layout
 
 ```text
