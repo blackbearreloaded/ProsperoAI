@@ -66,11 +66,6 @@ how it is built, and what a run on a console showed.
 > ProsperoAI preserves its reproducible native build, packaging, deployment,
 > and release foundation.
 
-> [!IMPORTANT]
-> **GPU compute work is documented in [PS5 GPU Research](https://github.com/blackbearreloaded/ps5-gpu-research).**
-> The companion repository records the native AGC GPU research that made
-> ProsperoAI's local model runtimes possible.
-
 ## Supported curated models
 
 | Model | Purpose | Installed size | Hardware result |
