@@ -56,10 +56,9 @@ assets are whitelisted and public; generation and model APIs retain bearer-key
 authorization.
 
 Both runtimes look for their respective formats in
-`/data/homebrew/prosperoai/models`. A nullfs mount helper exposes that directory
-inside the active test-title sandbox; it finds the current sandbox suffix, mounts
-only the model directory, and removes the empty mount directories on close. Build
-it with `bash tools/build-model-mount.sh`; the default test target is PPSA99023.
+`/data/prosperoai/models`, reached with the filesystem access Lapy gives the app at
+launch (`vulkan/storage.cpp`); the nullfs mount helper of the first hybrid builds is gone.
+The default test target is PPSA99023.
 
 The PS5 test title previously booted and rendered the full native Vulkan UI,
 loaded the shared Mistral GGUF and generated a response. A later browser request

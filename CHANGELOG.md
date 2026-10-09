@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+- Image generation works in the combined build: the image runtime has a memory region of
+  its own again, shared with the GPU, instead of the app's heap.
+- Generated voice and sound clips play (Triangle): they go through the interface's mixer
+  instead of a second audio output the console refused.
+- Prepared `.ps5lm` text bundles (Mistral 7B, Qwen3.5 9B) are found and run on AGC beside
+  GGUF models on Vulkan; one model is in memory at a time and its memory is given back
+  when another kind of model is chosen.
+- The sound model finds its files: its paths are no longer fixed to the app folder.
+- Storage access comes from Lapy, as in the other Prospero apps: a running Lapy service or
+  the packaged one-request helper. Models, settings, conversations and logs live in
+  `/data/prosperoai`; models from `/data/homebrew/prosperoai/models` are moved there at
+  the first start. The bundled nullfs mount helper is removed.
+- Downloads use libcurl with a socket receive buffer of up to 4 MB instead of the
+  console's 64 KB, which held distant servers to about 1 MB/s; they also work with
+  storage access, where the console's own HTTPS client fails.
+- Settings > Diagnostics > Debug log writes `/data/prosperoai/logs/debug-trace.txt` for
+  problem reports.
+- New launch picture.
+
 ## 01.001.000
 
 - Combined Vulkan llama.cpp text inference with the existing AGC Image, Audio and Voice

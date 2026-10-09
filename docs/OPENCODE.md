@@ -9,7 +9,7 @@ chunks, finish reasons, usage, and `[DONE]`. The existing console layout is unch
 Install the latest app-folder ZIP from the release, or build with `make app-release`.
 Launch the app and keep it running while using OpenCode. Use Models to download a
 Text preset, or copy a raw GGUF to the shared model directory. Vulkan GGUF and AGC
-prepared models are stored in `/data/homebrew/prosperoai/models`; the runtime
+prepared models are stored in `/data/prosperoai/models`; the runtime
 registers them immediately and returns their IDs from `/v1/models`. Use the exact model ID
 returned by `/v1/models`.
 

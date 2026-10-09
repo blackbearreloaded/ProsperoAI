@@ -126,7 +126,12 @@ upload for visible images, at most one per frame, and are released when the conv
 changes. Saved audio uses the existing player; interface cues use the kit's mixer.
 
 A diagnostic log is off by default. A file named `dev/log.txt` in the install folder turns
-it on; it is written to `/download0/ProsperoAI/logs/app.log`.
+it on; it is written to `logs/app.log` in the app's data folder (`/data/prosperoai`).
+
+The debug log is the one a user sends us: Settings > Diagnostics > Debug log, off by
+default, written to `logs/debug-trace.txt` in the same folder (`include/debug_log.hpp`
+lists its tags). What the app and the model runtimes print for the console's own log goes
+into it as well.
 
 ## Build and verification
 

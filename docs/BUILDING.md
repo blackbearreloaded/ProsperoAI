@@ -126,7 +126,7 @@ make llama-vulkan-title # tiny GGUF Vulkan/CPU token validation
 make app-vulkan         # complete UI/HTTP app in test slot PPSA99023
 ```
 
-Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. Production Vulkan and AGC runtimes use the shared `/data/homebrew/prosperoai/models` directory: Vulkan discovers GGUF files and AGC discovers prepared model folders. The isolated loading benchmark still packages its fixture inside `/app0/models`. The Vulkan Models screen can browse public Hugging Face repositories and download verified GGUF files to the shared directory. Downloads are limited to 7 GiB to leave room for Vulkan weights and context memory; that limit does not guarantee every model/context combination fits. The test title runs inside a filesystem sandbox, so its shared directory is exposed by the narrowly scoped nullfs mount payload. Build it with `bash tools/build-model-mount.sh` and load it once after each console boot; it mounts only the configured ProsperoAI test title while that title is running. Its default target is PPSA99023. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Never overwrite PPSA99004 for testing.
+Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. Production Vulkan and AGC runtimes use the `/data/prosperoai/models` directory: Vulkan discovers GGUF files and AGC discovers prepared model folders. The isolated loading benchmark still packages its fixture inside `/app0/models`. The Vulkan Models screen can browse public Hugging Face repositories and download verified GGUF files to the shared directory. Downloads are limited to 7 GiB to leave room for Vulkan weights and context memory; that limit does not guarantee every model/context combination fits. The app reaches that directory with the filesystem access Lapy gives it at launch (`vulkan/storage.cpp`); the test title PPSA99023 gets a Lapy helper built for its own title ID. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Never overwrite PPSA99004 for testing.
 
 Build jobs default to available CPUs (four on this host). Compiler cache defaults to `build/ccache`, including host tools. Incremental PS5 llama library build measured about 1.6 seconds with no changes; model copies and multi-gigabyte image compression still take time. Host iGPU is not used for compilation.
 
@@ -183,12 +183,14 @@ access. Refreshing manifests requires fetching every repository tree page and co
 SHA-256 for small files whose Hub entry has no LFS hash. Never use a truncated tree as
 a complete bundle.
 
-A shared model directory exposed by nullfs may be readable/writable even when its parent
-directories reject sandboxed `mkdir` or `access`. The downloader first checks the mounted
-leaf with `stat`. After a console reboot reload the scoped model-mount payload described
-above. Storage errors include errno and distinguish missing storage access from disk
-write failures. Hugging Face CDN redirects are followed explicitly because automatic
-redirects on this firmware returned HTTP 200 with an empty file body.
+Storage errors include errno and distinguish missing storage access from disk write
+failures. Downloads go through libcurl (`vulkan/net/`): the console's own HTTPS client
+refuses every public site once the app has filesystem access (`0x8095F00C`, it no longer
+finds the certificate authorities). libcurl, OpenSSL, libpsl and zstd come from the pinned
+PacBrew prefix and are linked into one object with `console_curl.c`, whose stand-ins for
+libc get names of their own there. Each socket asks for a receive buffer of up to 4 MB
+before it connects: with the console's 64 KB default a distant server delivers about
+1 MB/s whatever the line could carry.
 
 The HTTP UI exposes the same presets through `/api/models/presets` and shows download
 progress from `/api/models/download`. Workspace category buttons start a conversation
@@ -199,10 +201,12 @@ Back to Workspace preserves browser history; each history row has a confirmed de
 
 `make app-release` builds the standard dependencies, Vulkan llama.cpp archives and
 the native Vulkan/AGC app, then packages `dist/PPSA99004.zip` using the identity and
-version from `sce_sys/param.json`. It embeds a mount helper scoped to PPSA99004
-and `INSTALL.txt`; no models are bundled. Startup automatically sends the helper to
-the console-local ELF loader on port 9021 when storage is unavailable. The loader must
-be available in the configured homebrew environment; manual payload upload is not needed. A production release build is never
+version from `sce_sys/param.json`. It packages Lapy's one-request helper built for
+PPSA99004 (`lapy.elf`, `lapy-manifest.json`, `licenses/Lapy-MIT.txt`) and `INSTALL.txt`;
+no models are bundled. At launch the app asks a running Lapy service for filesystem
+access and otherwise sends the helper to the console-local ELF loader on port 9021; the
+loader must be available in the configured homebrew environment, manual payload upload
+is not needed. Without access the app keeps its data in its sandbox. A production release build is never
 automatically deployed to the console.
 
 The GitHub workflow uses Ubuntu 24.04 LLVM 19 host libraries with the pinned Mesa
