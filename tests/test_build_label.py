@@ -53,21 +53,25 @@ class BuildLabelTests(unittest.TestCase):
         self.assertIn("run: make app", workflow)
         self.assertIn('sha256sum "$TITLE_ID.zip" > SHA256SUMS', workflow)
         self.assertIn("assets=(release/PPSA99004.zip release/SHA256SUMS)", workflow)
-        # The compressed image is gone: nothing that builds may name it or its tool again.
+        # The image formats are gone: nothing that builds may name them or their tools again.
         build_files = (
             ".github/workflows/build.yml",
             "Makefile",
             "build.ps1",
             "tools/build.sh",
-            "tools/setup-packaging-dependencies.sh",
         )
         for name in build_files:
             text = (ROOT / name).read_text(encoding="utf-8").lower()
-            self.assertNotIn("ffpfsc", text, name)
-            self.assertNotIn("mkpfs", text, name)
-        self.assertFalse((ROOT / "tools/setup-mkpfs-tooling.ps1").exists())
+            for gone in ("ffpfsc", "mkpfs", "ffpkg", "ufs2"):
+                self.assertNotIn(gone, text, name)
+        for name in (
+            "setup-mkpfs-tooling.ps1",
+            "setup-ffpkg-tooling.ps1",
+            "setup-packaging-dependencies.sh",
+        ):
+            self.assertFalse((ROOT / "tools" / name).exists(), name)
         # Asked for by name, the removed formats are refused before anything is built.
-        for removed in ("Ffpfsc", "All"):
+        for removed in ("Ffpkg", "Ffpfsc", "All"):
             result = subprocess.run(
                 ["bash", str(ROOT / "tools/build.sh"), removed],
                 capture_output=True,
@@ -75,7 +79,7 @@ class BuildLabelTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(result.returncode, 2, removed)
-            self.assertIn("usage: tools/build.sh [Folder|Ffpkg]", result.stderr)
+            self.assertIn("usage: tools/build.sh [Folder]", result.stderr)
 
     def test_release_job_never_replaces_published_files(self):
         workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
