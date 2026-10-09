@@ -79,7 +79,17 @@ def read(ftp, path):
 
 def running(ftp):
     # The sandbox folder can outlive the app; the app's own folder mounted in it cannot.
-    return "app0" in (names(ftp, f"/mnt/sandbox/{TITLE}_000") or {})
+    # A folder left behind makes the console number the next one (_001, ...).
+    for name in names(ftp, "/mnt/sandbox") or {}:
+        if name.startswith(TITLE + "_") and "app0" in (names(ftp, f"/mnt/sandbox/{name}") or {}):
+            return True
+    # With filesystem access the app is no longer seen through its sandbox folder; its
+    # HTTP interface answers for as long as it runs.
+    try:
+        with socket.create_connection((host, int(os.environ.get("PS5_APP_PORT", "11434"))), timeout=2):
+            return True
+    except OSError:
+        return False
 
 
 def errors(ftp):
