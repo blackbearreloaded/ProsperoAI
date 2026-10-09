@@ -43,9 +43,11 @@ and ship with the baked font. `tools/font-baker/bake_list.cpp`, `tools/cjk-range
 
 Storage access comes from
 [PS5-Lapy-JB-Daemon](https://github.com/ArkSama/PS5-Lapy-JB-Daemon), created by ArkSama,
-MIT. The build fetches the cooperative owned-root helper from
-[mpereiraesaa's fork](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) at the commit
-pinned in `tools/build-lapy-helper.py`, builds it for the app's title with the PS5
+MIT; the exact-title one-request helper and the cooperative elevation protocol are
+[mpereiraesaa's](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon). The build fetches
+the helper's source from
+[this project's fork](https://github.com/blackbearreloaded/PS5-Lapy-JB-Daemon) at the
+commit pinned in `tools/build-lapy-helper.py`, builds it for the app's title with the PS5
 Payload SDK that upstream requires, checks it against its manifest and packages it as
 `lapy.elf` with `licenses/Lapy-MIT.txt`. The client that talks to it
 (`vulkan/elevation/`) and `vulkan/net/console_curl.c` come from the PS5 Native App
