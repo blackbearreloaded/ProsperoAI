@@ -18,8 +18,9 @@ extern "C"
     std::FILE *__real_fopen(const char *, const char *);
     std::FILE *__wrap_fopen(const char *path, const char *mode)
     {
-        const auto mapped =
-            std::string(path).find(std::string(prospero::kModelRoot) + "/") == 0 ? root + (path + std::strlen(prospero::kModelRoot)) : std::string(path);
+        const auto mapped = std::string(path).find(std::string(prospero::kModelRoot) + "/") == 0
+                                ? root + (path + std::strlen(prospero::kModelRoot))
+                                : std::string(path);
         return __real_fopen(mapped.c_str(), mode);
     }
     int sceKernelOpen(const char *path, int, int)

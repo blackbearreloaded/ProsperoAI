@@ -215,9 +215,8 @@ extern "C" double strtod(const char *value, char **end)
             int parsed_exponent = 0;
             while (cursor < input_end && *cursor >= '0' && *cursor <= '9')
             {
-                parsed_exponent = parsed_exponent < 10000
-                                      ? parsed_exponent * 10 + (*cursor - '0')
-                                      : 10000;
+                parsed_exponent =
+                    parsed_exponent < 10000 ? parsed_exponent * 10 + (*cursor - '0') : 10000;
                 ++cursor;
             }
             exponent += exponent_negative ? -parsed_exponent : parsed_exponent;
@@ -236,8 +235,7 @@ extern "C" double strtod(const char *value, char **end)
     {
         char line[128];
         std::snprintf(line, sizeof(line), "[ProsperoAI] strtod scanned=%td size=%td first=%02x\n",
-                      cursor - value, input_end - value,
-                      static_cast<unsigned char>(*input_end));
+                      cursor - value, input_end - value, static_cast<unsigned char>(*input_end));
         sceKernelDebugOutText(0, line);
     }
 #endif

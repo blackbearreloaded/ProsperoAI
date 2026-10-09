@@ -340,8 +340,10 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
     {
         label(list, "MODEL LIBRARY", kLeft, 222, palette_.accent);
         text(list, "A new model, when you need one.", 92, 300, 56, palette_.ink, true);
-        text(list, "Search model names, choose a repository, and bring a verified GGUF into your library.",
-             kLeft, 346, 24, palette_.muted);
+        text(
+            list,
+            "Search model names, choose a repository, and bring a verified GGUF into your library.",
+            kLeft, 346, 24, palette_.muted);
         filters_.draw(canvas);
         const Rect browser{96, 470, 1120, 478};
         const Rect guide{1240, 470, 584, 478};
@@ -349,8 +351,8 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
         panel(list, guide, 26);
         label(list, "01  /  FIND A MODEL", 128, 518, palette_.accent);
         search_.draw(canvas);
-        text(list, "Enter a model name  ·  Square: edit  ·  Cross: search", 128, 652,
-             19, palette_.muted);
+        text(list, "Enter a model name  ·  Square: edit  ·  Cross: search", 128, 652, 19,
+             palette_.muted);
         char status[192]{};
         prospero_model_download::status(status, sizeof(status));
         const auto downloader_state = prospero_model_download::state();
@@ -359,17 +361,21 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
             downloader_state == prospero_model_download::State::Downloading)
             spinner(list, 140, 700, 9, palette_.accent);
         text(list, status, 162, 708, 21,
-             downloader_state == prospero_model_download::State::Failed ? palette_.bad : palette_.muted);
+             downloader_state == prospero_model_download::State::Failed ? palette_.bad
+                                                                        : palette_.muted);
         if (downloader_state == prospero_model_download::State::Ready ||
             downloader_state == prospero_model_download::State::SearchReady)
         {
             for (std::size_t i = 0; i < prospero_model_download::candidate_count() && i < 8; ++i)
             {
                 prospero_model_download::Candidate candidate{};
-                if (!prospero_model_download::candidate(i, &candidate)) continue;
+                if (!prospero_model_download::candidate(i, &candidate))
+                    continue;
                 const float y = 758.0f + static_cast<float>(i) * 23.0f;
-                const Color ink = static_cast<int>(i) == download_focus_ ? palette_.accent : palette_.ink;
-                if (static_cast<int>(i) == download_focus_) list.circle(137, y - 7, 4, ink);
+                const Color ink =
+                    static_cast<int>(i) == download_focus_ ? palette_.accent : palette_.ink;
+                if (static_cast<int>(i) == download_focus_)
+                    list.circle(137, y - 7, 4, ink);
                 char row[220];
                 if (downloader_state == prospero_model_download::State::SearchReady)
                     std::snprintf(row, sizeof(row), "%s  ·  %llu downloads  ·  Cross to browse",
@@ -387,44 +393,44 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
              gfx::Align::center);
         text(list, "GGUF files are checked before they are", guide.cx(), 804, 20, palette_.muted,
              false, gfx::Align::center);
-        text(list, "added to the shared model library.", guide.cx(), 835, 20, palette_.muted,
+        text(list, "added to the shared model library.", guide.cx(), 835, 20, palette_.muted, false,
+             gfx::Align::center);
+        text(list, "Public repository  ·  On-console storage", guide.cx(), 900, 17, palette_.muted,
              false, gfx::Align::center);
-        text(list, "Public repository  ·  On-console storage", guide.cx(), 900, 17,
-             palette_.muted, false, gfx::Align::center);
         return;
     }
     if (state.models.empty())
     {
         // Nothing to browse: say what to do about it.
-        part(list, arrival(1),
-             [&]
-             {
-                 label(list, "MODEL LIBRARY", kLeft, 222, palette_.accent);
-                 text(list, "Find your next model.", 92, 300, 52, palette_.ink, true);
-                 const Rect download_button{kLeft, 378, 344, 66};
-                 list.bordered_rect(download_button, 20, palette_.accent,
-                                    empty_models_download_focus_ ? 2.0f : 1.0f,
-                                    empty_models_download_focus_ ? palette_.ink.with_alpha(0.78f)
-                                                                 : palette_.accent.with_alpha(0.8f));
-                 text(list, "Download a model", download_button.cx(), download_button.cy() + 8,
-                      23, palette_.on_accent, true, gfx::Align::center);
-                 text(list, "Cross to browse verified GGUF downloads", 470, 421, 21,
-                      palette_.muted);
-                 const Rect card{460, 488, 1000, 424};
-                 panel(list, card, 28);
-                 draw_sculpture(list, card.cx(), card.y + 130, 84, palette_.accent, clock_, 24);
-                 text(list, state.initialized ? "No models installed yet" : "Looking for models...",
-                      card.cx(), card.y + 262, 40, palette_.ink, true, gfx::Align::center);
-                 if (state.initialized)
-                 {
-                     text(list, "Copy your models into the shared model folder on this console,",
-                          card.cx(), card.y + 316, 25, palette_.muted, false, gfx::Align::center);
-                     text(list, "then open ProsperoAI again.",
-                          card.cx(), card.y + 352, 25, palette_.muted, false, gfx::Align::center);
-                     ui::text(list, fonts_.mono, "/data/homebrew/prosperoai/models", card.cx(),
-                              card.y + 404, 22, palette_.accent, gfx::Align::center);
-                 }
-             });
+        part(
+            list, arrival(1),
+            [&]
+            {
+                label(list, "MODEL LIBRARY", kLeft, 222, palette_.accent);
+                text(list, "Find your next model.", 92, 300, 52, palette_.ink, true);
+                const Rect download_button{kLeft, 378, 344, 66};
+                list.bordered_rect(download_button, 20, palette_.accent,
+                                   empty_models_download_focus_ ? 2.0f : 1.0f,
+                                   empty_models_download_focus_ ? palette_.ink.with_alpha(0.78f)
+                                                                : palette_.accent.with_alpha(0.8f));
+                text(list, "Download a model", download_button.cx(), download_button.cy() + 8, 23,
+                     palette_.on_accent, true, gfx::Align::center);
+                text(list, "Cross to browse verified GGUF downloads", 470, 421, 21, palette_.muted);
+                const Rect card{460, 488, 1000, 424};
+                panel(list, card, 28);
+                draw_sculpture(list, card.cx(), card.y + 130, 84, palette_.accent, clock_, 24);
+                text(list, state.initialized ? "No models installed yet" : "Looking for models...",
+                     card.cx(), card.y + 262, 40, palette_.ink, true, gfx::Align::center);
+                if (state.initialized)
+                {
+                    text(list, "Copy your models into the shared model folder on this console,",
+                         card.cx(), card.y + 316, 25, palette_.muted, false, gfx::Align::center);
+                    text(list, "then open ProsperoAI again.", card.cx(), card.y + 352, 25,
+                         palette_.muted, false, gfx::Align::center);
+                    ui::text(list, fonts_.mono, "/data/homebrew/prosperoai/models", card.cx(),
+                             card.y + 404, 22, palette_.accent, gfx::Align::center);
+                }
+            });
         return;
     }
 

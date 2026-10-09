@@ -261,9 +261,8 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
         search_.set_busy(false);
     const bool downloading_models = filters_.active() == 0;
     search_.set_placeholder(downloading_models ? "Search model names (e.g. Mistral 7B)"
-                                                  : "Search your models");
-    search_.set_bounds(downloading_models ? Rect{128, 558, 1056, 64}
-                                              : Rect{kLeft, 392, 612, 60});
+                                               : "Search your models");
+    search_.set_bounds(downloading_models ? Rect{128, 558, 1056, 64} : Rect{kLeft, 392, 612, 60});
     filters_.set_bounds((downloading_models || app_.state().models.empty())
                             ? Rect{kLeft, 392, 1728, 60}
                             : Rect{732, 392, 1092, 60});
@@ -434,7 +433,8 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
             if (filters_.handle(input, feedback) == ui::Event::changed)
             {
                 download_focus_ = 0;
-                empty_models_download_focus_ = app_.state().models.empty() && filters_.active() != 0;
+                empty_models_download_focus_ =
+                    app_.state().models.empty() && filters_.active() != 0;
                 refresh_models();
             }
         }
@@ -462,8 +462,9 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
         else if (input.nav == Direction::up && has_download_results)
             download_focus_ = std::max(0, download_focus_ - 1);
         else if (input.nav == Direction::down && has_download_results)
-            download_focus_ = std::min(static_cast<int>(prospero_model_download::candidate_count()) - 1,
-                                       download_focus_ + 1);
+            download_focus_ =
+                std::min(static_cast<int>(prospero_model_download::candidate_count()) - 1,
+                         download_focus_ + 1);
         else if (input.is_pressed(Action::confirm))
         {
             if (state == prospero_model_download::State::Ready)
@@ -1183,10 +1184,9 @@ void NativeUI::Impl::draw_boot(gfx::DrawList &list) const
     list.gradient_rect({0, 0, gfx::kVirtualWidth, gfx::kVirtualHeight}, 0, palette_.page_top,
                        palette_.page_bottom);
     // The doors part to reveal the warm light beyond the ProsperoAI arch.
-    const float opening = reduced_motion()
-                              ? 1.0f
-                              : tween::cubic_out(std::clamp((boot_age_ - 0.12f) / 0.95f, 0.0f,
-                                                            1.0f));
+    const float opening =
+        reduced_motion() ? 1.0f
+                         : tween::cubic_out(std::clamp((boot_age_ - 0.12f) / 0.95f, 0.0f, 1.0f));
     const float lift = (1 - veil) * -24;
     constexpr float center = 960.0f;
     constexpr float floor = 742.0f;
@@ -1195,8 +1195,8 @@ void NativeUI::Impl::draw_boot(gfx::DrawList &list) const
     const float arch_rx = 220.0f;
     const float arch_ry = 214.0f;
     const Color gold = palette_.accent;
-    list.glow({center - (10 + 120 * opening), arch_y - 110, 20 + 240 * opening, 350}, 30,
-              145, gold.with_alpha(0.08f + 0.13f * opening));
+    list.glow({center - (10 + 120 * opening), arch_y - 110, 20 + 240 * opening, 350}, 30, 145,
+              gold.with_alpha(0.08f + 0.13f * opening));
 
     // Nested arch strokes stay fixed while the two inset door leaves slide outward.
     for (int ring = 0; ring < 3; ++ring)
@@ -1230,25 +1230,21 @@ void NativeUI::Impl::draw_boot(gfx::DrawList &list) const
     const float right_bottom = center + 10 + 122 * opening;
     const float door_top = arch_y;
     const Color door = gfx::mix(palette_.page_top, palette_.depth, 0.38f).with_alpha(0.92f * veil);
-    const float left_leaf[] = {left_outer, door_top, left_top, door_top + 12,
+    const float left_leaf[] = {left_outer,  door_top,  left_top,   door_top + 12,
                                left_bottom, floor - 8, left_outer, floor};
-    const float right_leaf[] = {right_top, door_top + 12, right_outer, door_top,
-                                right_outer, floor, right_bottom, floor - 8};
+    const float right_leaf[] = {right_top,   door_top + 12, right_outer,  door_top,
+                                right_outer, floor,         right_bottom, floor - 8};
     list.polygon(left_leaf, 4, door);
     list.polygon(right_leaf, 4, door);
     list.line(left_outer, door_top, left_top, door_top + 12, 2.0f, gold.with_alpha(0.82f * veil));
-    list.line(left_top, door_top + 12, left_bottom, floor - 8, 2.0f,
-              gold.with_alpha(0.82f * veil));
+    list.line(left_top, door_top + 12, left_bottom, floor - 8, 2.0f, gold.with_alpha(0.82f * veil));
     list.line(left_bottom, floor - 8, left_outer, floor, 2.0f, gold.with_alpha(0.82f * veil));
-    list.line(right_top, door_top + 12, right_outer, door_top, 2.0f,
-              gold.with_alpha(0.82f * veil));
+    list.line(right_top, door_top + 12, right_outer, door_top, 2.0f, gold.with_alpha(0.82f * veil));
     list.line(right_outer, door_top, right_outer, floor, 2.0f, gold.with_alpha(0.82f * veil));
-    list.line(right_outer, floor, right_bottom, floor - 8, 2.0f,
-              gold.with_alpha(0.82f * veil));
+    list.line(right_outer, floor, right_bottom, floor - 8, 2.0f, gold.with_alpha(0.82f * veil));
     const float seam = 1 - opening;
     if (seam > 0.01f)
-        list.glow({center - 3, door_top + 70, 6, 190}, 3, 38,
-                  gold.with_alpha(0.20f * seam * veil));
+        list.glow({center - 3, door_top + 70, 6, 190}, 3, 38, gold.with_alpha(0.20f * seam * veil));
     list.circle(left_top + 16, 555 + lift, 3.2f, gold.with_alpha(0.8f * veil));
     list.circle(right_top - 16, 555 + lift, 3.2f, gold.with_alpha(0.8f * veil));
 

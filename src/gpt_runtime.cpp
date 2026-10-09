@@ -511,10 +511,10 @@ void load_models()
                     std::snprintf(root, sizeof(root), "%s/%s", prospero::kModelRoot, entry->d_name);
                     std::snprintf(model_file, sizeof(model_file), "%s/%s/model.ps5lm",
                                   prospero::kModelRoot, entry->d_name);
-                    std::snprintf(tokenizer_file, sizeof(tokenizer_file),
-                                  "%s/%s/tokenizer.ps5tok", prospero::kModelRoot, entry->d_name);
-                    std::snprintf(metadata_file, sizeof(metadata_file),
-                                  "%s/%s/model.json", prospero::kModelRoot, entry->d_name);
+                    std::snprintf(tokenizer_file, sizeof(tokenizer_file), "%s/%s/tokenizer.ps5tok",
+                                  prospero::kModelRoot, entry->d_name);
+                    std::snprintf(metadata_file, sizeof(metadata_file), "%s/%s/model.json",
+                                  prospero::kModelRoot, entry->d_name);
                     read_model_metadata(metadata_file, entry->d_name, name, sizeof(name), purpose,
                                         sizeof(purpose), runtime, sizeof(runtime));
                     add_model(entry->d_name, name, purpose, root, model_file, tokenizer_file,
@@ -580,8 +580,6 @@ const char *gpt_runtime_model_id(unsigned index)
     load_models();
     return index < model_count ? models[index].id : "";
 }
-
-
 
 const char *gpt_runtime_model_name(unsigned index)
 {
@@ -988,4 +986,6 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned message
 }
 
 // The AGC model catalog is fixed by installed recipe folders.
-void gpt_runtime_refresh_models() {}
+void gpt_runtime_refresh_models()
+{
+}
