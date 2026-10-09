@@ -11,6 +11,7 @@
 // does. No runtime module lookup or sceKernelDlsym() is involved.
 
 #include "http_server.hpp"
+#include "model_paths.hpp"
 
 #include "gpt_runtime.hpp"
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
@@ -33,6 +34,9 @@
 #include <cmath>
 #include <mutex>
 #include <pthread.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 extern "C"
 {
@@ -43,6 +47,7 @@ extern "C"
     int sceNetPoolCreate(const char *name, int size, int flags);
     int sceNetSocket(const char *name, int domain, int type, int protocol);
     int sceNetSocketClose(int sock);
+    int sceNetConnect(int sock, const void *address, unsigned int address_length);
     int sceNetBind(int sock, const void *address, unsigned int address_length);
     int sceNetListen(int sock, int backlog);
     int sceNetAccept(int sock, void *address, unsigned int *address_length);
@@ -106,6 +111,7 @@ struct NetApi
     int (*pool_create)(const char *, int, int);
     int (*socket)(const char *, int, int, int);
     int (*socket_close)(int);
+    int (*connect)(int, const void *, unsigned int);
     int (*bind)(int, const void *, unsigned int);
     int (*listen)(int, int);
     int (*accept)(int, void *, unsigned int *);
@@ -120,6 +126,7 @@ bool bring_up_net_api(NetApi *api)
     api->pool_create = sceNetPoolCreate;
     api->socket = sceNetSocket;
     api->socket_close = sceNetSocketClose;
+    api->connect = sceNetConnect;
     api->bind = sceNetBind;
     api->listen = sceNetListen;
     api->accept = sceNetAccept;
@@ -127,13 +134,65 @@ bool bring_up_net_api(NetApi *api)
     api->recv = sceNetRecv;
     api->setsockopt = sceNetSetsockopt;
 
-    const int init = api->init();
-    log_result("sceNetInit", init);
-    if (init < 0)
+    static std::once_flag once;
+    static bool ready = false;
+    std::call_once(once, [&] {
+        const int init = api->init();
+        log_result("sceNetInit", init);
+        if (init < 0) return;
+        const int pool = api->pool_create("prosperoai-http", kNetPoolSize, 0);
+        log_result("sceNetPoolCreate", pool);
+        ready = pool >= 0;
+    });
+    return ready;
+}
+
+bool model_storage_ready()
+{
+    struct stat marker{};
+    return stat(PROSPERO_MODEL_ROOT "/.prosperoai-storage-ready", &marker) == 0 &&
+           S_ISREG(marker.st_mode);
+}
+
+bool send_model_mount_payload(const NetApi &api, const char *path)
+{
+    std::FILE *file = std::fopen(path, "rb");
+    if (!file) return false;
+    unsigned char magic[4]{};
+    if (std::fread(magic, 1, sizeof(magic), file) != sizeof(magic) ||
+        std::memcmp(magic, "\x7f" "ELF", sizeof(magic)))
+    {
+        std::fclose(file);
         return false;
-    const int pool = api->pool_create("prosperoai-http", kNetPoolSize, 0);
-    log_result("sceNetPoolCreate", pool);
-    return pool >= 0;
+    }
+    std::rewind(file);
+    const int sock = api.socket("prosperoai-model-storage", kAfInet, kSockStream, 0);
+    if (sock < 0) { std::fclose(file); return false; }
+    struct timeval timeout{2, 0};
+    api.setsockopt(sock, kSolSocket, 0x1005, &timeout, sizeof(timeout)); // SO_SNDTIMEO
+    SceNetSockaddrIn address{};
+    address.sin_len = sizeof(address);
+    address.sin_family = kAfInet;
+    constexpr unsigned short port = 9021;
+    address.sin_port = static_cast<unsigned short>((port >> 8) | (port << 8));
+    address.sin_addr = 0x0100007fU; // network-order INADDR_LOOPBACK, console-local only
+    bool sent = api.connect(sock, &address, sizeof(address)) == 0;
+    char buffer[4096];
+    while (sent)
+    {
+        const std::size_t size = std::fread(buffer, 1, sizeof(buffer), file);
+        if (!size) { sent = std::ferror(file) == 0; break; }
+        std::size_t offset = 0;
+        while (offset < size)
+        {
+            const int count = api.send(sock, buffer + offset, size - offset, 0);
+            if (count <= 0) { sent = false; break; }
+            offset += static_cast<std::size_t>(count);
+        }
+    }
+    api.socket_close(sock); // EOF lets the local ELF loader execute the helper.
+    std::fclose(file);
+    return sent;
 }
 
 pthread_mutex_t generation_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -924,3 +983,22 @@ asm(".section .text.prosperoai_layout_probe,\"axR\",@progbits\n"
     "prosperoai_layout_probe:\n"
     ".fill 0x3000,1,0xcc\n"
     ".text\n");
+
+bool prospero_prepare_model_storage()
+{
+    if (model_storage_ready()) return true;
+    NetApi api{};
+    if (!bring_up_net_api(&api) ||
+        !send_model_mount_payload(api, "/app0/assets/platform/model-mount.elf"))
+    {
+        log_line("Model storage helper could not start through the local ELF loader");
+        return false;
+    }
+    for (unsigned attempt = 0; attempt < 100; ++attempt)
+    {
+        if (model_storage_ready()) return true;
+        usleep(50000);
+    }
+    log_line("Model storage helper did not mount the shared directory");
+    return false;
+}

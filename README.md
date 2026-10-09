@@ -129,8 +129,8 @@ generation. Both are functional demonstrations rather than real-time paths.
 2. Extract it. The archive contains a complete `PPSA99004/` app folder and an
    intentionally empty `PPSA99004/models/` directory.
 3. Upload the complete `PPSA99004` directory to `/data/homebrew/`.
-4. Load the included `payloads/prospero-model-mount.elf` with your ELF payload loader
-   once after each console boot. It exposes the shared model directory to this title.
+4. Keep the console's local ELF loader available. ProsperoAI automatically starts its
+   bundled storage helper when needed; no separate payload upload is required.
 5. Register or refresh the app folder in your homebrew loader, then launch ProsperoAI.
 6. Open **Models** and download a Text, Image, Audio or Voice preset. Alternatively,
    copy standalone text GGUF files or complete curated media folders to
@@ -147,7 +147,7 @@ For example:
 /data/homebrew/
 ├── PPSA99004/
 │   ├── eboot.bin
-│   ├── payloads/prospero-model-mount.elf
+│   ├── assets/
 │   ├── models/README.txt
 │   └── sce_sys/
 └── prosperoai/models/
@@ -161,8 +161,8 @@ folders at launch and shows their friendly names and purposes in Models. If
 no compatible model is installed, the app opens normally and explains where to
 add one.
 
-The folder ZIP includes the model mount payload. Models can be downloaded while
-the app is running after that payload has been loaded.
+Only the app-folder ZIP is distributed. The app automatically exposes shared model
+storage through the console-local loader, so models can be downloaded while it runs.
 
 ## Using ProsperoAI
 

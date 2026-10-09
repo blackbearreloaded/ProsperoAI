@@ -129,4 +129,7 @@ import sys
 p=Path(sys.argv[1]);(p/'index.txt').write_text(''.join(f.name+'\n' for f in sorted(p.glob('*.wav'))))
 PYINDEX
 done
+PS5_PAYLOAD_SDK="$sdk" make -C "$root/payload/model_mount" TITLE="$title" OUTPUT="$work/mount/$title"
+mkdir -p "$app/assets/platform"
+cp "$work/mount/$title/model-mount.elf" "$app/assets/platform/model-mount.elf"
 echo "Native Vulkan app folder: $app"

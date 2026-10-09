@@ -76,6 +76,13 @@ int main(void)
     char target[256] = {0};
     int mounted = 0, last_error = 0;
     unsigned application = 0xffffffffu;
+    // Create only this application's shared storage, never unrelated directories.
+    if (mkdir("/data/homebrew/prosperoai", 0777) && errno != EEXIST) return 1;
+    if (mkdir(PROSPERO_MODEL_ROOT, 0777) && errno != EEXIST) return 1;
+    FILE *ready = fopen(PROSPERO_MODEL_ROOT "/.prosperoai-storage-ready", "w");
+    if (!ready) return 1;
+    fputs("ProsperoAI shared model storage\n", ready);
+    fclose(ready);
     report("resident", 0, 0);
     for (;;)
     {

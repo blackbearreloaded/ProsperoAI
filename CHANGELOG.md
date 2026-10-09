@@ -14,8 +14,9 @@
   Conversations can be deleted with confirmation and Back to Workspace retains history.
 - Updated the PS5 icon and background, removed competing launch artwork and lowered
   native splash lettering. README uses the same golden doorway icon.
-- Bundled the shared-model mount payload for PPSA99004; load it once after each console
-  boot before using the app. The model-free release contains no downloaded weights.
+- Shared model storage is set up automatically by the app using its bundled title-scoped
+  helper and the console-local ELF loader. No separate payload upload is needed.
+  The model-free release contains no downloaded weights.
 
 - Replaced the RmlUi interface with a native Vulkan one built on ps5-homebrew-ui: Workspace,
   Models and Settings pages, a model library without the eight-model limit, search and

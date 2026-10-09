@@ -1,6 +1,9 @@
 // ProsperoAI native application controller.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_app.hpp"
+#ifdef PS5_LLAMA_VULKAN
+#include "http_server.hpp"
+#endif
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -485,6 +488,11 @@ void App::work()
     switch (job_)
     {
     case Job::Discover:
+    {
+#ifdef PS5_LLAMA_VULKAN
+        const bool storage_ready = prospero_prepare_model_storage();
+        gpt_runtime_refresh_models();
+#endif
         result_.models.clear();
         result_.model_counts = {};
         for (unsigned i = 0, count = gpt_runtime_model_count(); i < count; ++i)
@@ -505,7 +513,13 @@ void App::work()
         result_.initialized = true;
         result_.status =
             result_.models.empty() ? "No models are installed yet" : "Your library is ready";
+#ifdef PS5_LLAMA_VULKAN
+        if (!storage_ready)
+            result_.status =
+                "Model storage unavailable. Start the console's ELF loader and reopen the app.";
+#endif
         break;
+    }
     case Job::RefreshModels:
     {
         gpt_runtime_refresh_models();

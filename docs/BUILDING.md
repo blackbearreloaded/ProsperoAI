@@ -199,8 +199,10 @@ Back to Workspace preserves browser history; each history row has a confirmed de
 
 `make app-release` builds the standard dependencies, Vulkan llama.cpp archives and
 the native Vulkan/AGC app, then packages `dist/PPSA99004.zip` using the identity and
-version from `sce_sys/param.json`. It includes a mount payload scoped to PPSA99004
-and `INSTALL.txt`; no models are bundled. A production release build is never
+version from `sce_sys/param.json`. It embeds a mount helper scoped to PPSA99004
+and `INSTALL.txt`; no models are bundled. Startup automatically sends the helper to
+the console-local ELF loader on port 9021 when storage is unavailable. The loader must
+be available in the configured homebrew environment; manual payload upload is not needed. A production release build is never
 automatically deployed to the console.
 
 The GitHub workflow uses Ubuntu 24.04 LLVM 19 host libraries with the pinned Mesa
