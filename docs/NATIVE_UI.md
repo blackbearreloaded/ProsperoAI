@@ -192,6 +192,7 @@ The same script plays against the PC stand-ins with
 | `expect model <part of its id>\|answer\|image\|audio` | Notes whether that model is active and ready, or the last answer is of that kind (a text answer with `<unk>` in it is not one); an unmet one fails the run, which goes on |
 | `shot <name>` | Saves the frame as `<name>.bmp` |
 | `status` | Writes the state, the last answer's figures and the frame times since the last status |
+| `memory` | Writes what the app has mapped between `0x2_0000_0000` and `0x8_0000_0000`, where the model runtimes need room |
 | `quit [seconds]` | Writes the result, stays up that long, then closes the app |
 
 A wait that runs out, or a model that is not prepared, ends the run at once; an `expect`
