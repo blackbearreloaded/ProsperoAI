@@ -12,6 +12,7 @@
 namespace
 {
 unsigned text_selected = 0, released = 0, stopped = 0, generated = 0;
+unsigned bundles = 0, bundle_selected = 0, bundle_released = 0, reserved = 0;
 std::atomic<bool> block_voice{false}, voice_entered{false}, voice_release{false};
 } // namespace
 namespace prospero_vulkan
@@ -59,8 +60,70 @@ int gpt_runtime_generate(const gpt_runtime_message_t *, unsigned, const gpt_runt
     return 0;
 }
 } // namespace prospero_vulkan
+// The AGC text runtime (model.ps5lm bundles): none at first, one later.
+namespace prospero_agc
+{
+unsigned gpt_runtime_model_count()
+{
+    return bundles;
+}
+const char *gpt_runtime_model_id(unsigned)
+{
+    return "bundle0";
+}
+const char *gpt_runtime_model_name(unsigned)
+{
+    return "Bundle";
+}
+const char *gpt_runtime_backend()
+{
+    return "AGC";
+}
+bool gpt_runtime_context_full()
+{
+    return false;
+}
+bool gpt_runtime_select_model(unsigned i)
+{
+    bundle_selected = i + 1;
+    return i < bundles;
+}
+void release_model_memory()
+{
+    ++bundle_released;
+}
+int gpt_runtime_prepare()
+{
+    return 0;
+}
+int gpt_runtime_generate(const gpt_runtime_message_t *, unsigned, const gpt_runtime_settings_t &,
+                         char *out, std::size_t n, gpt_runtime_stats_t *, gpt_runtime_progress_fn)
+{
+    std::snprintf(out, n, "bundle");
+    return 0;
+}
+} // namespace prospero_agc
 extern "C"
 {
+    int ps5_agc_backend_reserve_memory()
+    {
+        ++reserved;
+        return 0;
+    }
+    std::int64_t sceKernelGetDirectMemorySize()
+    {
+        return 0;
+    }
+    int sceKernelAvailableDirectMemorySize(std::int64_t, std::int64_t, std::size_t, std::int64_t *,
+                                           std::size_t *free_bytes)
+    {
+        *free_bytes = 0;
+        return 0;
+    }
+    int sceKernelDebugOutText(int, const char *)
+    {
+        return 0;
+    }
     void ps5_media_stop()
     {
         ++stopped;
@@ -85,7 +148,7 @@ extern "C"
     int ps5_kokoro_tts_generate(const char *root, const char *prompt, char *out, std::size_t n,
                                 std::uint64_t *elapsed, gpt_runtime_progress_fn)
     {
-        assert(std::string(root) == std::string(prospero::kModelRoot) + "/kokoro-82m-fp16");
+        assert(std::string(root) == std::string(prospero::model_root()) + "/kokoro-82m-fp16");
         assert(std::strcmp(prompt, "Hello") == 0);
         ++generated;
         if (block_voice.load())
@@ -110,7 +173,7 @@ int main()
         const std::string relative = voice.files[i].path;
         if (relative.compare(0, 9, "licenses/") == 0)
             continue;
-        const auto path = std::filesystem::path(prospero::kModelRoot) / voice.id / relative;
+        const auto path = std::filesystem::path(prospero::model_root()) / voice.id / relative;
         std::filesystem::create_directories(path.parent_path());
         std::ofstream(path) << "fixture";
     }
@@ -148,4 +211,20 @@ int main()
     assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
     assert(std::strcmp(out, "text0") == 0);
     assert(gpt_runtime_model_count() == 3);
+    // A model.ps5lm bundle runs on the AGC text runtime: the Vulkan model leaves memory
+    // before it is loaded, and it leaves when another kind of model is chosen.
+    bundles = 1;
+    gpt_runtime_refresh_models();
+    assert(gpt_runtime_model_count() == 4);
+    assert(std::strcmp(gpt_runtime_model_id(2), "bundle0") == 0);
+    assert(std::strcmp(gpt_runtime_model_purpose(3), "text-to-speech") == 0);
+    const unsigned released_before = released;
+    assert(gpt_runtime_select_model(2) && bundle_selected == 1);
+    assert(released > released_before);
+    assert(gpt_runtime_prepare() == 0 && reserved == 1);
+    assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
+    assert(std::strcmp(out, "bundle") == 0);
+    assert(gpt_runtime_select_model(0) && bundle_released == 1);
+    assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
+    assert(std::strcmp(out, "text0") == 0);
 }

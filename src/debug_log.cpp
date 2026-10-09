@@ -90,9 +90,9 @@ bool open_trace()
     full = false;
     char stamp[40] = "unknown time";
     const std::time_t now = std::time(nullptr);
-    std::tm utc{};
-    if (gmtime_r(&now, &utc))
-        std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S UTC", &utc);
+    // Once, when the trace is opened: the console's libc has no gmtime_r for every build.
+    if (const std::tm *utc = std::gmtime(&now))
+        std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S UTC", utc);
     char header[192];
     std::snprintf(header, sizeof(header), "ProsperoAI %s%s%s debug log, opened %s",
                   PROSPERO_VERSION, PROSPERO_BUILD_LABEL[0] ? ", " : "", PROSPERO_BUILD_LABEL,

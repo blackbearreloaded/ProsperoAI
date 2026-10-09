@@ -509,7 +509,8 @@ void load_models()
                     char name[64];
                     char purpose[24];
                     char runtime[48];
-                    std::snprintf(root, sizeof(root), "%s/%s", prospero::model_root(), entry->d_name);
+                    std::snprintf(root, sizeof(root), "%s/%s", prospero::model_root(),
+                                  entry->d_name);
                     std::snprintf(model_file, sizeof(model_file), "%s/%s/model.ps5lm",
                                   prospero::model_root(), entry->d_name);
                     std::snprintf(tokenizer_file, sizeof(tokenizer_file), "%s/%s/tokenizer.ps5tok",
