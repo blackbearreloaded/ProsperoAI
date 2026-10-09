@@ -8,7 +8,6 @@ Before opening a pull request:
 
 ```bash
 make check
-make ffpfsc
 ```
 
 Describe any PS5 hardware validation separately from host-only checks. Runtime
