@@ -32,7 +32,8 @@ disagree about what to do next.
 
 ## Build and verify
 
-- `make deps`, `make app`, `make ffpfsc` work on the host. Read `docs/BUILDING.md` first.
+- `make deps`, `make app`, and `make test` work on the host. `make app` builds the app folder
+  and ZIP; read `docs/BUILDING.md` first.
 - A build that links is not a build that runs. Check the NEEDED list (`readelf -d`) and the
   program headers against a working build before deploying.
 - A user request to implement, debug or benchmark on the console authorizes the necessary
@@ -67,16 +68,14 @@ port 2323), process list, launch and screenshots.
 
 - Test titles use IDs other than `PPSA99004`, for example `PPSA99014`. Never delete or overwrite
   `PPSA99004` for a test.
-- Replacing a package under a title the console has already registered leaves the registration
-  inconsistent. The UI then reports "The data is corrupted". Remove the registration in the
-  console UI first, then install the new package.
+- Development and release builds use an app folder (releases also publish a ZIP of that folder).
+  Do not replace a registered package image in place: remove its registration in the console UI
+  before installing a different image. Folder-backed test titles can be updated after stopping
+  the title and verifying it is unmounted.
 - Deleting files from `/data/homebrew` does not remove the registration.
-- Working way to replace a test title without a reboot (confirmed by the user):
-  1. Upload the new package (`ps5ctl.py ftp put NEW.ffpfsc /data/homebrew/NEW.ffpfsc`).
-  2. In the console UI, open the title, press Options and choose Delete.
-  3. Send shadowmountplus again (`ps5ctl.py payload /data/payloads/shadowmountplus.elf`).
-     It rescans `/data/homebrew` and registers the new package.
-  Step 2 is the one that removes the stale record. Shadowmount alone does not.
+- To update a folder-backed test title without a reboot, stop it in the console UI, verify
+  `shadow info <ID>` reports `mounted:false`, then upload only the changed files with FTP. The
+  first registration still requires the configured title registration workflow.
 - Icons and metadata come from `sce_sys/`. Use this project's `sce_sys`, not another project's.
 
 ## Git and attribution

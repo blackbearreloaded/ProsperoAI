@@ -18,7 +18,6 @@ PACBREW_INCLUDE_PATHS ?=
 PACBREW_STATIC_ARCHIVES ?=
 PS5_HOST ?=
 FTP_PORT ?= 2121
-DEPLOY_FORMAT ?= folder
 PS5_FTP_USER ?= anonymous
 PS5_FTP_PASSWORD ?= codex
 DEPLOY_DRY_RUN ?= 0
@@ -39,7 +38,7 @@ export CCACHE_DIR
 export HOST_CXX HOST_TEST_CXXFLAGS HOST_TEST_LDFLAGS
 export APP_DEFINITIONS APP_CXXFLAGS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
-export PS5_HOST FTP_PORT DEPLOY_FORMAT PS5_FTP_USER PS5_FTP_PASSWORD DEPLOY_DRY_RUN
+export PS5_HOST FTP_PORT PS5_FTP_USER PS5_FTP_PASSWORD DEPLOY_DRY_RUN
 export TITLE_ID APP_NAME APP_CATEGORY CONTENT_SUFFIX
 
 RUNTIME := runtime/libc.prx
@@ -50,7 +49,7 @@ APP_DEFINITIONS += SDL_MAIN_HANDLED SDL_STATIC_LIB USING_GENERATED_CONFIG_H GL_G
 APP_INCLUDE_PATHS += include vendor/ps5/sdl/include vendor/ps5/sdl/include/SDL2 .deps/ui-kit/stage/src build/generated .deps/ps5-opengl/current/include
 APP_STATIC_ARCHIVES += vendor/ps5/sdl/lib/libSDL2.a .deps/ps5-opengl/libps5opengl-group.a
 
-.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps deps-status llama-vulkan radv pacbrew pacbrew-list assets-check format format-check tidy lint check ffpkg deploy undeploy clean distclean help
+.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps deps-status llama-vulkan radv pacbrew pacbrew-list assets-check format format-check tidy lint check deploy undeploy clean distclean help
 
 all: app
 build: app
@@ -93,17 +92,17 @@ llama-vulkan: deps ## Host llama-cli with the Vulkan backend, plus a PS5 syntax 
 llama-ps5: deps ## Cross-build static llama.cpp and Vulkan libraries for PS5
 	@bash tools/build-llama-ps5.sh
 
-vulkan-smoke: ## Package PS5 Vulkan startup/device-discovery test (PPSA99023)
+vulkan-smoke: ## Build PS5 Vulkan startup/device-discovery test folder (PPSA99023)
 	@bash tools/build-vulkan-smoke.sh
 
-llama-vulkan-title: llama-ps5 ## Package model inference test (requires build/vulkan-models/stories260K.gguf)
+llama-vulkan-title: llama-ps5 ## Build model inference test folder (requires build/vulkan-models/stories260K.gguf)
 	@LLAMA_SMOKE=1 bash tools/build-vulkan-smoke.sh
 
-app-vulkan: llama-ps5 ## Build ProsperoAI UI/API with llama.cpp Vulkan in safe test slot PPSA99023
+app-vulkan: llama-ps5 ## Build ProsperoAI UI/API with llama.cpp Vulkan in test slot PPSA99023
 	@PROSPERO_VULKAN_APP=1 bash tools/build-vulkan-smoke.sh
 
-app-vulkan-folder: llama-ps5 ## Build the Vulkan app folder without image compression
-	@PROSPERO_VULKAN_APP=1 VULKAN_PACKAGE=0 bash tools/build-vulkan-smoke.sh
+app-vulkan-folder: llama-ps5 ## Build the Vulkan app folder in test slot PPSA99023
+	@PROSPERO_VULKAN_APP=1 bash tools/build-vulkan-smoke.sh
 
 pacbrew:
 	@printf '%s\n' '==> [pacbrew] Fetching the pinned prebuilt ports sysroot'
@@ -129,12 +128,8 @@ app: $(RUNTIME)
 	@printf '%s\n' '==> [app] Compiling, linking, signing, and assembling the app folder'
 	@bash tools/build.sh Folder
 
-ffpkg: $(RUNTIME)
-	@printf '%s\n' '==> [ffpkg] Building the app folder and UFS2 image'
-	@bash tools/build.sh Ffpkg
-
 deploy:
-	@printf '%s\n' '==> [deploy] Building and publishing the selected app output over FTP'
+	@printf '%s\n' '==> [deploy] Building and publishing the app folder over FTP'
 	@bash tools/deploy.sh
 
 undeploy:
@@ -190,12 +185,11 @@ help:
 	  'make tidy            Run the shared Clang static-analysis policy' \
 	  'make lint            Run format, metadata, and shell checks (no clang-tidy)' \
 	  'make check           Run lint and build ProsperoAI' \
-	  'make ffpkg           Build the folder and UFS2 .ffpkg image' \
 	  'make deploy PS5_HOST=<address>  Build and FTP-deploy the app folder' \
 	  'make undeploy PS5_HOST=<address>  Remove this title from /data/homebrew' \
 	  'Build variables:     APP_DEFINITIONS, APP_INCLUDE_PATHS, APP_STATIC_ARCHIVES, APP_RUNTIME_MODULES' \
 	  'PacBrew variables:   PACBREW_PACKAGES, PACBREW_INCLUDE_PATHS, PACBREW_STATIC_ARCHIVES' \
-	  'Deploy variables:    FTP_PORT=2121, DEPLOY_FORMAT=folder|ffpkg, DEPLOY_DRY_RUN=0|1' \
+	  'Deploy variables:    FTP_PORT=2121, DEPLOY_DRY_RUN=0|1' \
 	  'Local defaults:      Copy .env.example to the ignored .env file' \
 	  'Build speed:         BUILD_JOBS defaults to all CPUs; USE_CCACHE=0 disables ccache' \
 	  'make clean           Remove build/, dist/, and generated libc.prx' \

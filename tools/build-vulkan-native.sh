@@ -101,9 +101,3 @@ p=Path(sys.argv[1]);(p/'index.txt').write_text(''.join(f.name+'\n' for f in sort
 PYINDEX
 done
 echo "Native Vulkan app folder: $app"
-if [[ ${VULKAN_PACKAGE:-0} != 0 ]]; then
- mkpfs=$(bash "$root/tools/setup-packaging-dependencies.sh" ffpfsc)
- package="$work/PPSA99023.$$.ffpfsc"
- "$mkpfs" pack folder --no-adjust-output-file-extension --version PS5 --verify "$app" "$package"
- mv "$package" "$work/PPSA99023.ffpfsc"
-fi

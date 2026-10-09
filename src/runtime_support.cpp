@@ -136,6 +136,8 @@ void *ReallocTracked(void *allocation, std::size_t size)
 #define strcasestr prospero_strcasestr
 #endif
 
+extern "C" double strtod(const char *value, char **end);
+
 extern "C" int pthread_once(pthread_once_t *once_control, void (*init_routine)(void))
 {
     constexpr int running = 2;
@@ -159,11 +161,9 @@ extern "C" int pthread_once(pthread_once_t *once_control, void (*init_routine)(v
     return 0;
 }
 
-extern "C" double prospero_strtod(const char *value, char **end);
-
 extern "C" float strtof(const char *value, char **end)
 {
-    return static_cast<float>(prospero_strtod(value, end));
+    return static_cast<float>(strtod(value, end));
 }
 
 extern "C" double strtod(const char *value, char **end)

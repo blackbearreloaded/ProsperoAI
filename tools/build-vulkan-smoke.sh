@@ -9,7 +9,6 @@ work="$root/build/vulkan-smoke"
 model_test=${LLAMA_SMOKE:-0}
 app_test=${PROSPERO_VULKAN_APP:-0}
 if [[ $app_test != 0 ]]; then
-    export VULKAN_PACKAGE=${VULKAN_PACKAGE:-1}
     exec bash "$root/tools/build-vulkan-native.sh"
 fi
 [[ $app_test == 0 ]] || model_test=1
@@ -141,12 +140,4 @@ for v in p['localizedParameters'].values():
 with open(sys.argv[2],'w') as f: json.dump(p,f,indent=2)
 PY
 cp "$root/runtime/libc.prx" "$app/sce_module/libc.prx"
-if [[ ${VULKAN_PACKAGE:-1} == 0 ]]; then
-    echo "Vulkan app folder: $app"
-    exit 0
-fi
-mkpfs=$(bash "$root/tools/setup-packaging-dependencies.sh" ffpfsc)
-package="$work/$title.$$.ffpfsc"
-"$mkpfs" pack folder --no-adjust-output-file-extension --version PS5 --verify "$app" "$package"
-mv "$package" "$work/$title.ffpfsc"
-echo "Vulkan smoke package: $work/$title.ffpfsc"
+echo "Vulkan test folder: $app"

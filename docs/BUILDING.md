@@ -5,7 +5,7 @@ fetches the pinned inputs and builds the app folder:
 
 ```bash
 make deps        # fetch missing dependencies at their pinned revisions
-make app         # build dist/PPSA99004 (eboot.bin + sce_sys + models/)
+make app         # build dist/PPSA99004 and dist/PPSA99004.zip
 ```
 
 > **Work in progress.** The Vulkan folder build and HTTP generation are verified on PS5 FW 12.70. See [benchmark results](VK_BENCHMARK_2026-10-08.md) and [current status](VK_ACTIVE.md).
@@ -14,20 +14,19 @@ make app         # build dist/PPSA99004 (eboot.bin + sce_sys + models/)
 
 | Target | What it does |
 |---|---|
-| `make` / `make app` | Build `dist/PPSA99004` |
+| `make` / `make app` | Build `dist/PPSA99004` and a ZIP of that app folder |
 | `make deps` | Fetch missing dependencies (SDK, zlib, pinned git inputs from `tools/deps.json`) |
 | `make deps-status` | List each pinned input, where it lives and whether it matches its pin |
 | `make doctor` | Check the host tools |
 | `make libc` | Rebuild and verify `runtime/libc.prx` (the clean-room runtime shim) |
-| `make ffpfsc` | Build the compressed `dist/PPSA99004.ffpfsc` package image |
 | `make deploy PS5_HOST=<address>` | Build and FTP-deploy to `/data/homebrew/PPSA99004` |
 | `make undeploy PS5_HOST=<address>` | Remove this title from `/data/homebrew` |
 | `make test` | Host integration tests of the tooling |
 | `make lint` | Format, static-analysis and metadata checks |
 | `make clean` / `make distclean` | Remove `build/` and `dist/` (`distclean` also removes `.deps/`) |
 
-Useful variables: `USE_CCACHE=0` (ccache is optional), `DEPLOY_FORMAT=folder|ffpfsc`,
-`FTP_PORT` (default `2121`), `DEPLOY_DRY_RUN=1` (print the deploy plan without sending it).
+Useful variables: `USE_CCACHE=0` (ccache is optional), `FTP_PORT` (default `2121`), and
+`DEPLOY_DRY_RUN=1` (print the folder-deploy plan without sending it).
 
 ## Dependencies
 
@@ -104,13 +103,13 @@ The clang static libraries (`clangBasic`, `clangAST`, ...) are built from the LL
 The console needs a homebrew FTP server listening on `FTP_PORT` (the tested setup uses port 2120).
 
 ```bash
-export PS5_HOST=<PS5-IP> FTP_PORT=2120 DEPLOY_FORMAT=ffpfsc USE_CCACHE=0
+export PS5_HOST=<PS5-IP> FTP_PORT=2120 USE_CCACHE=0
 bash tools/deploy.sh
 ```
 
-With `DEPLOY_FORMAT=ffpfsc` the app is installed as one package image. A folder deploy over an
-already-registered title can leave the console's title database inconsistent (`CE-107750-0`);
-undeploy first if that happens.
+Development deployment uploads the app folder. Use a separate test title for console work and
+stop it before updating files. Registration is separate from the files in `/data/homebrew`;
+deleting files alone does not remove a registered title.
 
 ## Status
 
