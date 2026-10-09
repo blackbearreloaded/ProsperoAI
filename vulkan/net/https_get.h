@@ -31,6 +31,11 @@ extern "C"
     /* The next bytes of the body: their count, 0 at its end, -1 on failure. */
     int prospero_https_read(prospero_https *session, void *buffer, size_t size);
 
+    /* Asked while a request waits for the network, about four times a second: a nonzero
+     * answer ends the request, and prospero_https_get/read report a failure. */
+    typedef int (*prospero_https_stop)(void *user);
+    void prospero_https_set_stop(prospero_https *session, prospero_https_stop stop, void *user);
+
     /* What went wrong, in libcurl's words; valid until the next request. */
     const char *prospero_https_error(const prospero_https *session);
 

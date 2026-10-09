@@ -142,9 +142,10 @@ void gpt_runtime_refresh_models()
 {
 }
 
-// Nothing is offered and nothing is fetched on a PC.
+// Nothing is fetched on a PC; one scene pretends that a preset is being downloaded.
 namespace prospero_model_download
 {
+static State preview_state = State::Idle;
 bool preset_installed(std::size_t)
 {
     return false;
@@ -158,20 +159,31 @@ void poll()
 }
 State state()
 {
-    return State::Idle;
+    return preview_state;
 }
 int active_preset()
 {
-    return -1;
+    return preview_state == State::Downloading ? 0 : -1;
 }
 void progress(std::uint64_t *completed, std::uint64_t *total)
 {
-    *completed = *total = 0;
+    *completed = preview_state == State::Downloading ? 42 : 0;
+    *total = preview_state == State::Downloading ? 100 : 0;
 }
 void status(char *output, std::size_t capacity)
 {
-    if (capacity)
-        output[0] = '\0';
+    std::snprintf(output, capacity, "%s",
+                  preview_state == State::Downloading ? "Downloading: 1827 / 4350 MiB (42%)" : "");
+}
+bool cancel()
+{
+    const bool running = preview_state == State::Downloading;
+    preview_state = State::Idle;
+    return running;
+}
+bool cancelling()
+{
+    return false;
 }
 std::size_t candidate_count()
 {
@@ -442,6 +454,17 @@ int main(int argc, char **argv)
     capture("welcome");
     press(hui::Action::page_next);
     capture("models");
+    // A preset is on its way: Triangle asks, the second button cancels.
+    prospero_model_download::preview_state = prospero_model_download::State::Downloading;
+    frames(30);
+    capture("downloading");
+    press(hui::Action::north);
+    capture("cancel-download");
+    press(hui::Action::right, hui::Direction::right);
+    press(hui::Action::confirm);
+    assert(prospero_model_download::preview_state == prospero_model_download::State::Idle);
+    capture("download-cancelled");
+    frames(420); // its notice has gone
     press(hui::Action::right, hui::Direction::right);
     press(hui::Action::right, hui::Direction::right);
     capture("models-image");

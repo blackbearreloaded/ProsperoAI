@@ -17,6 +17,8 @@
 - Downloads use libcurl with a socket receive buffer of up to 4 MB instead of the
   console's 64 KB, which held distant servers to about 1 MB/s; they also work with
   storage access, where the console's own HTTPS client fails.
+- A running model download can be cancelled: Triangle in Models, the Cancel button of the
+  browser page, or `DELETE /api/models/download`. What was downloaded so far is removed.
 - Settings > Diagnostics > Debug log writes `/data/prosperoai/logs/debug-trace.txt` for
   problem reports.
 - New launch picture.

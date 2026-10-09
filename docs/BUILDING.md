@@ -193,7 +193,8 @@ before it connects: with the console's 64 KB default a distant server delivers a
 1 MB/s whatever the line could carry.
 
 The HTTP UI exposes the same presets through `/api/models/presets` and shows download
-progress from `/api/models/download`. Workspace category buttons start a conversation
+progress from `/api/models/download`; `DELETE /api/models/download` cancels the running
+download and removes its partial files. Workspace category buttons start a conversation
 with an installed model of that type, or open its Models category when none is installed.
 Back to Workspace preserves browser history; each history row has a confirmed delete action.
 

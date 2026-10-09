@@ -257,7 +257,7 @@ larger contexts, authentication and detailed compatibility notes.
 | L1 / R1 | Switch between Workspace, Models, and Settings |
 | Square | Start a new conversation in Workspace; search in Models |
 | L2 / R2 in Models | Previous / next model category |
-| Triangle | Insert Space while typing; otherwise retry, delete a focused conversation, or play saved audio |
+| Triangle | Insert Space while typing; otherwise retry, delete a focused conversation, or play saved audio; in Models, cancel the running download |
 | R2 while typing | Done; send from Workspace |
 | Options | Ask to close the app, once nothing is running and the conversation is saved |
 | Right stick | Scroll through the current conversation |

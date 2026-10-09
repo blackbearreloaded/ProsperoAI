@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
 #include <mutex>
 #include <string>
 #include <sys/stat.h>
@@ -45,6 +46,7 @@ std::string worker_query;
 std::string worker_repo;
 std::size_t worker_index;
 std::atomic<int> worker_preset{-1};
+std::atomic<bool> cancel_requested{false};
 
 void set_status(const char *text) {
     std::lock_guard<std::mutex> lock(state_mutex);
@@ -101,6 +103,10 @@ struct HttpSession {
         // Networking is initialized by the app's HTTP server during startup.
         if (!session) session = prospero_https_open();
         if (!session) { set_failure("HTTPS client", "libcurl could not start"); return false; }
+        // A cancelled download does not wait for the network: the request ends at once.
+        prospero_https_set_stop(session, [](void *) -> int {
+            return cancel_requested.load(std::memory_order_acquire) ? 1 : 0;
+        }, nullptr);
         return true;
     }
     void close() { prospero_https_close(session); session = nullptr; }
@@ -260,6 +266,31 @@ bool make_directories(const std::string &path) {
     }
     return true;
 }
+bool cancel_pending() { return cancel_requested.load(std::memory_order_acquire); }
+// Removes a bundle's staging folder with what was downloaded into it.
+void remove_tree(const std::string &path, int depth = 0) {
+    if (depth > 8) return;
+    if (DIR *directory = opendir(path.c_str())) {
+        while (const dirent *entry = readdir(directory)) {
+            const std::string name = entry->d_name;
+            if (name == "." || name == "..") continue;
+            const std::string child = path + "/" + name;
+            struct stat info{};
+            if (lstat(child.c_str(), &info) == 0 && S_ISDIR(info.st_mode)) remove_tree(child, depth + 1);
+            else unlink(child.c_str());
+        }
+        closedir(directory);
+    }
+    rmdir(path.c_str());
+}
+// The end of a cancelled download: nothing of it is kept, and the page says so.
+void finish_cancelled(State next) {
+    completed_bytes.store(0, std::memory_order_release);
+    total_bytes.store(0, std::memory_order_release);
+    set_status("Download cancelled. Nothing of it was kept.");
+    prospero::debug::line("download", "cancelled, partial files removed");
+    current.store(next, std::memory_order_release);
+}
 bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile &item,
                        const std::string &target, std::uint64_t &completed) {
     const auto separator = target.find_last_of('/');
@@ -275,6 +306,7 @@ bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile
     std::uint64_t done = 0;
     while (ok) {
         int count = http.read(buffer.data(), buffer.size());
+        if (cancel_pending()) { ok=false; break; }
         if (count < 0) { set_failure("Preset download", http.error()); ok=false; break; }
         if (!count) break;
         if (done + static_cast<std::uint64_t>(count) > item.size) {
@@ -316,8 +348,13 @@ void install_preset() {
     for (std::size_t i = 0; i < preset.count; ++i) {
         const auto &file = preset.files[i];
         const std::string target = preset.kind == 0 ? final : staging + "/" + file.path;
-        if (!fetch_preset_file(http, preset, file, target, completed)) return;
+        if (!fetch_preset_file(http, preset, file, target, completed)) {
+            if (cancel_pending() && preset.kind != 0) remove_tree(staging);
+            return;
+        }
     }
+    // A single file is in place by now; a bundle is still in its staging folder.
+    if (preset.kind != 0 && cancel_pending()) { remove_tree(staging); return; }
     if (preset.kind != 0 && rename(staging.c_str(), final.c_str()) != 0) {
         storage_error("Cannot install completed bundle"); return;
     }
@@ -329,7 +366,9 @@ void install_preset() {
 void *worker_impl(void *) {
     const State action = current.load(std::memory_order_acquire);
     if (action == State::Downloading && worker_preset >= 0) {
-        install_preset(); worker_done.store(true, std::memory_order_release); return nullptr;
+        install_preset();
+        if (cancel_pending() && current.load() != State::Complete) finish_cancelled(State::Idle);
+        worker_done.store(true, std::memory_order_release); return nullptr;
     }
     if (action == State::Searching) {
         HttpSession http;
@@ -422,7 +461,7 @@ void *worker_impl(void *) {
         Sha256 hash;
         std::array<std::uint8_t, 1024*1024> buffer{};
         std::uint64_t done=0;
-        while(ok){int n=http.read(buffer.data(),buffer.size());if(n<0){set_failure("Model download",http.error());ok=false;break;}if(n==0)break;
+        while(ok){int n=http.read(buffer.data(),buffer.size());if(cancel_pending()){ok=false;break;}if(n<0){set_failure("Model download",http.error());ok=false;break;}if(n==0)break;
             if(done+static_cast<std::uint64_t>(n)>expected){set_error("Model size check",-1);ok=false;break;}
             if(std::fwrite(buffer.data(),1,n,file)!=static_cast<std::size_t>(n)){storage_error("Disk write");ok=false;break;}
             hash.update(buffer.data(),n);done+=n;completed_bytes.store(done,std::memory_order_release);
@@ -433,6 +472,8 @@ void *worker_impl(void *) {
         if(ok&&rename(part_path.c_str(),final_path.c_str())!=0){set_status("Could not finalize downloaded model file.");current.store(State::Failed);ok=false;}
         if(!ok) std::remove(part_path.c_str());
         if(ok) pace.report(item.name.c_str(), done);
+        // The repository's file list is still there: another file can be chosen.
+        if(!ok&&cancel_pending()) finish_cancelled(State::Ready);
         if(ok){char text[160];std::snprintf(text,sizeof(text),"Verified %s (%llu MiB). Restart not needed; refreshing models.",installed_name(repo,item.name).c_str(),static_cast<unsigned long long>(done/(1024*1024)));set_status(text);current.store(State::Complete,std::memory_order_release);}
     }
     worker_done.store(true, std::memory_order_release);
@@ -449,6 +490,7 @@ void *worker(void *argument) {
     }
 }
 bool start() {
+    cancel_requested.store(false,std::memory_order_release);
     worker_done.store(false,std::memory_order_release); worker_thread=nullptr;
     pthread_attr_t attributes; int rc=pthread_attr_init(&attributes);
     const bool attributes_ready = rc == 0;
@@ -488,12 +530,21 @@ void poll() {
     }
 }
 State state(){return current.load(std::memory_order_acquire);}
+bool cancel() {
+    poll();
+    std::lock_guard<std::mutex> job_lock(job_mutex);
+    if (state() != State::Downloading || !worker_thread ||
+        worker_done.load(std::memory_order_acquire)) return false;
+    cancel_requested.store(true, std::memory_order_release);
+    return true;
+}
+bool cancelling() { return state() == State::Downloading && cancel_pending(); }
 int active_preset() { return state() == State::Downloading ? worker_preset.load() : -1; }
 void progress(std::uint64_t *completed, std::uint64_t *total) {
     if (completed) *completed = completed_bytes.load(std::memory_order_acquire);
     if (total) *total = total_bytes.load(std::memory_order_acquire);
 }
-void status(char *out,std::size_t cap){if(!cap)return;std::lock_guard<std::mutex> lock(state_mutex);std::snprintf(out,cap,"%s",current_status);if(state()==State::Downloading){auto total=total_bytes.load();auto done=completed_bytes.load();if(total){char text[160];std::snprintf(text,sizeof(text),"Downloading: %llu / %llu MiB (%u%%)",static_cast<unsigned long long>(done/(1024*1024)),static_cast<unsigned long long>(total/(1024*1024)),static_cast<unsigned>((done*100)/total));std::snprintf(out,cap,"%s",text);}}}
+void status(char *out,std::size_t cap){if(!cap)return;std::lock_guard<std::mutex> lock(state_mutex);std::snprintf(out,cap,"%s",current_status);if(state()==State::Downloading&&cancel_pending()){std::snprintf(out,cap,"Cancelling the download...");}else if(state()==State::Downloading){auto total=total_bytes.load();auto done=completed_bytes.load();if(total){char text[160];std::snprintf(text,sizeof(text),"Downloading: %llu / %llu MiB (%u%%)",static_cast<unsigned long long>(done/(1024*1024)),static_cast<unsigned long long>(total/(1024*1024)),static_cast<unsigned>((done*100)/total));std::snprintf(out,cap,"%s",text);}}}
 std::size_t candidate_count(){std::lock_guard<std::mutex> lock(state_mutex);return items.size();}
 bool candidate(std::size_t i,Candidate*out){if(!out)return false;std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;std::snprintf(out->name,sizeof(out->name),"%s",items[i].name.c_str());out->size=items[i].size;return true;}
 bool search(const char *query){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(!query||state()==State::Searching||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(query);if(value.size()<2||value.size()>96){set_status("Enter at least two characters for model search.");current.store(State::Failed);return false;}for(unsigned char c:value)if(!(std::isalnum(c)||std::isspace(c)||c=='-'||c=='_'||c=='.'||c=='+')){set_status("Use letters, numbers, spaces, dots, dashes or underscores.");current.store(State::Failed);return false;}worker_query=value;{std::lock_guard<std::mutex> lock(state_mutex);items.clear();}current.store(State::Searching);set_status("Searching public GGUF repositories...");return start();}

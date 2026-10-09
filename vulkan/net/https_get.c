@@ -27,6 +27,8 @@ struct prospero_https
     size_t have, taken;
     int done, paused;
     CURLcode result;
+    prospero_https_stop stop;
+    void *stop_user;
     char error[CURL_ERROR_SIZE];
 };
 
@@ -90,6 +92,17 @@ static size_t on_data(char *bytes, size_t size, size_t count, void *user)
     return length;
 }
 
+/* True once the owner wants the request to end; the request then counts as failed. */
+static int stopped(prospero_https *session)
+{
+    if (!session->stop || !session->stop(session->stop_user))
+        return 0;
+    session->done = 1;
+    session->result = CURLE_ABORTED_BY_CALLBACK;
+    snprintf(session->error, sizeof(session->error), "stopped");
+    return 1;
+}
+
 static void drop_request(prospero_https *session)
 {
     if (!session->easy)
@@ -149,6 +162,12 @@ prospero_https *prospero_https_open(void)
     return session;
 }
 
+void prospero_https_set_stop(prospero_https *session, prospero_https_stop stop, void *user)
+{
+    session->stop = stop;
+    session->stop_user = user;
+}
+
 void prospero_https_close(prospero_https *session)
 {
     if (!session)
@@ -197,7 +216,11 @@ int prospero_https_get(prospero_https *session, const char *url, long *status)
         return 1;
     }
     while (!session->done && session->have == session->taken && !session->paused)
+    {
+        if (stopped(session))
+            return 1;
         pump(session);
+    }
     if (session->done && session->result != CURLE_OK)
         return 1;
     long code = 0;
@@ -209,10 +232,14 @@ int prospero_https_get(prospero_https *session, const char *url, long *status)
 
 int prospero_https_read(prospero_https *session, void *buffer, size_t size)
 {
-    if (!session->easy)
+    if (!session->easy || stopped(session))
         return -1;
     while (session->have == session->taken && !session->done)
+    {
         pump(session);
+        if (stopped(session))
+            return -1;
+    }
     size_t ready = session->have - session->taken;
     if (ready == 0)
         return session->result == CURLE_OK ? 0 : -1;

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -27,13 +28,15 @@ class HttpApiTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.scratch.cleanup()
 
-    def request(self, path="/v1/chat/completions", body=None, key=None, headers=None):
+    def request(self, path="/v1/chat/completions", body=None, key=None, headers=None, method=None,
+                environment=None):
         if body is None and path.endswith("completions"):
             body = {"model": "tiny.gguf", "messages": [{"role": "user", "content": "hello"}]}
         payload = json.dumps(body, ensure_ascii=False).encode() if body is not None else b""
-        lines = [f"{'POST' if body is not None else 'GET'} {path} HTTP/1.1", "Host: test",
+        lines = [f"{method or ('POST' if body is not None else 'GET')} {path} HTTP/1.1", "Host: test",
                  f"content-length: {len(payload)}"] + (headers or [])
         wire = subprocess.check_output([str(self.binary)] + ([key] if key else []),
+                                      env={**os.environ, **(environment or {})},
                                       input="\r\n".join(lines).encode()+b"\r\n\r\n"+payload)
         head, data = wire.split(b"\r\n\r\n", 1)
         return head.decode(), data.decode()
@@ -74,6 +77,20 @@ class HttpApiTests(unittest.TestCase):
         _, body = self.request("/api/models/download")
         progress = json.loads(body)
         self.assertEqual((progress["completed"], progress["total"]), (50, 100))
+
+    def test_cancel_download(self):
+        head, body = self.request("/api/models/download", method="DELETE")
+        self.assertIn("409 Conflict", head)
+        self.assertIn("no download is running", body)
+        head, body = self.request("/api/models/download", method="DELETE",
+                                  environment={"PROSPERO_TEST_DOWNLOADING": "1"})
+        self.assertIn("200 OK", head)
+        state = json.loads(body)
+        self.assertEqual((state["state"], state["cancelling"]), ("downloading", True))
+        _, body = self.request("/api/models/download")
+        self.assertIs(json.loads(body)["cancelling"], False)
+        _, page = self.request("/app.js")
+        self.assertIn("method:'DELETE'", page)
 
     def test_sse_unicode_usage_and_finish(self):
         body = {"model":"tiny.gguf", "messages":[{"role":"user","content":"x"}],

@@ -52,6 +52,13 @@ extern "C"
     {
         return "test";
     }
+    void prospero_https_set_stop(prospero_https *, prospero_https_stop, void *)
+    {
+    }
+    int scePthreadJoin(void *, void **)
+    {
+        return 0;
+    }
     int prospero_https_receive_buffer(void)
     {
         return 0;
@@ -75,6 +82,38 @@ int main()
     assert(!session.get("https://huggingface.co/model/resolve/main/missing.bin"));
     assert(current.load() == State::Failed);
     assert(std::strstr(current_status, "HTTP 404") != nullptr);
+    // Cancelling: only a running download can be cancelled; its partial files go, the
+    // repository's file list stays.
+    assert(!cancel() && !cancelling());
+    int placeholder = 0;
+    worker_thread = &placeholder;
+    current.store(State::Downloading);
+    total_bytes.store(200);
+    completed_bytes.store(50);
+    assert(cancel() && cancelling() && cancel_pending());
+    char line[160]{};
+    status(line, sizeof(line));
+    assert(std::strcmp(line, "Cancelling the download...") == 0);
+    char staging[] = "/tmp/prospero-cancel-XXXXXX";
+    assert(mkdtemp(staging));
+    const std::string nested = std::string(staging) + "/weights";
+    assert(::mkdir(nested.c_str(), 0777) == 0);
+    for (const std::string &file : {std::string(staging) + "/model.json.part", nested + "/a.bin"})
+    {
+        std::FILE *made = std::fopen(file.c_str(), "wb");
+        assert(made && std::fclose(made) == 0);
+    }
+    remove_tree(staging);
+    assert(access(staging, F_OK) != 0);
+    finish_cancelled(State::Ready);
+    worker_thread = nullptr;
+    cancel_requested.store(false);
+    assert(current.load() == State::Ready && !cancelling());
+    status(line, sizeof(line));
+    assert(std::strstr(line, "cancelled") != nullptr);
+    std::uint64_t completed_now = 1, total_now = 1;
+    progress(&completed_now, &total_now);
+    assert(completed_now == 0 && total_now == 0);
     Sha256 hash;
     hash.update("a", 1);
     hash.update("bc", 2);

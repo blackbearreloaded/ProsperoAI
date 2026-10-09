@@ -44,7 +44,8 @@ enum DialogAction
 {
     kUseModel = 1,
     kDeleteConversation,
-    kCloseApp
+    kCloseApp,
+    kCancelDownload
 };
 } // namespace
 
@@ -278,6 +279,13 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
         last_download_state_ != download_state)
         downloaded_models_pending_ = true;
     last_download_state_ = download_state;
+    if (cancel_pending_ && download_state != prospero_model_download::State::Downloading)
+    {
+        cancel_pending_ = false;
+        // It may have finished in the moment before the request reached it.
+        if (download_state != prospero_model_download::State::Complete)
+            toasts_.push(ui::StatusKind::info, "Download cancelled", "Nothing of it was kept.");
+    }
     if (downloaded_models_pending_ && app_.refresh_models())
     {
         downloaded_models_pending_ = false;
@@ -373,6 +381,8 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
                 accepted = app_.delete_session(static_cast<unsigned>(dialog_index_));
             else if (dialog_action_ == kCloseApp)
                 accepted = quit_ = !app_.busy() && !app_.state().unsaved;
+            else if (dialog_action_ == kCancelDownload)
+                accepted = cancel_pending_ = prospero_model_download::cancel();
             if (!accepted)
                 feedback.play(audio::Cue::error);
         }
@@ -458,6 +468,19 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
         keyboard_.enter();
         feedback.play(audio::Cue::modal_open);
     };
+    // A running download is cancelled from anywhere on the page, after a confirmation.
+    const auto ask_cancel = [&]
+    {
+        if (!prospero_model_download::cancelling())
+            open_dialog(kCancelDownload, -1, "Cancel this download?",
+                        "What has been downloaded so far is removed.", "Cancel download", true,
+                        feedback, "Keep downloading");
+    };
+    if (state == prospero_model_download::State::Downloading && input.is_pressed(Action::north))
+    {
+        ask_cancel();
+        return;
+    }
 
     if (filters_.active() == 0)
     {
@@ -478,6 +501,11 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
                          download_focus_ + 1);
         else if (input.is_pressed(Action::confirm))
         {
+            if (state == prospero_model_download::State::Downloading)
+            {
+                ask_cancel();
+                return;
+            }
             if (!has_download_results && (state == prospero_model_download::State::Ready ||
                                           state == prospero_model_download::State::SearchReady))
             {
@@ -529,7 +557,10 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
         {
             const auto preset_index = static_cast<std::size_t>(-index - 2);
             if (prospero_model_download::active_preset() == static_cast<int>(preset_index))
+            {
+                ask_cancel();
                 return;
+            }
             if (preset_saved_[preset_index])
             {
                 toasts_.push(ui::StatusKind::info, "Model bundle saved",
@@ -671,14 +702,15 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
 }
 
 void NativeUI::Impl::open_dialog(int action, int index, std::string title, std::string body,
-                                 const char *button, bool destructive, ui::Feedback &feedback)
+                                 const char *button, bool destructive, ui::Feedback &feedback,
+                                 const char *other)
 {
     dialog_action_ = action;
     dialog_index_ = index;
     ui::DialogContent content;
     content.title = std::move(title);
     content.body = std::move(body);
-    content.buttons = {{"Not now", ui::ButtonKind::secondary, false},
+    content.buttons = {{other, ui::ButtonKind::secondary, false},
                        {button, ui::ButtonKind::primary, destructive}};
     dialog_.open(std::move(content), feedback);
 }
@@ -1190,12 +1222,18 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
     }
     else if (tabs_.active() == 1)
     {
+        const bool downloading =
+            prospero_model_download::state() == prospero_model_download::State::Downloading;
+        bool cross_cancels = false;
         if (filters_.active() == 0)
         {
             const auto download_state = prospero_model_download::state();
             const bool has_results = prospero_model_download::candidate_count() > 0;
+            cross_cancels = downloading;
             const char *action =
-                has_results && download_state == prospero_model_download::State::Ready ? "Download"
+                downloading ? "Cancel download"
+                : has_results && download_state == prospero_model_download::State::Ready
+                    ? "Download"
                 : has_results && download_state == prospero_model_download::State::SearchReady
                     ? "Browse files"
                 : download_state == prospero_model_download::State::Ready ||
@@ -1209,13 +1247,15 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
         else if (!visible_models_.empty())
         {
             const int focused = visible_models_[static_cast<std::size_t>(models_.focus())];
-            hints[count++] = {ui::Button::cross,
-                              focused >= 0 ? "Use model"
-                              : prospero_model_download::active_preset() == -focused - 2
-                                  ? "Downloading..."
-                              : preset_saved_[-focused - 2] ? "Details"
-                                                            : "Download"};
+            cross_cancels =
+                focused < -1 && prospero_model_download::active_preset() == -focused - 2;
+            hints[count++] = {ui::Button::cross, focused >= 0                  ? "Use model"
+                                                 : cross_cancels               ? "Cancel download"
+                                                 : preset_saved_[-focused - 2] ? "Details"
+                                                                               : "Download"};
         }
+        if (downloading && !cross_cancels)
+            hints[count++] = {ui::Button::triangle, "Cancel download"};
         if (filters_.active() != 0)
         {
             hints[count++] = {ui::Button::square, "Search"};

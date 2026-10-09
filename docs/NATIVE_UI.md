@@ -24,7 +24,7 @@ the page, and a dialog shows its own.
 | Page | What it does |
 | --- | --- |
 | **Workspace** | Opens on a welcome page that says what is installed. Cross starts a conversation: with an empty prompt it opens the system keyboard (whose Done sends), with a typed one it sends. Square starts a new conversation. Left moves to the conversation list, where Cross opens one and Triangle deletes it after a confirmation. Triangle retries a failed answer or plays the latest saved audio. The right stick or Up and Down scroll. |
-| **Models** | The model under the focus leads the page; the grid below scrolls over any number of models. Square searches (a USB keyboard types straight into the search), Triangle steps through the kinds, Cross chooses a model after a confirmation. |
+| **Models** | The model under the focus leads the page; the grid below scrolls over any number of models. Square searches (a USB keyboard types straight into the search), L2 and R2 step through the kinds, Cross chooses a model after a confirmation. While a model is being downloaded, Triangle (or Cross on its card) cancels it after a confirmation; what was downloaded so far is removed. |
 | **Settings** | Appearance (Midnight or Daylight, three accents), Generation, Sound, Accessibility (reduced motion, high contrast, reading size) and About (version and credits). Circle returns to the categories. Changes apply at once and are saved in the background. |
 
 ## What the player sees and hears

@@ -72,7 +72,7 @@ struct NativeUI::Impl
     void handle_models(const InputFrame &input, ui::Feedback &feedback);
     void handle_settings(const InputFrame &input, ui::Feedback &feedback);
     void open_dialog(int action, int index, std::string title, std::string body, const char *button,
-                     bool destructive, ui::Feedback &feedback);
+                     bool destructive, ui::Feedback &feedback, const char *other = "Not now");
     void change_page(int page);
     void refresh_models();
     void build_form();
@@ -171,7 +171,7 @@ struct NativeUI::Impl
     bool keyboard_pending_ = false, quit_ = false;
     int download_focus_ = 0;
     prospero_model_download::State last_download_state_ = prospero_model_download::State::Idle;
-    bool downloaded_models_pending_ = false;
+    bool downloaded_models_pending_ = false, cancel_pending_ = false;
     std::array<bool, prospero_model_download::preset_count> preset_saved_{};
     unsigned revision_ = ~0U, font_revision_ = 0;
     int active_model_ = -1, catalog_count_ = -1, dialog_action_ = 0, dialog_index_ = -1;

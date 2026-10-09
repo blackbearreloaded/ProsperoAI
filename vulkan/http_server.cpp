@@ -640,9 +640,11 @@ void handle_model_download_status(const NetApi &api, int sock)
     prospero_model_download::progress(&completed, &total);
     char progress[200];
     std::snprintf(progress, sizeof(progress),
-                  "\",\"completed\":%llu,\"total\":%llu,\"active_preset\":%d,\"items\":[",
+                  "\",\"completed\":%llu,\"total\":%llu,\"active_preset\":%d,"
+                  "\"cancelling\":%s,\"items\":[",
                   static_cast<unsigned long long>(completed),
-                  static_cast<unsigned long long>(total), prospero_model_download::active_preset());
+                  static_cast<unsigned long long>(total), prospero_model_download::active_preset(),
+                  prospero_model_download::cancelling() ? "true" : "false");
     std::strncat(body, progress, sizeof(body) - std::strlen(body) - 1);
     for (std::size_t i = 0; i < prospero_model_download::candidate_count(); ++i)
     {
@@ -663,6 +665,18 @@ void handle_model_download_status(const NetApi &api, int sock)
     }
     std::strncat(body, "]}", sizeof(body) - std::strlen(body) - 1);
     send_json(api, sock, body);
+}
+
+// DELETE /api/models/download: the running download ends and its partial files are removed.
+void handle_model_download_cancel(const NetApi &api, int sock)
+{
+    if (!prospero_model_download::cancel())
+    {
+        send_status(api, sock, "409 Conflict", "application/json",
+                    "{\"error\":\"no download is running\"}");
+        return;
+    }
+    handle_model_download_status(api, sock);
 }
 
 void handle_model_presets(const NetApi &api, int sock, const char *body = nullptr)
@@ -891,6 +905,8 @@ void handle_connection(const NetApi &api, int sock)
         handle_model_presets(api, sock, body);
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/download") == 0)
         handle_model_download_status(api, sock);
+    else if (std::strcmp(method, "DELETE") == 0 && std::strcmp(path, "/api/models/download") == 0)
+        handle_model_download_cancel(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/search") == 0)
         handle_model_search_request(api, sock, body);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/browse") == 0)
