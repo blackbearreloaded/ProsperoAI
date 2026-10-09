@@ -8,7 +8,11 @@
 #include "audio/cues.hpp"
 #include "gfx/canvas.hpp"
 #include "gfx/renderer.hpp"
+#ifdef PROSPERO_UI_VULKAN
+#include "ui/display_vulkan.hpp"
+#else
 #include "platform/ps5/display_egl.hpp"
+#endif
 #include "platform/ps5/audio_out.hpp"
 #include "platform/ps5/system.hpp"
 #ifdef PS5_LLAMA_VULKAN
@@ -108,9 +112,11 @@ int main()
 {
     // This thread's large allocations stay out of the model runtimes' arena, and the
     // inference scratch takes its address range before the OpenGL runtime maps anything.
+#ifndef PROSPERO_UI_VULKAN
     ps5SetInterfaceThread();
     if (ps5_agc_backend_reserve_memory() != 0)
         hui::sys::log("[prosperoai] the inference scratch could not be reserved");
+#endif
     prospero_setup_sdl_memory();
     SDL_Init(0); // Existing media decoder, clock and IME helpers; no SDL video.
     hui::ps5::Display display;

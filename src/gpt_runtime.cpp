@@ -2,8 +2,10 @@
 
 #include "gpt_runtime.hpp"
 #include "model_metadata.hpp"
+#include "model_paths.hpp"
 #include <algorithm>
 #include <vector>
+#include <unistd.h>
 
 #if defined(PS5_MEDIA_AUDIO) && !defined(PS5_DUAL_BACKEND)
 #error "PS5 media routing requires the universal model backend"
@@ -476,7 +478,12 @@ void load_models()
         return;
     models_loaded = true;
 
-    const int directory = sceKernelOpen("/app0/models", 0, 0);
+    int directory = sceKernelOpen(prospero::kModelRoot, 0, 0);
+    for (unsigned retry = 0; directory < 0 && retry < 60; ++retry)
+    {
+        usleep(50000);
+        directory = sceKernelOpen(prospero::kModelRoot, 0, 0);
+    }
     int directory_bytes = -1;
     if (directory >= 0)
     {
@@ -501,13 +508,13 @@ void load_models()
                     char name[64];
                     char purpose[24];
                     char runtime[48];
-                    std::snprintf(root, sizeof(root), "/app0/models/%s", entry->d_name);
-                    std::snprintf(model_file, sizeof(model_file), "/app0/models/%s/model.ps5lm",
-                                  entry->d_name);
+                    std::snprintf(root, sizeof(root), "%s/%s", prospero::kModelRoot, entry->d_name);
+                    std::snprintf(model_file, sizeof(model_file), "%s/%s/model.ps5lm",
+                                  prospero::kModelRoot, entry->d_name);
                     std::snprintf(tokenizer_file, sizeof(tokenizer_file),
-                                  "/app0/models/%s/tokenizer.ps5tok", entry->d_name);
+                                  "%s/%s/tokenizer.ps5tok", prospero::kModelRoot, entry->d_name);
                     std::snprintf(metadata_file, sizeof(metadata_file),
-                                  "/app0/models/%s/model.json", entry->d_name);
+                                  "%s/%s/model.json", prospero::kModelRoot, entry->d_name);
                     read_model_metadata(metadata_file, entry->d_name, name, sizeof(name), purpose,
                                         sizeof(purpose), runtime, sizeof(runtime));
                     add_model(entry->d_name, name, purpose, root, model_file, tokenizer_file,
@@ -535,8 +542,8 @@ void load_models()
     char line[160];
     std::snprintf(line, sizeof(line),
                   "[prosperoai] models_found=%u directory_fd=%d "
-                  "directory_bytes=%d path=/app0/models\n",
-                  model_count, directory, directory_bytes);
+                  "directory_bytes=%d path=%s\n",
+                  model_count, directory, directory_bytes, prospero::kModelRoot);
     sceKernelDebugOutText(0, line);
 }
 } // namespace

@@ -1,5 +1,6 @@
 // Real model discovery, with paged directory reads and remapped host fixtures.
 #include "gpt_runtime.hpp"
+#include "model_paths.hpp"
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -18,12 +19,12 @@ extern "C"
     std::FILE *__wrap_fopen(const char *path, const char *mode)
     {
         const auto mapped =
-            std::string(path).find("/app0/models/") == 0 ? root + (path + 12) : std::string(path);
+            std::string(path).find(std::string(prospero::kModelRoot) + "/") == 0 ? root + (path + std::strlen(prospero::kModelRoot)) : std::string(path);
         return __real_fopen(mapped.c_str(), mode);
     }
     int sceKernelOpen(const char *path, int, int)
     {
-        assert(std::strcmp(path, "/app0/models") == 0);
+        assert(std::strcmp(path, prospero::kModelRoot) == 0);
         directory = opendir(root.c_str());
         return directory ? 1 : -1;
     }

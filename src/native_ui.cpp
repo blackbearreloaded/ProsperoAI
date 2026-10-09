@@ -92,7 +92,8 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
                        {"Text", 0, false, 1},
                        {"Image", 0, false, 2},
                        {"Audio", 0, false, 3},
-                       {"Voice", 0, false, 4}});
+                       {"Voice", 0, false, 4},
+                       {"Download", 0, false, 5}});
     filters_.set_bounds({732, 392, 1092, 60});
     filters_.set_focused(false);
     search_.style.max_rows = 0;
@@ -254,6 +255,11 @@ void NativeUI::Impl::announce(ui::Feedback &feedback)
 
 void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &feedback)
 {
+    prospero_model_download::poll();
+    if (prospero_model_download::state() != prospero_model_download::State::Loading)
+        search_.set_busy(false);
+    search_.set_placeholder(filters_.active() == 5 ? "Hugging Face repository (owner/name)"
+                                                  : "Search your models");
     const bool was_generating = app_.generating();
     app_.poll();
     if (!welcomed_)
@@ -394,6 +400,44 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
 
 void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedback)
 {
+    if (filters_.active() == 5)
+    {
+        const auto state = prospero_model_download::state();
+        if (input.is_pressed(Action::west))
+        {
+            search_open_ = true;
+            search_.set_active(true);
+            keyboard_.style.max_length = 128;
+            keyboard_.set_length(search_.length());
+            keyboard_.enter();
+            feedback.play(audio::Cue::modal_open);
+        }
+        else if (input.is_pressed(Action::up) && state == prospero_model_download::State::Ready)
+            download_focus_ = std::max(0, download_focus_ - 1);
+        else if (input.is_pressed(Action::down) && state == prospero_model_download::State::Ready)
+            download_focus_ = std::min(static_cast<int>(prospero_model_download::candidate_count()) - 1,
+                                       download_focus_ + 1);
+        else if (input.is_pressed(Action::confirm))
+        {
+            if (state == prospero_model_download::State::Ready)
+            {
+                if (!prospero_model_download::download(static_cast<std::size_t>(download_focus_)))
+                    feedback.play(audio::Cue::error);
+            }
+            else if (state != prospero_model_download::State::Loading &&
+                     state != prospero_model_download::State::Downloading)
+            {
+                if (prospero_model_download::browse(search_.text().c_str()))
+                {
+                    download_focus_ = 0;
+                    search_.set_busy(true);
+                }
+                else
+                    feedback.play(audio::Cue::error);
+            }
+        }
+        return;
+    }
     if (app_.state().models.empty())
     {
         // Nothing to filter, search or choose: the page says how to add a model.

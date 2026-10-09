@@ -54,6 +54,7 @@ bool api_authorized(const char *request) {
 }
 
 void handle_openai_models(const NetApi &api, int sock) {
+    gpt_runtime_refresh_models();
     ApiJson data = ApiJson::array();
     for (unsigned i = 0; i < gpt_runtime_model_count(); ++i)
         data.push_back({{"id", gpt_runtime_model_id(i)}, {"object", "model"},

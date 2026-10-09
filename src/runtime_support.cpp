@@ -3,10 +3,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <pthread.h>
 extern "C" int sceKernelUsleep(std::uint32_t microseconds);
+extern "C" int sceKernelDebugOutText(int channel, const char *text);
 extern "C" int ps5_agc_backend_reserve(void);
 extern "C" int sceSystemServiceHideSplashScreen(void);
 extern "C" void *mmap(void *address, std::size_t length, int protection, int flags, int descriptor,
@@ -128,6 +130,7 @@ void *ReallocTracked(void *allocation, std::size_t size)
 #ifdef PS5_LLAMA_VULKAN
 #define pthread_once prospero_pthread_once
 #define strtof prospero_strtof
+#define strtod prospero_strtod
 #define fseek prospero_fseek
 #define ftell prospero_ftell
 #define strcasestr prospero_strcasestr
@@ -156,9 +159,89 @@ extern "C" int pthread_once(pthread_once_t *once_control, void (*init_routine)(v
     return 0;
 }
 
+extern "C" double prospero_strtod(const char *value, char **end);
+
 extern "C" float strtof(const char *value, char **end)
 {
-    return static_cast<float>(strtod(value, end));
+    return static_cast<float>(prospero_strtod(value, end));
+}
+
+extern "C" double strtod(const char *value, char **end)
+{
+    const char *cursor = value;
+    const char *input_end = value + std::strlen(value);
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n' || *cursor == '\r' ||
+           *cursor == '\f' || *cursor == '\v')
+        ++cursor;
+    const char *number = cursor;
+    bool negative = false;
+    if (*cursor == '+' || *cursor == '-')
+        negative = *cursor++ == '-';
+    double result = 0;
+    int fractional_digits = 0;
+    bool has_digits = false;
+    while (cursor < input_end && *cursor >= '0' && *cursor <= '9')
+    {
+        has_digits = true;
+        result = result * 10 + (*cursor++ - '0');
+    }
+    if (cursor < input_end && *cursor == '.')
+    {
+        ++cursor;
+        while (cursor < input_end && *cursor >= '0' && *cursor <= '9')
+        {
+            has_digits = true;
+            result = result * 10 + (*cursor++ - '0');
+            ++fractional_digits;
+        }
+    }
+    if (!has_digits)
+    {
+        if (end)
+            *end = const_cast<char *>(value);
+        return 0;
+    }
+    int exponent = -fractional_digits;
+    if (cursor < input_end && (*cursor == 'e' || *cursor == 'E'))
+    {
+        const char *marker = cursor++;
+        bool exponent_negative = false;
+        if (cursor < input_end && (*cursor == '+' || *cursor == '-'))
+            exponent_negative = *cursor++ == '-';
+        if (cursor >= input_end || *cursor < '0' || *cursor > '9')
+            cursor = marker;
+        else
+        {
+            int parsed_exponent = 0;
+            while (cursor < input_end && *cursor >= '0' && *cursor <= '9')
+            {
+                parsed_exponent = parsed_exponent < 10000
+                                      ? parsed_exponent * 10 + (*cursor - '0')
+                                      : 10000;
+                ++cursor;
+            }
+            exponent += exponent_negative ? -parsed_exponent : parsed_exponent;
+        }
+    }
+    if (exponent > 308)
+        result = std::numeric_limits<double>::infinity();
+    else if (exponent < -324)
+        result = 0;
+    else if (exponent)
+        result *= std::pow(10.0, exponent);
+    if (end)
+        *end = const_cast<char *>(cursor == number ? value : cursor);
+#ifdef PS5_LLAMA_VULKAN
+    if (cursor != input_end)
+    {
+        char line[128];
+        std::snprintf(line, sizeof(line), "[ProsperoAI] strtod scanned=%td size=%td first=%02x\n",
+                      cursor - value, input_end - value,
+                      static_cast<unsigned char>(*input_end));
+        sceKernelDebugOutText(0, line);
+    }
+#endif
+    return negative ? -result : result;
 }
 
 extern "C" int fseek(std::FILE *file, long offset, int origin)

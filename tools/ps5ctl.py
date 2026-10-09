@@ -5,6 +5,7 @@
   ps5ctl.py status
   ps5ctl.py payload PATH.elf            send an ELF to the payload port (9021)
   ps5ctl.py ftp ls [REMOTE]             list a directory over the homebrew FTP server
+  ps5ctl.py ftp get REMOTE LOCAL      download a binary file without text decoding
   ps5ctl.py ftp put LOCAL REMOTE        upload a file
   ps5ctl.py ftp rm REMOTE [--yes]       delete a file (or an empty directory with --dir)
   ps5ctl.py title rm TITLE_ID [--yes]   delete /data/homebrew/TITLE_ID* entries
@@ -112,6 +113,17 @@ def cmd_ftp(args):
             print(ftp.size(args.remote))
         elif args.action == "chmod":
             print(ftp.sendcmd(f"SITE CHMOD {args.mode} {args.remote}"))
+        elif args.action == "mkdir":
+            print(ftp.mkd(args.remote))
+        elif args.action == "move":
+            require_yes(args)
+            print(ftp.rename(args.source, args.destination))
+        elif args.action == "get":
+            target = pathlib.Path(args.local)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("wb") as output:
+                ftp.retrbinary(f"RETR {args.remote}", output.write)
+            print(f"downloaded {args.remote} -> {target}")
         elif args.action == "put":
             with open(args.local, "rb") as fh:
                 ftp.storbinary(f"STOR {args.remote}", fh, blocksize=256 * 1024)
@@ -356,6 +368,15 @@ def main(argv=None):
     fchmod = fsub.add_parser("chmod")
     fchmod.add_argument("mode", choices=("644", "755", "777"))
     fchmod.add_argument("remote")
+    fmkdir = fsub.add_parser("mkdir")
+    fmkdir.add_argument("remote")
+    fmove = fsub.add_parser("move")
+    fmove.add_argument("source")
+    fmove.add_argument("destination")
+    fmove.add_argument("--yes", action="store_true")
+    fget = fsub.add_parser("get")
+    fget.add_argument("remote")
+    fget.add_argument("local")
     fput = fsub.add_parser("put")
     fput.add_argument("local")
     fput.add_argument("remote")

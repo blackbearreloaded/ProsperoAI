@@ -127,7 +127,7 @@ make llama-vulkan-title # tiny GGUF Vulkan/CPU token validation
 make app-vulkan         # complete UI/HTTP app in test slot PPSA99023
 ```
 
-Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. The Vulkan app discovers raw GGUF files under `/app0/models` and `/data/homebrew/prosperoai/models`; its Models screen can browse a public Hugging Face repository and download a verified GGUF to the latter directory. Downloads are limited to 7 GiB to leave room for Vulkan weights and context memory; that limit does not guarantee every model/context combination fits. The original AGC backend still uses prepared model folders. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Console testing is authorized by the user’s task request as described in `AGENTS.md`; remove stale test registration before replacing a registered image. Never overwrite PPSA99004 for testing.
+Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. Production Vulkan and AGC runtimes use the shared `/data/homebrew/prosperoai/models` directory: Vulkan discovers GGUF files and AGC discovers prepared model folders. The isolated loading benchmark still packages its fixture inside `/app0/models`. The Vulkan Models screen can browse public Hugging Face repositories and download verified GGUF files to the shared directory. Downloads are limited to 7 GiB to leave room for Vulkan weights and context memory; that limit does not guarantee every model/context combination fits. The test title runs inside a filesystem sandbox, so its shared directory is exposed by the narrowly scoped nullfs mount payload. Build it with `bash tools/build-model-mount.sh` and load it once after each console boot; it mounts only the configured ProsperoAI test title while that title is running. Its default target is PPSA99023. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Never overwrite PPSA99004 for testing.
 
 Build jobs default to available CPUs (four on this host). Compiler cache defaults to `build/ccache`, including host tools. Incremental PS5 llama library build measured about 1.6 seconds with no changes; model copies and multi-gigabyte image compression still take time. Host iGPU is not used for compilation.
 
@@ -153,3 +153,10 @@ Installation and repeated launches within a console-testing task are covered by 
 The Vulkan build also exposes `/v1/models` and `/v1/chat/completions`, including SSE and portable function calls. See [OpenCode configuration](OPENCODE.md) for bearer keys, context sizing and protocol limits. Image, audio and speech remain on the existing AGC build; their Vulkan migration is planned.
 
 Default Vulkan backend logging forwards WARN/ERROR. Create `/app0/vulkan_verbose_logging.txt` only for detailed diagnosis; synchronous full debug output materially slows loading. For first-load-only benchmark runs, add `/app0/load_parallel_only.txt` (three optimized loads per launch).
+
+## Native UI Vulkan presentation probe
+
+`UI_PROBE=1 bash tools/build-vulkan-smoke.sh` builds an independent display probe
+in PPSA99019. This verifies graphics presentation without OpenGL or a model;
+upstream UI design remains unchanged. See [migration stages](VK_UI_MIGRATION.md)
+and [current evidence](VK_ACTIVE.md).

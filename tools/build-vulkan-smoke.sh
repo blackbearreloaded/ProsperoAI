@@ -8,6 +8,10 @@ archive="$ref/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a"
 work="$root/build/vulkan-smoke"
 model_test=${LLAMA_SMOKE:-0}
 app_test=${PROSPERO_VULKAN_APP:-0}
+if [[ $app_test != 0 ]]; then
+    export VULKAN_PACKAGE=${VULKAN_PACKAGE:-1}
+    exec bash "$root/tools/build-vulkan-native.sh"
+fi
 [[ $app_test == 0 ]] || model_test=1
 [[ $model_test == 0 ]] || work="$root/build/llama-vulkan-title"
 [[ $app_test == 0 ]] || work="$root/build/prospero-vulkan"
@@ -17,14 +21,21 @@ if [[ ${LOAD_BENCHMARK:-0} == 1 ]]; then
     title=PPSA99019
     work="$root/build/vulkan-load-benchmark"
 fi
+if [[ ${UI_PROBE:-0} == 1 ]]; then
+    [[ $model_test == 0 && $app_test == 0 && ${LOAD_BENCHMARK:-0} == 0 ]] || { echo "UI_PROBE must run independently" >&2; exit 2; }
+    title=PPSA99019
+    work="$root/build/vulkan-ui-probe"
+fi
 app="$work/$title"
 tool="$root/build/host/ps5-native-tool"
 mkdir -p "$work/obj" "$work/stubs" "$app/sce_sys" "$app/sce_module"
 cc() { PS5_PAYLOAD_SDK="$sdk" USE_CCACHE=0 sh "$root/tooling/prospero-clang18" "$@"; }
 llama_inputs=()
 if [[ $model_test == 0 ]]; then
+    source_name=vulkan-smoke
+    [[ ${UI_PROBE:-0} == 0 ]] || source_name=vulkan-ui-probe
     cc -std=c11 -O2 -Wall -Wextra -Werror -ffunction-sections -fdata-sections \
-        -I "$root/.deps/Vulkan-Headers/include" -c "$root/tools/vulkan-smoke.c" -o "$work/obj/smoke.o"
+        -I "$root/.deps/Vulkan-Headers/include" -c "$root/tools/$source_name.c" -o "$work/obj/smoke.o"
 else
     if [[ $app_test == 0 ]]; then
         test_source=llama-vulkan-smoke

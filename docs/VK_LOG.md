@@ -204,3 +204,22 @@ untouched, no reboot. Native OpenGL/RADV linking remains unresolved.
 User requested standing task-scoped console authorization in AGENTS.md;
 repeated relevant test deployments/launches/cleanup no longer ask each step.
 Separate permission remains for reboot, unrelated data and main PPSA99004.
+
+## 2026-10-09 — native UI Vulkan presentation stage
+
+User requested gradual OpenGL-to-Vulkan UI migration, preserving upstream design.
+Added independent UI_PROBE target in PPSA99019 with VK_KHR_display presentation,
+graphics queue, color-attachment render pass and a diagnostic attachment clear.
+No EGL, OpenGL, UI redesign or model is included. Build/sign/package and ELF
+foundation checks pass (same NEEDED as working standalone, entry0x120,14 headers).
+
+Closed PPSA99023 temporarily; old PPSA99019 benchmark replacement initially
+returned EBUSY until active app closed. Verified registration404 and source
+absence before uploading the20MiB UI probe. Automatic rescan registered it.
+Launch0x0000c018, PID118: all Vulkan init/acquire/submit/present calls return0;
+120 frames presented and process stayed alive. Source report saved at
+build/vulkan-ui-probe/console-results.txt; klog /tmp/prospero-ui-probe-klog.txt.
+No screenshot: active Remote Play manager/session unavailable. API success does
+not prove pixel correctness, UI parity, text rendering or inference concurrency.
+Probe then closed and optimized legacy PPSA99023 relaunched. No reboot or main
+PPSA99004 changes. Migration stages are documented in VK_UI_MIGRATION.md.

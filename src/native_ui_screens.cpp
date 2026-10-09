@@ -336,6 +336,40 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
 {
     auto &list = canvas.list;
     const auto &state = app_.state();
+    if (filters_.active() == 5)
+    {
+        label(list, "HUGGING FACE", kLeft, 222, palette_.accent);
+        text(list, "Bring a model home.", 92, 300, 62, palette_.ink, true);
+        text(list, "Enter a public repository as owner/name, then choose a verified GGUF file.",
+             kLeft, 346, 25, palette_.muted);
+        search_.draw(canvas);
+        text(list, "Enter repository  ·  Square: edit  ·  Cross: browse or download", kLeft, 482,
+             22, palette_.muted);
+        char status[192]{};
+        prospero_model_download::status(status, sizeof(status));
+        const auto downloader_state = prospero_model_download::state();
+        if (downloader_state == prospero_model_download::State::Loading ||
+            downloader_state == prospero_model_download::State::Downloading)
+            spinner(list, kLeft + 12, 548, 9, palette_.accent);
+        text(list, status, kLeft + 32, 556, 23,
+             downloader_state == prospero_model_download::State::Failed ? palette_.bad : palette_.muted);
+        if (downloader_state == prospero_model_download::State::Ready)
+        {
+            for (std::size_t i = 0; i < prospero_model_download::candidate_count() && i < 8; ++i)
+            {
+                prospero_model_download::Candidate candidate{};
+                if (!prospero_model_download::candidate(i, &candidate)) continue;
+                const float y = 612.0f + static_cast<float>(i) * 42.0f;
+                const Color ink = static_cast<int>(i) == download_focus_ ? palette_.accent : palette_.ink;
+                if (static_cast<int>(i) == download_focus_) list.circle(kLeft + 6, y - 7, 4, ink);
+                char row[220];
+                std::snprintf(row, sizeof(row), "%s  ·  %llu MiB", candidate.name,
+                              static_cast<unsigned long long>(candidate.size / (1024 * 1024)));
+                text(list, fit(row, 22, 1640, false), kLeft + 24, y, 22, ink);
+            }
+        }
+        return;
+    }
     if (state.models.empty())
     {
         // Nothing to browse: say what to do about it.
@@ -349,11 +383,11 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
                       card.cx(), card.y + 262, 40, palette_.ink, true, gfx::Align::center);
                  if (state.initialized)
                  {
-                     text(list, "Copy a model folder into the app's models folder on this console,",
+                     text(list, "Copy your models into the shared model folder on this console,",
                           card.cx(), card.y + 316, 25, palette_.muted, false, gfx::Align::center);
-                     text(list, "then open ProsperoAI again. Nothing is downloaded by the app.",
+                     text(list, "then open ProsperoAI again.",
                           card.cx(), card.y + 352, 25, palette_.muted, false, gfx::Align::center);
-                     ui::text(list, fonts_.mono, "models/<model-id>/model.json", card.cx(),
+                     ui::text(list, fonts_.mono, "/data/homebrew/prosperoai/models", card.cx(),
                               card.y + 404, 22, palette_.accent, gfx::Align::center);
                  }
              });

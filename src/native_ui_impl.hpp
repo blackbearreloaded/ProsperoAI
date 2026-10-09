@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "native_ui.hpp"
+#include "model_downloader_ps5.hpp"
 #include "ui/components/dialog.hpp"
 #include "ui/components/form.hpp"
 #include "ui/components/grid.hpp"
@@ -160,6 +161,7 @@ struct NativeUI::Impl
     bool welcomed_ = false, was_busy_ = false;
     bool conversation_ = false, search_open_ = false, rail_ = false, category_focus_ = false;
     bool keyboard_pending_ = false, quit_ = false;
+    int download_focus_ = 0;
     unsigned revision_ = ~0U, font_revision_ = 0;
     int active_model_ = -1, catalog_count_ = -1, dialog_action_ = 0, dialog_index_ = -1;
     int category_ = 0, pending_model_ = -1, hero_model_ = -1;

@@ -2,6 +2,25 @@
 
 Updated: 2026-10-09. Plan: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
 
+## Native UI Vulkan port — first stage (2026-10-09)
+
+- User requested a gradual native UI port to Vulkan and explicitly requires
+  unchanged upstream design. Work now follows this request rather than the
+  earlier proposed OpenGL+RADV reconciliation probe.
+- Added independent `UI_PROBE=1` build, test slot PPSA99019, no EGL/OpenGL/model.
+  Uses VK_KHR_display, graphics queue, swapchain and color-attachment render pass.
+- PS5 launch `0x0000c018`, PID118. All initialization calls and 120 consecutive
+  submissions/presents succeeded; process stayed alive. Report:
+  `build/vulkan-ui-probe/console-results.txt`, klog `/tmp/prospero-ui-probe-klog.txt`.
+- NEEDED matches the working standalone benchmark, entry0x120 and 14 headers.
+  Build/sign/package, shell syntax and whitespace checks passed.
+- No screenshot captured: existing Remote Play manager/session unavailable.
+  Do not claim pixel correctness or native UI parity from API success alone.
+- Probe closed after testing; optimized legacy app PPSA99023 relaunched.
+- Next stage: existing upstream draw-list geometry and font atlases on Vulkan,
+  with pixel/readback and visual comparison; then backdrop/glass and inference
+  concurrency. [Scope and stages](VK_UI_MIGRATION.md). Product design unchanged.
+
 ## Status after the midnight-ui merge (current)
 
 Upstream `main` merged PR #6 ("midnight-ui"): RmlUi is gone, replaced by a native

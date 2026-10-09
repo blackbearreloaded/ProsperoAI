@@ -8,7 +8,7 @@ chunks, finish reasons, usage, and `[DONE]`. The existing console layout is unch
 
 Build with `make app-vulkan-folder`. Install raw GGUF models under the app's `models/`
 folder or use the Vulkan app's Models screen to browse a public Hugging Face repository and
-download a model. Downloads are saved to `/data/homebrew/prosperoai/models`; the runtime
+download a model. Vulkan GGUF and AGC prepared models are stored in the shared `/data/homebrew/prosperoai/models` directory; the runtime
 registers them immediately and returns their IDs from `/v1/models`. Use the exact model ID
 returned by `/v1/models`.
 

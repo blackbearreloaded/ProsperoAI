@@ -502,7 +502,7 @@ void App::work()
             result_.models.empty() ? "No models are installed yet" : "Your library is ready";
         break;
     case Job::Select:
-#ifndef PROSPERO_HOST
+#if !defined(PROSPERO_HOST) && !defined(PS5_LLAMA_VULKAN)
         ps5_agc_backend_reserve();
 #endif
         result_.ready = gpt_runtime_select_model(argument_) && gpt_runtime_prepare() == 0;

@@ -13,6 +13,9 @@
 #include "http_server.hpp"
 
 #include "gpt_runtime.hpp"
+#if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+#include "model_downloader_ps5.hpp"
+#endif
 
 #include <cstdint>
 #include <cstdio>
@@ -347,6 +350,49 @@ void send_json(const NetApi &api, int sock, const char *json)
     send_status(api, sock, "200 OK", "application/json", json);
 }
 
+#ifdef PROSPERO_UI_VULKAN
+#ifndef PROSPERO_WEB_ASSET_ROOT
+#define PROSPERO_WEB_ASSET_ROOT "/app0/assets/web/"
+#endif
+// Public presentation assets only; model and generation routes retain bearer authentication.
+bool serve_ui_asset(const NetApi &api, int sock, const char *path)
+{
+    struct Asset { const char *route; const char *file; const char *type; };
+    static const Asset assets[] = {
+        {"/", "index.html", "text/html; charset=utf-8"},
+        {"/app.css", "app.css", "text/css; charset=utf-8"},
+        {"/app.js", "app.js", "text/javascript; charset=utf-8"},
+        {"/fonts/Inter-Regular.ttf", "fonts/Inter-Regular.ttf", "font/ttf"},
+        {"/fonts/Inter-SemiBold.ttf", "fonts/Inter-SemiBold.ttf", "font/ttf"},
+        {"/fonts/Montserrat-Medium.ttf", "fonts/Montserrat-Medium.ttf", "font/ttf"},
+    };
+    for (const auto &asset : assets)
+    {
+        if (std::strcmp(path, asset.route) != 0) continue;
+        const std::string filename = std::string(PROSPERO_WEB_ASSET_ROOT) + asset.file;
+        FILE *file = std::fopen(filename.c_str(), "rb");
+        if (!file) { send_status(api, sock, "404 Not Found", "text/plain", "UI asset unavailable"); return true; }
+        std::fseek(file, 0, SEEK_END);
+        const long size = std::ftell(file);
+        std::rewind(file);
+        if (size < 0 || size > 8 * 1024 * 1024) { std::fclose(file); send_status(api, sock, "500 Internal Server Error", "text/plain", "UI asset unavailable"); return true; }
+        char header[512];
+        std::snprintf(header, sizeof(header),
+            "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n"
+            "X-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\n"
+            "Content-Security-Policy: default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; frame-ancestors 'none'\r\nConnection: close\r\n\r\n",
+            asset.type, size);
+        send_all(api, sock, header, std::strlen(header));
+        char buffer[16384];
+        for (std::size_t count; (count = std::fread(buffer, 1, sizeof(buffer), file)) != 0;)
+            send_all(api, sock, buffer, count);
+        std::fclose(file);
+        return true;
+    }
+    return false;
+}
+#endif
+
 const char kChatPage[] =
     "<!doctype html><html><head><meta charset=\"utf-8\">"
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -516,6 +562,73 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
 
 #include "openai_api.inc"
 
+#if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+void handle_model_download_status(const NetApi &api, int sock)
+{
+    prospero_model_download::poll();
+    char status[192]{};
+    prospero_model_download::status(status, sizeof(status));
+    char body[4096] = "{\"state\":\"";
+    const char *state = "idle";
+    switch (prospero_model_download::state()) {
+    case prospero_model_download::State::Loading: state = "loading"; break;
+    case prospero_model_download::State::Ready: state = "ready"; break;
+    case prospero_model_download::State::Downloading: state = "downloading"; break;
+    case prospero_model_download::State::Complete: state = "complete"; break;
+    case prospero_model_download::State::Failed: state = "failed"; break;
+    default: break;
+    }
+    std::strncat(body, state, sizeof(body) - std::strlen(body) - 1);
+    std::strncat(body, "\",\"status\":\"", sizeof(body) - std::strlen(body) - 1);
+    json_append_escaped(body, sizeof(body), status);
+    std::strncat(body, "\",\"items\":[", sizeof(body) - std::strlen(body) - 1);
+    for (std::size_t i = 0; i < prospero_model_download::candidate_count(); ++i) {
+        prospero_model_download::Candidate candidate{};
+        if (!prospero_model_download::candidate(i, &candidate)) continue;
+        char item[512];
+        std::snprintf(item, sizeof(item), "%s{\"name\":\"", i ? "," : "");
+        std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
+        json_append_escaped(body, sizeof(body), candidate.name);
+        std::snprintf(item, sizeof(item), "\",\"size\":%llu}",
+                      static_cast<unsigned long long>(candidate.size));
+        std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
+    }
+    std::strncat(body, "]}", sizeof(body) - std::strlen(body) - 1);
+    send_json(api, sock, body);
+}
+
+void handle_model_download_action(const NetApi &api, int sock, const char *body,
+                                  bool browse_repository)
+{
+    bool accepted = false;
+    if (browse_repository) {
+        char repository[160]{};
+        if (!json_find_string(body, "repository", repository, sizeof(repository))) {
+            send_status(api, sock, "400 Bad Request", "application/json",
+                        "{\"error\":\"repository is required as owner/name\"}");
+            return;
+        }
+        accepted = prospero_model_download::browse(repository);
+    } else {
+        const char *value = json_value_start(body, "index");
+        char *end = nullptr;
+        const long index = value ? std::strtol(value, &end, 10) : -1;
+        if (!value || end == value || index < 0 || index > 7) {
+            send_status(api, sock, "400 Bad Request", "application/json",
+                        "{\"error\":\"a valid GGUF item index is required\"}");
+            return;
+        }
+        accepted = prospero_model_download::download(static_cast<std::size_t>(index));
+    }
+    if (!accepted) {
+        send_status(api, sock, "409 Conflict", "application/json",
+                    "{\"error\":\"downloader is busy or the request is invalid\"}");
+        return;
+    }
+    handle_model_download_status(api, sock);
+}
+#endif
+
 std::size_t read_request(const NetApi &api, int sock, char *buffer, std::size_t capacity)
 {
     std::size_t total = 0;
@@ -600,6 +713,13 @@ void handle_connection(const NetApi &api, int sock)
     const char *header_end = std::strstr(request, "\r\n\r\n");
     const char *body = header_end != nullptr ? header_end + 4 : "";
 
+#ifdef PROSPERO_UI_VULKAN
+    if (std::strcmp(method, "GET") == 0 && serve_ui_asset(api, sock, path))
+    {
+        api.socket_close(sock);
+        return;
+    }
+#endif
     if (!api_authorized(request))
         openai_error(api, sock, "401 Unauthorized", "invalid_api_key", "A valid bearer API key is required.");
 #ifdef PS5_LLAMA_VULKAN
@@ -607,6 +727,14 @@ void handle_connection(const NetApi &api, int sock)
         handle_openai_models(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/v1/chat/completions") == 0)
         handle_openai_chat(api, sock, body);
+#endif
+#if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+    else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/download") == 0)
+        handle_model_download_status(api, sock);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/browse") == 0)
+        handle_model_download_action(api, sock, body, true);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/download") == 0)
+        handle_model_download_action(api, sock, body, false);
 #endif
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/") == 0)
         send_status(api, sock, "200 OK", "text/html; charset=utf-8", kChatPage);

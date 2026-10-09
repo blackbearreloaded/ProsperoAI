@@ -3,6 +3,7 @@
 #ifdef PS5_LLAMA_VULKAN
 #include "model_downloader_ps5.hpp"
 #include "gpt_runtime.hpp"
+#include "model_paths.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -38,7 +39,7 @@ int scePthreadJoin(void *, void **);
 namespace prospero_model_download {
 namespace {
 using Json = nlohmann::json;
-constexpr const char *kModelRoot = "/data/homebrew/prosperoai/models";
+constexpr const char *kModelRoot = prospero::kModelRoot;
 constexpr std::uint64_t kMaxCatalogBytes = 8 * 1024 * 1024;
 // Keep enough headroom for Vulkan allocations and KV cache on the console.
 constexpr std::uint64_t kMaxModelBytes = 7ULL * 1024 * 1024 * 1024;

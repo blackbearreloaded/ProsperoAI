@@ -18,6 +18,7 @@ class HttpApiTests(unittest.TestCase):
         if not compiler or not (ROOT / ".deps/llama.cpp/vendor/nlohmann/json.hpp").exists():
             raise unittest.SkipTest("C++ compiler and make deps required")
         subprocess.run([compiler, "-std=c++20", "-O1", "-pthread", "-ffunction-sections", "-fdata-sections",
+                        '-DPROSPERO_WEB_ASSET_ROOT="'+str(ROOT / 'assets/web')+'/"',
                         "-Wl,--gc-sections", "-I"+str(ROOT / "vulkan"), "-I"+str(ROOT / "include"),
                         "-I"+str(ROOT / ".deps/llama.cpp/vendor"),
                         str(ROOT / "tests/http_api_harness.cpp"), "-o", str(cls.binary)], check=True)
@@ -44,6 +45,22 @@ class HttpApiTests(unittest.TestCase):
         data = json.loads(body)
         self.assertEqual(data["model"], "second.gguf")
         self.assertEqual(data["usage"]["total_tokens"], 14)
+
+    def test_public_ui_preserves_private_api(self):
+        header, body = self.request("/", key="private")
+        self.assertIn("200 OK", header)
+        self.assertIn("Content-Security-Policy:", header)
+        self.assertIn('id="workspace"', body)
+        header, body = self.request("/app.js", key="private")
+        self.assertIn("200 OK", header)
+        self.assertIn("/v1/chat/completions", body)
+        self.assertIn("/api/models/browse", body)
+        for route in ("/v1/models", "/api/tags", "/api/models/download",
+                      "/../api_key.txt", "/fonts/../../api_key.txt"):
+            header, _ = self.request(route, key="private")
+            self.assertIn("401 Unauthorized", header)
+        header, _ = self.request("/../api_key.txt")
+        self.assertIn("404 Not Found", header)
 
     def test_sse_unicode_usage_and_finish(self):
         body = {"model":"tiny.gguf", "messages":[{"role":"user","content":"x"}],
@@ -103,7 +120,7 @@ class HttpApiTests(unittest.TestCase):
         self.assertNotIn("tool_calls", json.loads(body)["choices"][0]["message"])
 
     def test_bearer_auth_on_all_routes(self):
-        for route in ["/v1/models", "/api/tags", "/"]:
+        for route in ["/v1/models", "/api/tags", "/api/models/download"]:
             head, _ = self.request(route, key="secret")
             self.assertIn("401", head)
         head, _ = self.request("/v1/models", key="secret", headers=["authorization: Bearer secret"])

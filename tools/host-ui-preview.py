@@ -12,7 +12,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD = ROOT / "build/ui-preview"
+VULKAN = "--vulkan" in sys.argv
+BUILD = ROOT / ("build/ui-preview-vulkan" if VULKAN else "build/ui-preview")
 BUILD.mkdir(parents=True, exist_ok=True)
 arguments = [value for value in sys.argv[1:] if not value.startswith("--")]
 OUTPUT = Path(arguments[0]) if arguments else BUILD / "screenshots"
@@ -34,10 +35,17 @@ sources = [ROOT / "src/native_app.cpp", ROOT / "src/native_ui.cpp",
            ROOT / "src/font_set.cpp", ROOT / "src/media_preview.cpp",
            ROOT / "src/dev_script.cpp",
            ROOT / "host/ui_preview.cpp", ROOT / "host/platform_host.cpp", *kit_sources]
+if VULKAN:
+    subprocess.run([sys.executable, str(ROOT / "tools/prepare-vulkan-ui-shaders.py"),
+                    '--kit', str(KIT), '--output', str(BUILD / 'generated')], check=True)
+    sources = [p for p in sources if p.name != 'gl_program.cpp']
+    sources += [ROOT / 'vulkan/ui/backend.cpp', ROOT / 'vulkan/ui/program.cpp']
 cxx = os.environ.get("HOST_CXX", "clang++")
 flags = ["-std=c++20", "-O2", "-g", "-fno-exceptions", "-fno-rtti", "-DGL_GLEXT_PROTOTYPES",
          "-DPROSPERO_HOST", f'-DPROSPERO_SETTINGS_PATH="{BUILD / "settings.cfg"}"',
          "-I" + str(ROOT / "include"), "-I" + str(ROOT / "src"), "-I" + str(KIT)]
+if VULKAN:
+    flags += ['-DPROSPERO_UI_VULKAN', '-I' + str(ROOT / 'vulkan/ui'), '-I' + str(BUILD / 'generated')]
 flags += os.environ.get("HOST_PREVIEW_CXXFLAGS", "").split()
 headers_time = max(p.stat().st_mtime for base in (KIT, ROOT / "include", ROOT / "src")
                    for p in base.rglob("*.hpp"))
@@ -54,7 +62,7 @@ with ThreadPoolExecutor(max_workers=int(os.environ.get("BUILD_JOBS", "6"))) as p
     objects = list(pool.map(compile_source, sources))
 binary = BUILD / "prospero-ui-preview"
 subprocess.run([cxx, *os.environ.get("HOST_PREVIEW_CXXFLAGS", "").split(), *objects, "-pthread",
-                "-lEGL", "-lGL", "-Wl,--wrap=fopen", "-o", str(binary)], check=True)
+                *(["-ldl"] if VULKAN else ["-lEGL", "-lGL"]), "-Wl,--wrap=fopen", "-o", str(binary)], check=True)
 command = [str(binary), str(FONTS), str(OUTPUT)]
 if "--reel" in sys.argv:
     encoder = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo",
