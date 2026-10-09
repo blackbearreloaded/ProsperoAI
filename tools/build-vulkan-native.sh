@@ -74,6 +74,31 @@ for index in "${!objects[@]}"; do
    objects[$index]="${objects[$index]%.o}.sd.o";;
  esac
 done
+# The model downloader's HTTPS (vulkan/net): libcurl with OpenSSL, libpsl and zstd from the
+# pinned PacBrew prefix, linked into one object with console_curl.c. What that file puts in
+# place of libc for them (name lookup, fcntl on sockets, a few more functions) gets a name of
+# its own there, so the rest of the app keeps the functions it had. zlib is not taken from
+# the prefix: the Vulkan driver's archive already has it.
+pacbrew=$(bash "$root/tools/setup-pacbrew-dependencies.sh" --all | tail -n 1)/user/homebrew
+[[ -f $pacbrew/lib/libcurl.a && -f $pacbrew/lib/libcrypto.a ]] || {
+ echo "libcurl is missing from the PacBrew prefix ($pacbrew): run make pacbrew" >&2; exit 2; }
+net_objects=()
+for name in console_curl https_get; do
+ cc -std=c11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -DCURL_STATICLIB=1 \
+  -I "$pacbrew/include" -I "$root/vulkan/net" -c "$root/vulkan/net/$name.c" -o "$work/obj/net_$name.o"
+ net_objects+=("$work/obj/net_$name.o")
+done
+net_rename=(--redefine-sym fcntl=__wrap_fcntl --redefine-sym __real_fcntl=fcntl)
+for name in getaddrinfo freeaddrinfo gai_strerror gethostbyname getnameinfo fnmatch getpwuid_r \
+  _setjmp _longjmp openlog closelog dladdr if_nametoindex pipe2 recvmmsg sendmmsg popen pclose \
+  isatty mkstemp gmtime_r ZSTD_trace_compress_begin ZSTD_trace_compress_end \
+  ZSTD_trace_decompress_begin ZSTD_trace_decompress_end; do
+ net_rename+=(--redefine-sym "$name=console_curl_$name")
+done
+ld.lld-18 -r -o "$work/obj/net.all.o" "${net_objects[@]}" --start-group "$pacbrew/lib/libcurl.a" \
+ "$pacbrew/lib/libpsl.a" "$pacbrew/lib/libssl.a" "$pacbrew/lib/libcrypto.a" "$pacbrew/lib/libzstd.a" --end-group
+llvm-objcopy-18 "${net_rename[@]}" "$work/obj/net.all.o" "$work/obj/net.o"
+objects+=("$work/obj/net.o")
 for name in app_crt app_cpp_runtime; do
  cc -std=c++20 -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections -c "$ref/tooling/native/$name.cpp" -o "$work/obj/$name.o"
 done

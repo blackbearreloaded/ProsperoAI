@@ -3,12 +3,15 @@
 #ifdef PS5_LLAMA_VULKAN
 #include "model_downloader_ps5.hpp"
 #include "gpt_runtime.hpp"
+#include "debug_log.hpp"
 #include "model_paths.hpp"
+#include "net/https_get.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <cctype>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -19,22 +22,6 @@
 #include <nlohmann/json.hpp>
 
 extern "C" {
-int sceNetPoolCreate(const char *, int, int);
-int sceNetPoolDestroy(int);
-int sceSslInit(std::size_t);
-int sceSslTerm(int);
-int sceHttp2Init(int, int, std::size_t, int);
-int sceHttp2Term(int);
-int sceHttp2CreateTemplate(int, const char *, int, int);
-int sceHttp2DeleteTemplate(int);
-int sceHttp2CreateRequestWithURL(int, const char *, const char *, std::uint64_t);
-int sceHttp2DeleteRequest(int);
-int sceHttp2SendRequest(int, const void *, std::size_t);
-int sceHttp2GetStatusCode(int, int *);
-int sceHttp2SetAutoRedirect(int, int);
-int sceHttp2GetAllResponseHeaders(int, char **, std::size_t *);
-int sceHttp2GetResponseContentLength(int, std::uint64_t *);
-int sceHttp2ReadData(int, void *, std::size_t);
 int scePthreadCreate(void **, const void *, void *(*)(void *), void *, const char *);
 int scePthreadJoin(void *, void **);
 }
@@ -70,6 +57,12 @@ void set_error(const char *stage, int code) {
     set_status(text);
     current.store(State::Failed, std::memory_order_release);
 }
+void set_failure(const char *stage, const char *detail) {
+    char text[160];
+    std::snprintf(text, sizeof(text), "%s failed: %s", stage, detail && *detail ? detail : "no answer");
+    set_status(text);
+    current.store(State::Failed, std::memory_order_release);
+}
 
 bool safe_repo(const std::string &repo) {
     if (repo.size() < 3 || repo.size() > 128 || std::count(repo.begin(), repo.end(), '/') != 1) return false;
@@ -100,80 +93,48 @@ std::string encode_path(const std::string &path) {
     return output;
 }
 
+// HTTPS on libcurl (vulkan/net/https_get.h): the console's own client refuses every
+// public site once the app has filesystem access. Redirects are followed there.
 struct HttpSession {
-    int pool = -1, ssl = -1, http = -1, tmpl = -1, request = -1;
+    prospero_https *session = nullptr;
     bool open() {
         // Networking is initialized by the app's HTTP server during startup.
-        pool = sceNetPoolCreate("prosperoai-model-download", 256 * 1024, 0);
-        if (pool < 0) { set_error("Network pool", pool); return false; }
-        ssl = sceSslInit(512 * 1024);
-        if (ssl < 0) { set_error("HTTPS/TLS", ssl); return false; }
-        http = sceHttp2Init(pool, ssl, 1024 * 1024, 1);
-        if (http < 0) { set_error("HTTPS client", http); return false; }
-        tmpl = sceHttp2CreateTemplate(http, "ProsperoAI/1.0", 3, 1);
-        if (tmpl < 0) { set_error("HTTPS template", tmpl); return false; }
+        if (!session) session = prospero_https_open();
+        if (!session) { set_failure("HTTPS client", "libcurl could not start"); return false; }
         return true;
     }
-    void close_request() { if (request >= 0) { sceHttp2DeleteRequest(request); request = -1; } }
-    void close() {
-        close_request();
-        if (tmpl >= 0) sceHttp2DeleteTemplate(tmpl);
-        if (http >= 0) sceHttp2Term(http);
-        if (ssl >= 0) sceSslTerm(ssl);
-        if (pool >= 0) sceNetPoolDestroy(pool);
-    }
+    void close() { prospero_https_close(session); session = nullptr; }
     ~HttpSession() { close(); }
     bool get(const std::string &url) {
-        std::string address = url;
-        // Follow redirects explicitly. The firmware's automatic redirect path can
-        // report HTTP 200 while returning an empty body for Hugging Face CDN files.
-        for (int hop = 0; hop < 8; ++hop) {
-            close_request();
-            request = sceHttp2CreateRequestWithURL(tmpl, "GET", address.c_str(), 0);
-            if (request < 0) { set_error("HTTPS request", request); return false; }
-            int result = sceHttp2SetAutoRedirect(request, 0);
-            if (result < 0) { set_error("HTTPS redirect setup", result); return false; }
-            result = sceHttp2SendRequest(request, nullptr, 0);
-            if (result < 0) { set_error("HTTPS send", result); close_request(); return false; }
-            int status = 0;
-            result = sceHttp2GetStatusCode(request, &status);
-            if (result < 0) { set_error("HTTPS response", result); return false; }
-            if (status == 200) return true;
-            if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308) {
-                set_error("Hugging Face response", status); return false;
-            }
-            char *headers = nullptr;
-            std::size_t length = 0;
-            result = sceHttp2GetAllResponseHeaders(request, &headers, &length);
-            if (result < 0 || !headers || length > 65536) { set_error("HTTPS redirect headers", result); return false; }
-            std::string redirect;
-            const std::string text(headers, length);
-            for (std::size_t start = 0; start < text.size();) {
-                const auto end = text.find('\n', start);
-                std::string line = text.substr(start, end == std::string::npos ? end : end - start);
-                std::string key = line.substr(0, 9);
-                std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return std::tolower(c); });
-                if (key == "location:") {
-                    redirect = line.substr(9);
-                    const auto first = redirect.find_first_not_of(" \t");
-                    if (first != std::string::npos) redirect.erase(0, first);
-                    const auto last = redirect.find_last_not_of(std::string("\r\n \t\0", 5));
-                    if (last != std::string::npos) redirect.resize(last + 1);
-                    break;
-                }
-                if (end == std::string::npos) break;
-                start = end + 1;
-            }
-            if (!redirect.empty() && redirect.front() == '/') {
-                const auto host_end = address.find('/', 8);
-                redirect = address.substr(0, host_end) + redirect;
-            }
-            if (redirect.compare(0, 8, "https://") != 0) {
-                set_status("Model host returned an invalid HTTPS redirect."); current.store(State::Failed); return false;
-            }
-            address = std::move(redirect);
+        long status = 0;
+        if (!open()) return false;
+        if (prospero_https_get(session, url.c_str(), &status) != 0) {
+            set_failure("Connection", prospero_https_error(session)); return false;
         }
-        set_status("Model host returned too many redirects."); current.store(State::Failed); return false;
+        if (status != 200) {
+            char text[160];
+            std::snprintf(text, sizeof(text), "Hugging Face answered HTTP %ld.%s", status,
+                          status == 401 || status == 403 ? " The repository may need an account."
+                          : status == 404 ? " The file or repository was not found." : "");
+            set_status(text);
+            current.store(State::Failed, std::memory_order_release);
+            return false;
+        }
+        return true;
+    }
+    int read(void *buffer, std::size_t size) { return prospero_https_read(session, buffer, size); }
+    const char *error() const { return prospero_https_error(session); }
+};
+
+// How fast a file came, for the debug log: the figure a slow download is reported with.
+struct Pace {
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    void report(const char *name, std::uint64_t bytes) const {
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        const double size = static_cast<double>(bytes) / (1024.0 * 1024.0);
+        prospero::debug::line("download", "%s: %.1f MiB in %.1f s (%.2f MiB/s), socket receive buffer %d KB",
+                              name, size, seconds, seconds > 0.0 ? size / seconds : 0.0,
+                              prospero_https_receive_buffer() / 1024);
     }
 };
 
@@ -184,8 +145,8 @@ bool read_catalog(const std::string &repo, std::vector<Item> *output) {
     std::string body;
     std::array<char, 32768> chunk{};
     for (;;) {
-        int n = sceHttp2ReadData(http.request, chunk.data(), chunk.size());
-        if (n < 0) { set_error("Catalog download", n); return false; }
+        int n = http.read(chunk.data(), chunk.size());
+        if (n < 0) { set_failure("Catalog download", http.error()); return false; }
         if (n == 0) break;
         if (body.size() + static_cast<std::size_t>(n) > kMaxCatalogBytes) {
             set_status("Repository catalog is too large (8 MiB limit)."); current.store(State::Failed); return false;
@@ -253,7 +214,7 @@ void storage_error(const char *operation) {
     std::snprintf(message, sizeof(message), "%s: %s (%d).%s", operation,
                   std::strerror(error), error,
                   error == EACCES || error == ENOENT
-                      ? " Shared model storage must be connected after console restart."
+                      ? " The model folder cannot be reached: storage access is missing."
                       : " Check available storage.");
     set_status(message);
     current.store(State::Failed);
@@ -306,15 +267,15 @@ bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile
     const std::string part = target + ".part";
     FILE *file = std::fopen(part.c_str(), "wb");
     if (!file) { storage_error("Cannot create preset file"); return false; }
-    http.close_request();
+    const Pace pace;
     bool ok = http.get(std::string("https://huggingface.co/") + preset.repository +
                        "/resolve/" + preset.revision + "/" + encode_path(item.source));
     Sha256 hash;
     std::array<std::uint8_t, 256 * 1024> buffer{};
     std::uint64_t done = 0;
     while (ok) {
-        int count = sceHttp2ReadData(http.request, buffer.data(), buffer.size());
-        if (count < 0) { set_error("Preset download", count); ok=false; break; }
+        int count = http.read(buffer.data(), buffer.size());
+        if (count < 0) { set_failure("Preset download", http.error()); ok=false; break; }
         if (!count) break;
         if (done + static_cast<std::uint64_t>(count) > item.size) {
             set_status("Preset file is larger than its pinned manifest."); current.store(State::Failed); ok=false; break;
@@ -340,7 +301,7 @@ bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile
         storage_error("Cannot finalize preset file"); ok=false;
     }
     if (!ok) std::remove(part.c_str());
-    if (ok) completed += done;
+    if (ok) { completed += done; pace.report(item.path, done); }
     return ok;
 }
 void install_preset() {
@@ -381,8 +342,8 @@ void *worker_impl(void *) {
         std::string body;
         std::array<char, 32768> chunk{};
         for (;;) {
-            int n = sceHttp2ReadData(http.request, chunk.data(), chunk.size());
-            if (n < 0) { set_error("Model search", n); worker_done.store(true); return nullptr; }
+            int n = http.read(chunk.data(), chunk.size());
+            if (n < 0) { set_failure("Model search", http.error()); worker_done.store(true); return nullptr; }
             if (n == 0) break;
             if (body.size() + static_cast<std::size_t>(n) > kMaxCatalogBytes) {
                 set_status("Model search response is too large."); current.store(State::Failed);
@@ -455,12 +416,13 @@ void *worker_impl(void *) {
         FILE *file=std::fopen(part_path.c_str(),"wb");
         if (!file) { storage_error("Cannot create model file"); worker_done.store(true); return nullptr; }
         const std::string url="https://huggingface.co/"+repo+"/resolve/main/"+encode_path(item.name);
+        const Pace pace;
         bool ok=http.get(url);
         std::uint64_t expected=item.size;
         Sha256 hash;
         std::array<std::uint8_t, 1024*1024> buffer{};
         std::uint64_t done=0;
-        while(ok){int n=sceHttp2ReadData(http.request,buffer.data(),buffer.size());if(n<0){set_error("Model download",n);ok=false;break;}if(n==0)break;
+        while(ok){int n=http.read(buffer.data(),buffer.size());if(n<0){set_failure("Model download",http.error());ok=false;break;}if(n==0)break;
             if(done+static_cast<std::uint64_t>(n)>expected){set_error("Model size check",-1);ok=false;break;}
             if(std::fwrite(buffer.data(),1,n,file)!=static_cast<std::size_t>(n)){storage_error("Disk write");ok=false;break;}
             hash.update(buffer.data(),n);done+=n;completed_bytes.store(done,std::memory_order_release);
@@ -470,6 +432,7 @@ void *worker_impl(void *) {
         if(ok&&(done!=expected||hash.finish()!=item.sha256)){set_status("Download size or SHA-256 check failed; partial file removed.");current.store(State::Failed);ok=false;}
         if(ok&&rename(part_path.c_str(),final_path.c_str())!=0){set_status("Could not finalize downloaded model file.");current.store(State::Failed);ok=false;}
         if(!ok) std::remove(part_path.c_str());
+        if(ok) pace.report(item.name.c_str(), done);
         if(ok){char text[160];std::snprintf(text,sizeof(text),"Verified %s (%llu MiB). Restart not needed; refreshing models.",installed_name(repo,item.name).c_str(),static_cast<unsigned long long>(done/(1024*1024)));set_status(text);current.store(State::Complete,std::memory_order_release);}
     }
     worker_done.store(true, std::memory_order_release);

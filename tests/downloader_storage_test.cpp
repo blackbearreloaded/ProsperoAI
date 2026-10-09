@@ -6,7 +6,7 @@
 #include <pthread.h>
 static int mounted_stat(const char *path, struct stat *result)
 {
-    assert(std::strcmp(path, "/data/homebrew/prosperoai/models") == 0);
+    assert(std::strcmp(path, "/data/prosperoai/models") == 0);
     result->st_mode = S_IFDIR | 0777;
     return 0;
 }
@@ -23,67 +23,58 @@ static int forbidden_parent_mkdir(const char *, mode_t)
 #undef stat
 #undef mkdir
 static std::vector<std::string> requested;
-static std::string response_headers;
+static long answer_status = 200;
+struct prospero_https
+{
+    int unused;
+};
 extern "C"
 {
-    int sceHttp2CreateRequestWithURL(int, const char *, const char *url, std::uint64_t)
+    prospero_https *prospero_https_open(void)
+    {
+        static prospero_https session;
+        return &session;
+    }
+    void prospero_https_close(prospero_https *)
+    {
+    }
+    int prospero_https_get(prospero_https *, const char *url, long *status)
     {
         requested.emplace_back(url);
-        return 42;
+        *status = answer_status;
+        return 0;
     }
-    int sceHttp2DeleteRequest(int)
+    int prospero_https_read(prospero_https *, void *, std::size_t)
     {
         return 0;
     }
-    int sceHttp2SetAutoRedirect(int, int enabled)
+    const char *prospero_https_error(const prospero_https *)
     {
-        assert(!enabled);
-        return 0;
+        return "test";
     }
-    int sceHttp2SendRequest(int, const void *, std::size_t)
-    {
-        return 0;
-    }
-    int sceHttp2GetStatusCode(int, int *status)
-    {
-        *status = requested.size() < 3 ? 302 : 200;
-        return 0;
-    }
-    int sceHttp2GetAllResponseHeaders(int, char **out, std::size_t *size)
-    {
-        response_headers = requested.size() == 1
-                               ? "HTTP/2 302\r\nLocation: /api/resolved\r\n"
-                               : "HTTP/2 302\r\nlocation: https://cdn.hf.co/model.bin\r\n";
-        *out = response_headers.data();
-        *size = response_headers.size();
-        return 0;
-    }
-    int sceHttp2DeleteTemplate(int)
-    {
-        return 0;
-    }
-    int sceHttp2Term(int)
-    {
-        return 0;
-    }
-    int sceSslTerm(int)
-    {
-        return 0;
-    }
-    int sceNetPoolDestroy(int)
+    int prospero_https_receive_buffer(void)
     {
         return 0;
     }
 }
+namespace prospero::debug
+{
+void line(const char *, const char *, ...)
+{
+}
+} // namespace prospero::debug
 int main()
 {
     using namespace prospero_model_download;
     assert(ensure_model_root());
     HttpSession session;
     assert(session.get("https://huggingface.co/model/resolve/main/model.bin"));
-    assert(requested.size() == 3);
-    assert(requested[1] == "https://huggingface.co/api/resolved");
-    assert(requested[2] == "https://cdn.hf.co/model.bin");
+    assert(requested.size() == 1);
+    // An answer that is not the file is a failure the page reports, with its status.
+    answer_status = 404;
+    assert(!session.get("https://huggingface.co/model/resolve/main/missing.bin"));
+    assert(current.load() == State::Failed);
+    assert(std::strstr(current_status, "HTTP 404") != nullptr);
     Sha256 hash;
     hash.update("a", 1);
     hash.update("bc", 2);
