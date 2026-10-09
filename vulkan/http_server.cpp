@@ -571,6 +571,8 @@ void handle_model_download_status(const NetApi &api, int sock)
     char body[4096] = "{\"state\":\"";
     const char *state = "idle";
     switch (prospero_model_download::state()) {
+    case prospero_model_download::State::Searching: state = "searching"; break;
+    case prospero_model_download::State::SearchReady: state = "search_ready"; break;
     case prospero_model_download::State::Loading: state = "loading"; break;
     case prospero_model_download::State::Ready: state = "ready"; break;
     case prospero_model_download::State::Downloading: state = "downloading"; break;
@@ -589,12 +591,30 @@ void handle_model_download_status(const NetApi &api, int sock)
         std::snprintf(item, sizeof(item), "%s{\"name\":\"", i ? "," : "");
         std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
         json_append_escaped(body, sizeof(body), candidate.name);
-        std::snprintf(item, sizeof(item), "\",\"size\":%llu}",
+        std::snprintf(item, sizeof(item), prospero_model_download::state() ==
+                      prospero_model_download::State::SearchReady ? "\",\"downloads\":%llu}" :
+                      "\",\"size\":%llu}",
                       static_cast<unsigned long long>(candidate.size));
         std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
     }
     std::strncat(body, "]}", sizeof(body) - std::strlen(body) - 1);
     send_json(api, sock, body);
+}
+
+void handle_model_search_request(const NetApi &api, int sock, const char *body)
+{
+    char query[128]{};
+    if (!json_find_string(body, "query", query, sizeof(query))) {
+        send_status(api, sock, "400 Bad Request", "application/json",
+                    "{\"error\":\"a model name is required\"}");
+        return;
+    }
+    if (!prospero_model_download::search(query)) {
+        send_status(api, sock, "409 Conflict", "application/json",
+                    "{\"error\":\"search is busy or the query is invalid\"}");
+        return;
+    }
+    handle_model_download_status(api, sock);
 }
 
 void handle_model_download_action(const NetApi &api, int sock, const char *body,
@@ -731,6 +751,8 @@ void handle_connection(const NetApi &api, int sock)
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/download") == 0)
         handle_model_download_status(api, sock);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/search") == 0)
+        handle_model_search_request(api, sock, body);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/browse") == 0)
         handle_model_download_action(api, sock, body, true);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/download") == 0)

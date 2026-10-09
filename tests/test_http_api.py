@@ -54,9 +54,9 @@ class HttpApiTests(unittest.TestCase):
         header, body = self.request("/app.js", key="private")
         self.assertIn("200 OK", header)
         self.assertIn("/v1/chat/completions", body)
-        self.assertIn("/api/models/browse", body)
+        self.assertIn("/api/models/search", body)
         for route in ("/v1/models", "/api/tags", "/api/models/download",
-                      "/../api_key.txt", "/fonts/../../api_key.txt"):
+                      "/api/models/search", "/../api_key.txt", "/fonts/../../api_key.txt"):
             header, _ = self.request(route, key="private")
             self.assertIn("401 Unauthorized", header)
         header, _ = self.request("/../api_key.txt")
@@ -120,7 +120,7 @@ class HttpApiTests(unittest.TestCase):
         self.assertNotIn("tool_calls", json.loads(body)["choices"][0]["message"])
 
     def test_bearer_auth_on_all_routes(self):
-        for route in ["/v1/models", "/api/tags", "/api/models/download"]:
+        for route in ["/v1/models", "/api/tags", "/api/models/download", "/api/models/search"]:
             head, _ = self.request(route, key="secret")
             self.assertIn("401", head)
         head, _ = self.request("/v1/models", key="secret", headers=["authorization: Bearer secret"])

@@ -17,6 +17,7 @@ void status(char *output, std::size_t capacity) {
 }
 std::size_t candidate_count() { return 0; }
 bool candidate(std::size_t, Candidate *) { return false; }
+bool search(const char *) { return false; }
 bool browse(const char *) { return false; }
 bool download(std::size_t) { return false; }
 }

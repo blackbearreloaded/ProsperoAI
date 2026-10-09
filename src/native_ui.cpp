@@ -88,12 +88,13 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     filters_.style.height = 60;
     filters_.style.text_size = 23;
     filters_.style.wrap = true;
-    filters_.set_tabs({{"All", 0, false, 0},
+    filters_.set_tabs({{"Download", 0, false, 5},
+                       {"All", 0, false, 0},
                        {"Text", 0, false, 1},
                        {"Image", 0, false, 2},
                        {"Audio", 0, false, 3},
-                       {"Voice", 0, false, 4},
-                       {"Download", 0, false, 5}});
+                       {"Voice", 0, false, 4}});
+    filters_.set_active(1);
     filters_.set_bounds({732, 392, 1092, 60});
     filters_.set_focused(false);
     search_.style.max_rows = 0;
@@ -258,8 +259,14 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     prospero_model_download::poll();
     if (prospero_model_download::state() != prospero_model_download::State::Loading)
         search_.set_busy(false);
-    search_.set_placeholder(filters_.active() == 5 ? "Hugging Face repository (owner/name)"
+    const bool downloading_models = filters_.active() == 0;
+    search_.set_placeholder(downloading_models ? "Search model names (e.g. Mistral 7B)"
                                                   : "Search your models");
+    search_.set_bounds(downloading_models ? Rect{128, 558, 1056, 64}
+                                              : Rect{kLeft, 392, 612, 60});
+    filters_.set_bounds((downloading_models || app_.state().models.empty())
+                            ? Rect{kLeft, 392, 1728, 60}
+                            : Rect{732, 392, 1092, 60});
     const bool was_generating = app_.generating();
     app_.poll();
     if (!welcomed_)
@@ -400,7 +407,7 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
 
 void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedback)
 {
-    if (filters_.active() == 5)
+    if (filters_.active() == 0)
     {
         const auto state = prospero_model_download::state();
         if (input.is_pressed(Action::west))
@@ -412,9 +419,13 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
             keyboard_.enter();
             feedback.play(audio::Cue::modal_open);
         }
-        else if (input.is_pressed(Action::up) && state == prospero_model_download::State::Ready)
+        else if (input.is_pressed(Action::up) &&
+                 (state == prospero_model_download::State::Ready ||
+                  state == prospero_model_download::State::SearchReady))
             download_focus_ = std::max(0, download_focus_ - 1);
-        else if (input.is_pressed(Action::down) && state == prospero_model_download::State::Ready)
+        else if (input.is_pressed(Action::down) &&
+                 (state == prospero_model_download::State::Ready ||
+                  state == prospero_model_download::State::SearchReady))
             download_focus_ = std::min(static_cast<int>(prospero_model_download::candidate_count()) - 1,
                                        download_focus_ + 1);
         else if (input.is_pressed(Action::confirm))
@@ -424,10 +435,21 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
                 if (!prospero_model_download::download(static_cast<std::size_t>(download_focus_)))
                     feedback.play(audio::Cue::error);
             }
+            else if (state == prospero_model_download::State::SearchReady)
+            {
+                prospero_model_download::Candidate candidate{};
+                if (prospero_model_download::candidate(static_cast<std::size_t>(download_focus_),
+                                                       &candidate) &&
+                    prospero_model_download::browse(candidate.name))
+                    search_.set_busy(true);
+                else
+                    feedback.play(audio::Cue::error);
+            }
             else if (state != prospero_model_download::State::Loading &&
+                     state != prospero_model_download::State::Searching &&
                      state != prospero_model_download::State::Downloading)
             {
-                if (prospero_model_download::browse(search_.text().c_str()))
+                if (prospero_model_download::search(search_.text().c_str()))
                 {
                     download_focus_ = 0;
                     search_.set_busy(true);
@@ -440,9 +462,13 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
     }
     if (app_.state().models.empty())
     {
-        // Nothing to filter, search or choose: the page says how to add a model.
-        if (input.is_pressed(Action::confirm) || input.is_pressed(Action::north) ||
-            input.is_pressed(Action::west))
+        // The empty library has no model filters; Cross/Square opens its downloader.
+        if (input.is_pressed(Action::confirm) || input.is_pressed(Action::west))
+        {
+            filters_.set_active(0);
+            feedback.play(audio::Cue::tab);
+        }
+        else if (input.is_pressed(Action::north))
             feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
     }
     else if (input.is_pressed(Action::north))
@@ -612,7 +638,8 @@ void NativeUI::Impl::refresh_models()
         const int capability = static_cast<int>(catalog[i].capability) + 1;
         std::string name = catalog[i].name + " " + catalog[i].id;
         std::transform(name.begin(), name.end(), name.begin(), lower);
-        if ((filters_.active() == 0 || filters_.active() == capability) &&
+        const int selected_filter = filters_.active() == 0 ? 0 : filters_.active() - 1;
+        if ((selected_filter == 0 || selected_filter == capability) &&
             name.find(query) != std::string::npos)
             visible_models_.push_back(static_cast<int>(i));
     }

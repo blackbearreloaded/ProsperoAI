@@ -51,6 +51,7 @@ std::atomic<std::uint64_t> completed_bytes{0}, total_bytes{0};
 char current_status[160] = "Enter a Hugging Face GGUF repository.";
 void *worker_thread = nullptr;
 std::atomic<bool> worker_done{false};
+std::string worker_query;
 std::string worker_repo;
 std::size_t worker_index;
 
@@ -232,6 +233,53 @@ public:
 
 void *worker_impl(void *) {
     const State action = current.load(std::memory_order_acquire);
+    if (action == State::Searching) {
+        HttpSession http;
+        if (!http.open() || !http.get("https://huggingface.co/api/models?search=" +
+                                      encode_path(worker_query) +
+                                      "&filter=gguf&sort=downloads&direction=-1&limit=20")) {
+            worker_done.store(true, std::memory_order_release);
+            return nullptr;
+        }
+        std::string body;
+        std::array<char, 32768> chunk{};
+        for (;;) {
+            int n = sceHttp2ReadData(http.request, chunk.data(), chunk.size());
+            if (n < 0) { set_error("Model search", n); worker_done.store(true); return nullptr; }
+            if (n == 0) break;
+            if (body.size() + static_cast<std::size_t>(n) > kMaxCatalogBytes) {
+                set_status("Model search response is too large."); current.store(State::Failed);
+                worker_done.store(true); return nullptr;
+            }
+            body.append(chunk.data(), static_cast<std::size_t>(n));
+        }
+        const Json entries = Json::parse(body, nullptr, false);
+        if (entries.is_discarded() || !entries.is_array()) {
+            set_status("Hugging Face returned an invalid search response.");
+            current.store(State::Failed); worker_done.store(true); return nullptr;
+        }
+        std::vector<Item> found;
+        for (const auto &entry : entries) {
+            if (!entry.is_object() || !entry.contains("id") || !entry["id"].is_string()) continue;
+            Item item;
+            item.name = entry["id"].get<std::string>();
+            if (!safe_repo(item.name)) continue;
+            if (entry.contains("downloads") && entry["downloads"].is_number_integer()) {
+                const auto count = entry["downloads"].get<std::int64_t>();
+                if (count > 0) item.size = static_cast<std::uint64_t>(count);
+            }
+            found.push_back(std::move(item));
+            if (found.size() == 8) break;
+        }
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            items = std::move(found);
+            std::snprintf(current_status, sizeof(current_status), "%zu matching repositories found.", items.size());
+        }
+        current.store(State::SearchReady, std::memory_order_release);
+        worker_done.store(true, std::memory_order_release);
+        return nullptr;
+    }
     if (action == State::Loading) {
         std::vector<Item> found;
         if (read_catalog(worker_repo, &found)) {
@@ -307,6 +355,7 @@ State state(){return current.load(std::memory_order_acquire);}
 void status(char *out,std::size_t cap){if(!cap)return;std::lock_guard<std::mutex> lock(state_mutex);std::snprintf(out,cap,"%s",current_status);if(state()==State::Downloading){auto total=total_bytes.load();auto done=completed_bytes.load();if(total){char text[160];std::snprintf(text,sizeof(text),"Downloading: %llu / %llu MiB (%u%%)",static_cast<unsigned long long>(done/(1024*1024)),static_cast<unsigned long long>(total/(1024*1024)),static_cast<unsigned>((done*100)/total));std::snprintf(out,cap,"%s",text);}}}
 std::size_t candidate_count(){std::lock_guard<std::mutex> lock(state_mutex);return items.size();}
 bool candidate(std::size_t i,Candidate*out){if(!out)return false;std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;std::snprintf(out->name,sizeof(out->name),"%s",items[i].name.c_str());out->size=items[i].size;return true;}
+bool search(const char *query){poll();if(!query||state()==State::Searching||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(query);if(value.size()<2||value.size()>96){set_status("Enter at least two characters for model search.");current.store(State::Failed);return false;}for(unsigned char c:value)if(!(std::isalnum(c)||std::isspace(c)||c=='-'||c=='_'||c=='.'||c=='+')){set_status("Use letters, numbers, spaces, dots, dashes or underscores.");current.store(State::Failed);return false;}worker_query=value;items.clear();current.store(State::Searching);set_status("Searching public GGUF repositories...");return start();}
 bool browse(const char *repo){poll();if(!repo||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(repo);if(!safe_repo(value)){set_status("Enter a repository as owner/name.");current.store(State::Failed);return false;}worker_repo=value;items.clear();current.store(State::Loading);set_status("Connecting to Hugging Face over HTTPS...");return start();}
 bool download(std::size_t i){poll();if(state()!=State::Ready||worker_thread)return false;{std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;worker_index=i;}completed_bytes.store(0);total_bytes.store(items[i].size);current.store(State::Downloading);set_status("Starting model download...");return start();}
 }
