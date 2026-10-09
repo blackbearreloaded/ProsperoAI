@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="sce_sys/icon0.png" width="128" alt="ProsperoAI icon">
+  <a href="sce_sys/icon0.png"><img src="sce_sys/icon0.png" width="128" alt="ProsperoAI golden doorway icon used on PS5"></a>
 </p>
 
 <h1 align="center">ProsperoAI</h1>
@@ -28,6 +28,12 @@ how it is built, and what a run on a console showed.
 > [!WARNING]
 > ProsperoAI is an experimental project for validating generative-AI workloads
 > on the PS5 GPU. It is not production software.
+
+> [!NOTE]
+> **Work in progress on this branch.** The GPU backend is being migrated from the
+> AGC kernels to llama.cpp's Vulkan backend on RADV, and the network layer is being
+> moved onto the Payload SDK's sockets. The Vulkan folder build has been verified on PS5 FW 12.70;
+> see [benchmark results](docs/VK_BENCHMARK_2026-10-08.md). Build steps are in [docs/BUILDING.md](docs/BUILDING.md).
 
 ## Highlights
 

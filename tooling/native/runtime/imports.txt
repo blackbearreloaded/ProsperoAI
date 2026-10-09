@@ -105,3 +105,7 @@ sceLibcHeapGetTraceInfo|#B#C|1|0
 sceLibcInternalBacktraceForGame|#B#C|1|0
 sceLibcInternalHeapErrorReportForGame|#B#C|1|0
 sceSysmoduleGetModuleInfoForUnwind|#C#D|1|0
+sceSysmoduleLoadModuleInternal|#C#D|1|0
+sceKernelDlsym|#A#B|1|0
+sceKernelGetModuleList|#A#B|1|0
+sceKernelGetModuleInfo|#A#B|1|0

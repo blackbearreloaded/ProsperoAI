@@ -88,17 +88,21 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     filters_.style.height = 60;
     filters_.style.text_size = 23;
     filters_.style.wrap = true;
-    filters_.set_tabs({{"All", 0, false, 0},
+    filters_.set_tabs({{"Download", 0, false, 5},
+                       {"All", 0, false, 0},
                        {"Text", 0, false, 1},
                        {"Image", 0, false, 2},
                        {"Audio", 0, false, 3},
                        {"Voice", 0, false, 4}});
+    filters_.set_active(1);
     filters_.set_bounds({732, 392, 1092, 60});
     filters_.set_focused(false);
     search_.style.max_rows = 0;
     search_.set_bounds({kLeft, 392, 612, 60});
     search_.set_placeholder("Search your models");
     keyboard_.style.bindings = ui::KeyboardBindings::standard();
+    keyboard_.style.bindings.space = Action::north;
+    keyboard_.style.bindings.done = Action::jump_next;
     keyboard_.style.max_length = 64;
     keyboard_.set_bounds({360, 596, 1200, 310});
     keyboard_.on_text = [this](std::string_view value)
@@ -254,6 +258,26 @@ void NativeUI::Impl::announce(ui::Feedback &feedback)
 
 void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &feedback)
 {
+    prospero_model_download::poll();
+    const auto download_state = prospero_model_download::state();
+    if (download_state == prospero_model_download::State::Complete &&
+        last_download_state_ != download_state)
+        downloaded_models_pending_ = true;
+    last_download_state_ = download_state;
+    if (downloaded_models_pending_ && app_.refresh_models())
+    {
+        downloaded_models_pending_ = false;
+        refresh_models();
+    }
+    if (prospero_model_download::state() != prospero_model_download::State::Loading)
+        search_.set_busy(false);
+    const bool downloading_models = filters_.active() == 0;
+    search_.set_placeholder(downloading_models ? "Search model names (e.g. Mistral 7B)"
+                                               : "Search your models");
+    search_.set_bounds(downloading_models ? Rect{128, 558, 1056, 64} : Rect{kLeft, 392, 612, 60});
+    filters_.set_bounds((downloading_models || app_.state().models.empty())
+                            ? Rect{kLeft + 64, 392, 1600, 60}
+                            : Rect{796, 392, 964, 60});
     const bool was_generating = app_.generating();
     app_.poll();
     if (!welcomed_)
@@ -287,10 +311,12 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     const auto &state = app_.state();
     Capability hue = Capability::Text;
     if (tabs_.active() == 1 && !visible_models_.empty())
-        hue = state
-                  .models[static_cast<std::size_t>(
-                      visible_models_[static_cast<std::size_t>(models_.focus())])]
-                  .capability;
+    {
+        const int index = visible_models_[static_cast<std::size_t>(models_.focus())];
+        hue = index >= 0
+                  ? state.models[static_cast<std::size_t>(index)].capability
+                  : static_cast<Capability>(prospero_model_download::presets[-index - 2].kind);
+    }
     else if (state.selected_model >= 0)
         hue = state.models[static_cast<std::size_t>(state.selected_model)].capability;
     // A conversation model's own colour is the accent, so the second cloud is a cool
@@ -394,30 +420,117 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
 
 void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedback)
 {
-    if (app_.state().models.empty())
+    if (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next))
     {
-        // Nothing to filter, search or choose: the page says how to add a model.
-        if (input.is_pressed(Action::confirm) || input.is_pressed(Action::north) ||
-            input.is_pressed(Action::west))
-            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
-    }
-    else if (input.is_pressed(Action::north))
-    {
-        filters_.step(1, input, feedback);
+        const int previous_filter = filters_.active();
+        filters_.step(input.is_pressed(Action::jump_next) ? 1 : -1, input, feedback);
+        if (previous_filter == 0 || filters_.active() == 0)
+            search_.clear();
+        filters_.set_focused(false);
+        download_focus_ = 0;
         refresh_models();
+        return;
     }
-    else if (input.is_pressed(Action::west))
+    const auto state = prospero_model_download::state();
+    const bool has_download_results = prospero_model_download::candidate_count() > 0 &&
+                                      (state == prospero_model_download::State::Ready ||
+                                       state == prospero_model_download::State::SearchReady);
+    const auto open_search = [&]
     {
         search_open_ = true;
         search_.set_active(true);
+        keyboard_.style.max_length = filters_.active() == 0 ? 128 : 64;
         keyboard_.set_length(search_.length());
         keyboard_.enter();
         feedback.play(audio::Cue::modal_open);
+    };
+
+    if (filters_.active() == 0)
+    {
+        if (input.is_pressed(Action::back))
+        {
+            filters_.set_active(1);
+            refresh_models();
+            feedback.play(audio::Cue::tab);
+            return;
+        }
+        if (input.is_pressed(Action::west))
+            open_search();
+        else if (input.nav == Direction::up && has_download_results)
+            download_focus_ = std::max(0, download_focus_ - 1);
+        else if (input.nav == Direction::down && has_download_results)
+            download_focus_ =
+                std::min(static_cast<int>(prospero_model_download::candidate_count()) - 1,
+                         download_focus_ + 1);
+        else if (input.is_pressed(Action::confirm))
+        {
+            if (!has_download_results && (state == prospero_model_download::State::Ready ||
+                                          state == prospero_model_download::State::SearchReady))
+            {
+                open_search();
+                return;
+            }
+            if (state == prospero_model_download::State::Ready)
+            {
+                if (!prospero_model_download::download(static_cast<std::size_t>(download_focus_)))
+                    feedback.play(audio::Cue::error);
+            }
+            else if (state == prospero_model_download::State::SearchReady)
+            {
+                prospero_model_download::Candidate candidate{};
+                if (prospero_model_download::candidate(static_cast<std::size_t>(download_focus_),
+                                                       &candidate) &&
+                    prospero_model_download::browse(candidate.name))
+                    search_.set_busy(true);
+                else
+                    feedback.play(audio::Cue::error);
+            }
+            else if (state != prospero_model_download::State::Loading &&
+                     state != prospero_model_download::State::Searching &&
+                     state != prospero_model_download::State::Downloading)
+            {
+                if (search_.length() < 2)
+                {
+                    open_search();
+                    return;
+                }
+                if (prospero_model_download::search(search_.text().c_str()))
+                {
+                    download_focus_ = 0;
+                    search_.set_busy(true);
+                }
+                else
+                    feedback.play(audio::Cue::error);
+            }
+        }
+        return;
     }
+    if (input.is_pressed(Action::west))
+        open_search();
     else if (models_.handle(input, feedback) == ui::Event::activated && !visible_models_.empty())
     {
         const int index = visible_models_[static_cast<std::size_t>(models_.focus())];
         const auto &state = app_.state();
+        if (index < -1)
+        {
+            const auto preset_index = static_cast<std::size_t>(-index - 2);
+            if (prospero_model_download::active_preset() == static_cast<int>(preset_index))
+                return;
+            if (preset_saved_[preset_index])
+            {
+                toasts_.push(ui::StatusKind::info, "Model bundle saved",
+                             "The model is installed in your library.");
+            }
+            else if (prospero_model_download::download_preset(preset_index))
+            {
+                feedback.play(audio::Cue::tab);
+                toasts_.push(ui::StatusKind::info, "Downloading model",
+                             prospero_model_download::presets[preset_index].name);
+            }
+            else
+                feedback.play(audio::Cue::error);
+            return;
+        }
         if (app_.busy() || state.unsaved)
         {
             feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.7f);
@@ -568,9 +681,31 @@ void NativeUI::Impl::refresh_models()
         const int capability = static_cast<int>(catalog[i].capability) + 1;
         std::string name = catalog[i].name + " " + catalog[i].id;
         std::transform(name.begin(), name.end(), name.begin(), lower);
-        if ((filters_.active() == 0 || filters_.active() == capability) &&
+        const int selected_filter = filters_.active() == 0 ? 0 : filters_.active() - 1;
+        if ((selected_filter == 0 || selected_filter == capability) &&
             name.find(query) != std::string::npos)
             visible_models_.push_back(static_cast<int>(i));
+    }
+    for (std::size_t i = 0; i < prospero_model_download::preset_count; ++i)
+    {
+        const auto &preset = prospero_model_download::presets[i];
+        preset_saved_[i] = prospero_model_download::preset_installed(i);
+        // Installed text models already have a runtime card; media bundles stay visible
+        // in the Vulkan library so their runtime requirement remains clear.
+        if (preset.kind == 0 && preset_saved_[i])
+            continue;
+        if (std::any_of(catalog.begin(), catalog.end(),
+                        [&](const Model &model) {
+                            return model.id == preset.id ||
+                                   (preset.kind == 0 && model.id == preset.files[0].source);
+                        }))
+            continue;
+        std::string name = std::string(preset.name) + " " + preset.id;
+        std::transform(name.begin(), name.end(), name.begin(), lower);
+        const int selected_filter = filters_.active() == 0 ? 0 : filters_.active() - 1;
+        if ((selected_filter == 0 || selected_filter == preset.kind + 1) &&
+            name.find(query) != std::string::npos)
+            visible_models_.push_back(-static_cast<int>(i) - 2);
     }
     models_.set_count(static_cast<int>(visible_models_.size()));
     models_.set_focus(0);
@@ -1009,15 +1144,40 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
     else if (search_open_)
     {
         hints[count++] = {ui::Button::cross, "Type"};
-        hints[count++] = {ui::Button::circle, "Done"};
+        hints[count++] = {ui::Button::triangle, "Space"};
+        hints[count++] = {ui::Button::r2, "Done"};
+        hints[count++] = {ui::Button::circle, "Back"};
     }
     else if (tabs_.active() == 1)
     {
-        if (!visible_models_.empty())
-            hints[count++] = {ui::Button::cross, "Use model"};
-        if (!state.models.empty())
+        if (filters_.active() == 0)
         {
-            hints[count++] = {ui::Button::triangle, "Filter"};
+            const auto download_state = prospero_model_download::state();
+            const bool has_results = prospero_model_download::candidate_count() > 0;
+            const char *action =
+                has_results && download_state == prospero_model_download::State::Ready ? "Download"
+                : has_results && download_state == prospero_model_download::State::SearchReady
+                    ? "Browse files"
+                : download_state == prospero_model_download::State::Ready ||
+                        download_state == prospero_model_download::State::SearchReady
+                    ? "Edit search"
+                : search_.length() < 2 ? "Enter search"
+                                       : "Search";
+            hints[count++] = {ui::Button::cross, action};
+            hints[count++] = {ui::Button::square, "Edit search"};
+        }
+        else if (!visible_models_.empty())
+        {
+            const int focused = visible_models_[static_cast<std::size_t>(models_.focus())];
+            hints[count++] = {ui::Button::cross,
+                              focused >= 0 ? "Use model"
+                              : prospero_model_download::active_preset() == -focused - 2
+                                  ? "Downloading..."
+                              : preset_saved_[-focused - 2] ? "Details"
+                                                            : "Download"};
+        }
+        if (filters_.active() != 0)
+        {
             hints[count++] = {ui::Button::square, "Search"};
         }
     }
@@ -1072,24 +1232,83 @@ void NativeUI::Impl::draw_boot(gfx::DrawList &list) const
     list.push_opacity(veil);
     list.gradient_rect({0, 0, gfx::kVirtualWidth, gfx::kVirtualHeight}, 0, palette_.page_top,
                        palette_.page_bottom);
-    // The sculpture draws itself in, then turns slowly.
-    const float grow = reduced_motion() ? 1 : tween::cubic_out(std::min(boot_age_ / 1.1f, 1.0f));
+    // The doors part to reveal the warm light beyond the ProsperoAI arch.
+    const float opening =
+        reduced_motion() ? 1.0f
+                         : tween::cubic_out(std::clamp((boot_age_ - 0.12f) / 0.95f, 0.0f, 1.0f));
     const float lift = (1 - veil) * -24;
-    list.glow({820, 318 + lift, 280, 200}, 100, 150, palette_.accent.with_alpha(0.10f * grow));
-    draw_sculpture(list, 960, 420 + lift, 190 + 26 * grow, palette_.accent.with_alpha(grow),
-                   clock_ + 4, 44);
+    constexpr float center = 960.0f;
+    constexpr float floor = 742.0f;
+    const float side = 220.0f;
+    const float arch_y = 438.0f + lift;
+    const float arch_rx = 220.0f;
+    const float arch_ry = 214.0f;
+    const Color gold = palette_.accent;
+    list.glow({center - (10 + 120 * opening), arch_y - 110, 20 + 240 * opening, 350}, 30, 145,
+              gold.with_alpha(0.08f + 0.13f * opening));
+
+    // Nested arch strokes stay fixed while the two inset door leaves slide outward.
+    for (int ring = 0; ring < 3; ++ring)
+    {
+        const float inset = static_cast<float>(ring) * 18.0f;
+        const float rx = arch_rx - inset;
+        const float ry = arch_ry - inset;
+        float last_x = center - rx;
+        float last_y = arch_y;
+        for (int step = 1; step <= 32; ++step)
+        {
+            const float angle = 3.14159265f + 3.14159265f * static_cast<float>(step) / 32.0f;
+            const float x = center + std::cos(angle) * rx;
+            const float y = arch_y + std::sin(angle) * ry;
+            list.line(last_x, last_y, x, y, ring == 0 ? 3.0f : 1.4f,
+                      gold.with_alpha((ring == 0 ? 0.82f : 0.38f) * veil));
+            last_x = x;
+            last_y = y;
+        }
+        list.line(center - rx, arch_y, center - rx, floor, ring == 0 ? 3.0f : 1.4f,
+                  gold.with_alpha((ring == 0 ? 0.82f : 0.38f) * veil));
+        list.line(center + rx, arch_y, center + rx, floor, ring == 0 ? 3.0f : 1.4f,
+                  gold.with_alpha((ring == 0 ? 0.82f : 0.38f) * veil));
+    }
+
+    const float left_outer = center - side;
+    const float right_outer = center + side;
+    const float left_top = center - 10 - 140 * opening;
+    const float left_bottom = center - 10 - 122 * opening;
+    const float right_top = center + 10 + 140 * opening;
+    const float right_bottom = center + 10 + 122 * opening;
+    const float door_top = arch_y;
+    const Color door = gfx::mix(palette_.page_top, palette_.depth, 0.38f).with_alpha(0.92f * veil);
+    const float left_leaf[] = {left_outer,  door_top,  left_top,   door_top + 12,
+                               left_bottom, floor - 8, left_outer, floor};
+    const float right_leaf[] = {right_top,   door_top + 12, right_outer,  door_top,
+                                right_outer, floor,         right_bottom, floor - 8};
+    list.polygon(left_leaf, 4, door);
+    list.polygon(right_leaf, 4, door);
+    list.line(left_outer, door_top, left_top, door_top + 12, 2.0f, gold.with_alpha(0.82f * veil));
+    list.line(left_top, door_top + 12, left_bottom, floor - 8, 2.0f, gold.with_alpha(0.82f * veil));
+    list.line(left_bottom, floor - 8, left_outer, floor, 2.0f, gold.with_alpha(0.82f * veil));
+    list.line(right_top, door_top + 12, right_outer, door_top, 2.0f, gold.with_alpha(0.82f * veil));
+    list.line(right_outer, door_top, right_outer, floor, 2.0f, gold.with_alpha(0.82f * veil));
+    list.line(right_outer, floor, right_bottom, floor - 8, 2.0f, gold.with_alpha(0.82f * veil));
+    const float seam = 1 - opening;
+    if (seam > 0.01f)
+        list.glow({center - 3, door_top + 70, 6, 190}, 3, 38, gold.with_alpha(0.20f * seam * veil));
+    list.circle(left_top + 16, 555 + lift, 3.2f, gold.with_alpha(0.8f * veil));
+    list.circle(right_top - 16, 555 + lift, 3.2f, gold.with_alpha(0.8f * veil));
+
     const float words =
         reduced_motion() ? 1 : tween::cubic_out(std::clamp((boot_age_ - 0.25f) / 0.6f, 0.0f, 1.0f));
     list.push_opacity(words);
-    ui::text(list, fonts_.display, "ProsperoAI", 960, 690 + (1 - words) * 14 + lift, 64,
+    ui::text(list, fonts_.display, "ProsperoAI", 960, 810 + (1 - words) * 14 + lift, 64,
              palette_.ink, gfx::Align::center);
-    label(list, "RUNS ON YOUR CONSOLE.  STAYS ON YOUR CONSOLE.", 960, 742 + lift, palette_.accent,
+    label(list, "RUNS ON YOUR CONSOLE.  STAYS ON YOUR CONSOLE.", 960, 860 + lift, palette_.accent,
           gfx::Align::center);
     const auto &state = app_.state();
-    text(list, fit(state.status, 23, 900, false), 960, 852, 23, palette_.muted, false,
+    text(list, fit(state.status, 23, 900, false), 960, 916, 23, palette_.muted, false,
          gfx::Align::center);
     // A light travels along the rule while the catalogue is read.
-    const Rect track{760, 884, 400, 3};
+    const Rect track{760, 950, 400, 3};
     list.rounded_rect(track, 1.5f, palette_.line);
     const float travel = reduced_motion() ? 0.5f : std::fmod(boot_age_ * 0.9f, 1.0f);
     list.push_clip(track);
@@ -1111,13 +1330,16 @@ void NativeUI::Impl::draw_search(ui::Canvas &canvas) const
     overlay.shadow({sheet.x, sheet.y + 18, sheet.w, sheet.h}, 26, 60, Color::rgb(0x000000, 0.45f));
     overlay.bordered_rect(sheet, 26, palette_.panel.with_alpha(1.0f / palette_.panel.a), 1,
                           palette_.line);
-    label(overlay, "SEARCH YOUR MODELS", 364, 492, palette_.accent);
+    label(overlay, filters_.active() == 0 ? "FIND A MODEL TO DOWNLOAD" : "SEARCH YOUR MODELS", 364,
+          492, palette_.accent);
     const bool empty = search_.text().empty();
     text(overlay, empty ? "Type a name..." : fit(search_.text(), 32, 900).c_str(), 364, 548, 32,
          empty ? palette_.muted : palette_.ink, !empty);
     char found[64];
     std::snprintf(found, sizeof(found), "%zu found", visible_models_.size());
-    text(overlay, found, sheet.x + sheet.w - 40, 548, 22, palette_.muted, false, gfx::Align::right);
+    if (filters_.active() != 0)
+        text(overlay, found, sheet.x + sheet.w - 40, 548, 22, palette_.muted, false,
+             gfx::Align::right);
     keyboard_.draw(canvas);
 }
 

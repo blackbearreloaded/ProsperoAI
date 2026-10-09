@@ -23,6 +23,8 @@ enum gpt_input_key_t {
     GPT_INPUT_TEXT,
     GPT_INPUT_BACKSPACE,
     GPT_INPUT_ENTER,
+    GPT_INPUT_L2,
+    GPT_INPUT_R2,
     GPT_INPUT_COUNT
 };
 

@@ -87,6 +87,7 @@ class App
     App(const App &) = delete;
     App &operator=(const App &) = delete;
     bool initialize();
+    bool refresh_models();
     void poll();
     void shutdown();
     const State &state() const
@@ -115,6 +116,7 @@ class App
     enum class Job
     {
         Discover,
+        RefreshModels,
         Select,
         Open,
         Delete,

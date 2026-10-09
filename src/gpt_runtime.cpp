@@ -2,8 +2,10 @@
 
 #include "gpt_runtime.hpp"
 #include "model_metadata.hpp"
+#include "model_paths.hpp"
 #include <algorithm>
 #include <vector>
+#include <unistd.h>
 
 #if defined(PS5_MEDIA_AUDIO) && !defined(PS5_DUAL_BACKEND)
 #error "PS5 media routing requires the universal model backend"
@@ -89,6 +91,7 @@ extern "C"
     int sceKernelDebugOutText(int channel, const char *text);
 }
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
@@ -451,13 +454,36 @@ void sort_models()
               { return std::strcmp(a.id, b.id) < 0; });
 }
 
+// The model list is read by the UI thread and by the HTTP thread. Short list reads and
+// deletes take this lock; select_model does not, because it loads a backend for a long time.
+std::atomic_flag models_lock = ATOMIC_FLAG_INIT;
+
+struct ModelsGuard
+{
+    ModelsGuard()
+    {
+        while (models_lock.test_and_set(std::memory_order_acquire))
+        {
+        }
+    }
+    ~ModelsGuard()
+    {
+        models_lock.clear(std::memory_order_release);
+    }
+};
+
 void load_models()
 {
     if (models_loaded)
         return;
     models_loaded = true;
 
-    const int directory = sceKernelOpen("/app0/models", 0, 0);
+    int directory = sceKernelOpen(prospero::kModelRoot, 0, 0);
+    for (unsigned retry = 0; directory < 0 && retry < 60; ++retry)
+    {
+        usleep(50000);
+        directory = sceKernelOpen(prospero::kModelRoot, 0, 0);
+    }
     int directory_bytes = -1;
     if (directory >= 0)
     {
@@ -482,13 +508,13 @@ void load_models()
                     char name[64];
                     char purpose[24];
                     char runtime[48];
-                    std::snprintf(root, sizeof(root), "/app0/models/%s", entry->d_name);
-                    std::snprintf(model_file, sizeof(model_file), "/app0/models/%s/model.ps5lm",
-                                  entry->d_name);
-                    std::snprintf(tokenizer_file, sizeof(tokenizer_file),
-                                  "/app0/models/%s/tokenizer.ps5tok", entry->d_name);
-                    std::snprintf(metadata_file, sizeof(metadata_file),
-                                  "/app0/models/%s/model.json", entry->d_name);
+                    std::snprintf(root, sizeof(root), "%s/%s", prospero::kModelRoot, entry->d_name);
+                    std::snprintf(model_file, sizeof(model_file), "%s/%s/model.ps5lm",
+                                  prospero::kModelRoot, entry->d_name);
+                    std::snprintf(tokenizer_file, sizeof(tokenizer_file), "%s/%s/tokenizer.ps5tok",
+                                  prospero::kModelRoot, entry->d_name);
+                    std::snprintf(metadata_file, sizeof(metadata_file), "%s/%s/model.json",
+                                  prospero::kModelRoot, entry->d_name);
                     read_model_metadata(metadata_file, entry->d_name, name, sizeof(name), purpose,
                                         sizeof(purpose), runtime, sizeof(runtime));
                     add_model(entry->d_name, name, purpose, root, model_file, tokenizer_file,
@@ -516,8 +542,8 @@ void load_models()
     char line[160];
     std::snprintf(line, sizeof(line),
                   "[prosperoai] models_found=%u directory_fd=%d "
-                  "directory_bytes=%d path=/app0/models\n",
-                  model_count, directory, directory_bytes);
+                  "directory_bytes=%d path=%s\n",
+                  model_count, directory, directory_bytes, prospero::kModelRoot);
     sceKernelDebugOutText(0, line);
 }
 } // namespace
@@ -536,30 +562,35 @@ const char *gpt_runtime_name()
 
 unsigned gpt_runtime_model_count()
 {
+    ModelsGuard guard;
     load_models();
     return model_count;
 }
 
 unsigned gpt_runtime_selected_model()
 {
+    ModelsGuard guard;
     load_models();
     return selected_model;
 }
 
 const char *gpt_runtime_model_id(unsigned index)
 {
+    ModelsGuard guard;
     load_models();
     return index < model_count ? models[index].id : "";
 }
 
 const char *gpt_runtime_model_name(unsigned index)
 {
+    ModelsGuard guard;
     load_models();
     return index < model_count ? models[index].name : "No models found";
 }
 
 const char *gpt_runtime_model_purpose(unsigned index)
 {
+    ModelsGuard guard;
     load_models();
     return index < model_count ? models[index].purpose : "unknown";
 }
@@ -784,7 +815,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned message
                          std::size_t output_capacity, gpt_runtime_stats_t *stats,
                          gpt_runtime_progress_fn progress)
 {
-    if (!messages || message_count < 2 || !output || !output_capacity)
+    if (!messages || message_count < 1 || !output || !output_capacity)
         return 1;
     load_models();
     if (!model_count)
@@ -952,4 +983,9 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned message
         std::snprintf(output, output_capacity, "The selected model's model.ps5lm is missing.");
     }
     return result;
+}
+
+// The AGC model catalog is fixed by installed recipe folders.
+void gpt_runtime_refresh_models()
+{
 }

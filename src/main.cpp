@@ -8,9 +8,16 @@
 #include "audio/cues.hpp"
 #include "gfx/canvas.hpp"
 #include "gfx/renderer.hpp"
+#ifdef PROSPERO_UI_VULKAN
+#include "ui/display_vulkan.hpp"
+#else
 #include "platform/ps5/display_egl.hpp"
+#endif
 #include "platform/ps5/audio_out.hpp"
 #include "platform/ps5/system.hpp"
+#ifdef PS5_LLAMA_VULKAN
+#include "http_server.hpp"
+#endif
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cstdio>
@@ -88,6 +95,9 @@ void input_event(const gpt_input_event_t &event, hui::InputFrame &input, prosper
         if (event.key >= GPT_INPUT_UP)
             input.nav = directions[event.key - GPT_INPUT_UP];
     }
+    else if (event.key == GPT_INPUT_L2 || event.key == GPT_INPUT_R2)
+        input.pressed |=
+            hui::action_bit(event.key == GPT_INPUT_L2 ? Action::jump_prev : Action::jump_next);
     else if (event.key == GPT_INPUT_SCROLL_UP)
         ui.scroll(-120);
     else if (event.key == GPT_INPUT_SCROLL_DOWN)
@@ -105,9 +115,14 @@ int main()
 {
     // This thread's large allocations stay out of the model runtimes' arena, and the
     // inference scratch takes its address range before the OpenGL runtime maps anything.
+#ifndef PROSPERO_UI_VULKAN
     ps5SetInterfaceThread();
     if (ps5_agc_backend_reserve_memory() != 0)
         hui::sys::log("[prosperoai] the inference scratch could not be reserved");
+#elif defined(PROSPERO_HYBRID_MEDIA)
+    if (ps5_agc_backend_reserve_memory() != 0)
+        hui::sys::log("[prosperoai] the media inference scratch could not be reserved");
+#endif
     prospero_setup_sdl_memory();
     SDL_Init(0); // Existing media decoder, clock and IME helpers; no SDL video.
     hui::ps5::Display display;
@@ -198,6 +213,11 @@ int main()
             // catalogue is read behind the opening that follows it.
             hui::sys::hide_splash_screen();
             app.initialize();
+#ifdef PS5_LLAMA_VULKAN
+            // Best-effort: the on-console UI runs regardless of whether the
+            // network/API server comes up.
+            prospero_http_server_start(11434);
+#endif
             first_frame = false;
         }
     }

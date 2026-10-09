@@ -61,23 +61,23 @@ constexpr std::size_t kPreinitFileOffset = 0x113CE0;
 constexpr std::size_t kModuleParamFileOffset = 0x113CE8;
 constexpr std::size_t kMetadataFileOffset = 0x11B810;
 constexpr std::uint64_t kMetadataAddress = 0x117810;
-constexpr std::size_t kMetadataSize = 0x2A9F8;
-constexpr std::size_t kBuildNoteOffset = 0x2A710;
-constexpr std::size_t kDynamicOffset = 0x2A738;
+constexpr std::size_t kMetadataSize = 0x2AB18;
+constexpr std::size_t kBuildNoteOffset = 0x2A830;
+constexpr std::size_t kDynamicOffset = 0x2A858;
 constexpr std::size_t kDynamicCount = 44;
 constexpr std::size_t kDataFileSize = 0x3B78;
 constexpr std::size_t kDataMemorySize = 0x7808;
 constexpr std::uint64_t kDataAddress = 0x110000;
 constexpr std::size_t kExportCount = 2566;
-constexpr std::size_t kRuntimeFileSize = 0x14629A;
+constexpr std::size_t kRuntimeFileSize = 0x1463BA;
 constexpr std::size_t kReadOnlyFileSize = 0x3DF80;
 constexpr std::size_t kUnwindHeaderFileOffset = 0x108164;
 constexpr std::uint64_t kUnwindHeaderAddress = 0x104164;
 constexpr std::size_t kUnwindHeaderSize = 0x5E1C;
-constexpr std::size_t kCommentFileOffset = 0x146210;
+constexpr std::size_t kCommentFileOffset = 0x146330;
 constexpr std::size_t kCommentSize = 0x58;
-constexpr std::size_t kTailNoteFileOffset = 0x146268;
-constexpr std::size_t kVersionFileOffset = 0x146280;
+constexpr std::size_t kTailNoteFileOffset = 0x146388;
+constexpr std::size_t kVersionFileOffset = 0x1463A0;
 constexpr std::uint64_t kFiniAddress = 0xC8010;
 constexpr std::uint64_t kInitAddress = 0x100;
 constexpr std::uint64_t kThreadDtorsAddress = 0x200;
@@ -88,18 +88,18 @@ constexpr std::size_t kHeapApiFileOffset = 0x114100;
 constexpr std::size_t kHeapApiSize = 0x48;
 constexpr std::size_t kObjectStorageOffset = 0x180;
 constexpr std::size_t kGotReservedEntries = 3;
-constexpr std::size_t kImportCount = 102;
-constexpr std::size_t kPltRelocationCount = 100;
+constexpr std::size_t kImportCount = 106;
+constexpr std::size_t kPltRelocationCount = 104;
 constexpr std::size_t kRelativeRelocationCount = 1790;
 constexpr std::size_t kTlsRelocationCount = 3;
 constexpr std::size_t kGlobDatRelocationCount = 3;
 constexpr std::uint64_t kRelativeAnchorSlotAddress = 0x10C008;
 constexpr std::uint64_t kRelativeAnchorAddress = 0x230;
-constexpr std::size_t kStringTableSize = 0xA7A3;
-constexpr std::size_t kSymbolTableOffset = 0xA7A8;
-constexpr std::size_t kJumpRelocationOffset = 0x1A1E0;
-constexpr std::size_t kRelaOffset = 0x1AB40;
-constexpr std::size_t kHashTableOffset = 0x253A0;
+constexpr std::size_t kStringTableSize = 0xA7E3;
+constexpr std::size_t kSymbolTableOffset = 0xA7E8;
+constexpr std::size_t kJumpRelocationOffset = 0x1A280;
+constexpr std::size_t kRelaOffset = 0x1AC40;
+constexpr std::size_t kHashTableOffset = 0x254A0;
 
 constexpr std::int64_t kDtNull = 0;
 constexpr std::int64_t kDtNeeded = 1;
@@ -716,25 +716,25 @@ std::uint64_t pack_attribute(std::uint16_t id, std::uint8_t attribute)
 void build_dynamic(std::span<std::uint8_t> dynamic, std::size_t symbol_count)
 {
     const std::vector<std::pair<std::int64_t, std::uint64_t>> entries{
-        {kDtNeeded, 0xA6C1},
-        {kDtSceNeededModule, pack_name_version_id(0xA6CF, 0x0101, 1)},
-        {kDtSceImportLib, pack_name_version_id(0xA6CF, 0x0001, 0)},
+        {kDtNeeded, 0xA701},
+        {kDtSceNeededModule, pack_name_version_id(0xA70F, 0x0101, 1)},
+        {kDtSceImportLib, pack_name_version_id(0xA70F, 0x0001, 0)},
         {kDtSceImportLibAttr, pack_attribute(0, 0x09)},
-        {kDtNeeded, 0xA6D9},
-        {kDtSceNeededModule, pack_name_version_id(0xA6F0, 0x0101, 2)},
-        {kDtSceImportLib, pack_name_version_id(0xA703, 0x0001, 1)},
-        {kDtSceImportLibAttr, pack_attribute(1, 0x09)},
         {kDtNeeded, 0xA719},
-        {kDtSceNeededModule, pack_name_version_id(0xA72D, 0x0101, 3)},
-        {kDtSceImportLib, pack_name_version_id(0xA72D, 0x0001, 2)},
+        {kDtSceNeededModule, pack_name_version_id(0xA730, 0x0101, 2)},
+        {kDtSceImportLib, pack_name_version_id(0xA743, 0x0001, 1)},
+        {kDtSceImportLibAttr, pack_attribute(1, 0x09)},
+        {kDtNeeded, 0xA759},
+        {kDtSceNeededModule, pack_name_version_id(0xA76D, 0x0101, 3)},
+        {kDtSceImportLib, pack_name_version_id(0xA76D, 0x0001, 2)},
         {kDtSceImportLibAttr, pack_attribute(2, 0x09)},
-        {kDtSoname, 0xA73D},
-        {kDtSceModuleInfo, pack_name_version_id(0xA746, 0x0101, 0)},
+        {kDtSoname, 0xA77D},
+        {kDtSceModuleInfo, pack_name_version_id(0xA786, 0x0101, 0)},
         {kDtSceModuleAttr, 0},
-        {kDtSceOrigFilename, 0xA74B},
-        {kDtSceExportLib, pack_name_version_id(0xA746, 0x0001, 3)},
+        {kDtSceOrigFilename, 0xA78B},
+        {kDtSceExportLib, pack_name_version_id(0xA786, 0x0001, 3)},
         {kDtSceExportLibAttr, pack_attribute(3, 0x01)},
-        {kDtSceExportLib, pack_name_version_id(0xA797, 0x0001, 4)},
+        {kDtSceExportLib, pack_name_version_id(0xA7D7, 0x0001, 4)},
         {kDtSceExportLibAttr, pack_attribute(4, 0x01)},
         {kDtRela, kMetadataAddress + kRelaOffset},
         {kDtRelaSz,
@@ -806,23 +806,23 @@ void build_metadata(Bytes &file, const std::vector<ApiSymbol> &api,
         append_string(metadata, string_cursor, name);
         names.push_back(name);
     }
-    require(string_cursor == 0xA6C1, "runtime symbol-name string extent");
+    require(string_cursor == 0xA701, "runtime symbol-name string extent");
 
-    put_string(metadata, 0xA6C1, "libkernel.prx");
-    put_string(metadata, 0xA6CF, "libkernel");
-    put_string(metadata, 0xA6D9, "libSceLibcInternal.prx");
-    put_string(metadata, 0xA6F0, "libSceLibcInternal");
-    put_string(metadata, 0xA703, "libSceLibcInternalExt");
-    put_string(metadata, 0xA719, "libSceSysmodule.prx");
-    put_string(metadata, 0xA72D, "libSceSysmodule");
-    put_string(metadata, 0xA73D, "libc.prx");
-    put_string(metadata, 0xA746, "libc");
-    put_string(metadata, 0xA74B, "libc.prx by BlackBearReloaded");
-    put_string(metadata, 0xA797, "libc_setjmp");
+    put_string(metadata, 0xA701, "libkernel.prx");
+    put_string(metadata, 0xA70F, "libkernel");
+    put_string(metadata, 0xA719, "libSceLibcInternal.prx");
+    put_string(metadata, 0xA730, "libSceLibcInternal");
+    put_string(metadata, 0xA743, "libSceLibcInternalExt");
+    put_string(metadata, 0xA759, "libSceSysmodule.prx");
+    put_string(metadata, 0xA76D, "libSceSysmodule");
+    put_string(metadata, 0xA77D, "libc.prx");
+    put_string(metadata, 0xA786, "libc");
+    put_string(metadata, 0xA78B, "libc.prx by BlackBearReloaded");
+    put_string(metadata, 0xA7D7, "libc_setjmp");
 
     const std::size_t symbol_count = names.size();
     const std::size_t symbol_table_size = symbol_count * 24;
-    require(symbol_table_size == 0xFA38, "runtime symbol-table size");
+    require(symbol_table_size == 0xFA98, "runtime symbol-table size");
     auto symbols = metadata.subspan(kSymbolTableOffset, symbol_table_size);
     build_export_symbols(symbols, api, export_name_offsets);
     for (std::size_t i = 0; i < imports.size(); ++i)
@@ -886,7 +886,7 @@ void build_metadata(Bytes &file, const std::vector<ApiSymbol> &api,
     require(relocation == relocation_count, "runtime emitted dynamic relocations");
 
     const Bytes hash = build_sysv_hash(names);
-    require(hash.size() == 0x5370, "runtime SysV hash size");
+    require(hash.size() == 0x5390, "runtime SysV hash size");
     copy_bytes(metadata, kHashTableOffset, hash);
     require(kHashTableOffset + hash.size() == kBuildNoteOffset, "runtime tables end at build note");
     build_gnu_note(metadata.subspan(kBuildNoteOffset, 0x24));
@@ -959,9 +959,9 @@ void verify_runtime(const Bytes &file, const std::vector<ApiSymbol> &api,
     require(read_u32(file, kMarkerFileOffset) == 1, "runtime Need_sceLibc marker");
     require(read_u64(file, kGotFileOffset) == kMetadataAddress + kDynamicOffset,
             "runtime GOT dynamic pointer");
-    require(read_ascii_z(file, kMetadataFileOffset + 0xA74B) == "libc.prx by BlackBearReloaded",
+    require(read_ascii_z(file, kMetadataFileOffset + 0xA78B) == "libc.prx by BlackBearReloaded",
             "runtime clean original filename");
-    require(api.size() + imports.size() + 1 == 2669, "runtime dynamic symbol count");
+    require(api.size() + imports.size() + 1 == 2673, "runtime dynamic symbol count");
     const std::string ascii(reinterpret_cast<const char *>(file.data()), file.size());
     require(ascii.find("BlackBearReloaded") != std::string::npos, "runtime attribution marker");
     for (std::string_view forbidden :

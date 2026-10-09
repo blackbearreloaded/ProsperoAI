@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include "native_ui.hpp"
+#include "model_downloader_ps5.hpp"
 #include "ui/components/dialog.hpp"
 #include "ui/components/form.hpp"
 #include "ui/components/grid.hpp"
@@ -86,6 +87,8 @@ struct NativeUI::Impl
     void draw_welcome(ui::Canvas &canvas) const;
     void draw_conversation(ui::Canvas &canvas) const;
     void draw_models(ui::Canvas &canvas) const;
+    void draw_model_filters(ui::Canvas &canvas) const;
+    void draw_download_progress(gfx::DrawList &list, const Rect &bounds) const;
     void draw_model(gfx::DrawList &list, const Rect &cell, int index, float focus) const;
     void draw_model_art(gfx::DrawList &list, int kind, float cx, float cy, float size, Color color,
                         float phase, float focus) const;
@@ -159,7 +162,12 @@ struct NativeUI::Impl
     float boot_ = 1, boot_age_ = 0, busy_seconds_ = 0, hero_age_ = 10;
     bool welcomed_ = false, was_busy_ = false;
     bool conversation_ = false, search_open_ = false, rail_ = false, category_focus_ = false;
+    bool empty_models_download_focus_ = true;
     bool keyboard_pending_ = false, quit_ = false;
+    int download_focus_ = 0;
+    prospero_model_download::State last_download_state_ = prospero_model_download::State::Idle;
+    bool downloaded_models_pending_ = false;
+    std::array<bool, prospero_model_download::preset_count> preset_saved_{};
     unsigned revision_ = ~0U, font_revision_ = 0;
     int active_model_ = -1, catalog_count_ = -1, dialog_action_ = 0, dialog_index_ = -1;
     int category_ = 0, pending_model_ = -1, hero_model_ = -1;

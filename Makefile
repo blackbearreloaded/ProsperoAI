@@ -33,6 +33,8 @@ GTEST_ARGS ?=
 BUILD_JOBS ?= $(shell nproc 2>/dev/null || echo 2)
 USE_CCACHE ?= 1
 export BUILD_JOBS USE_CCACHE
+CCACHE_DIR ?= $(CURDIR)/build/ccache
+export CCACHE_DIR
 export HOST_CXX HOST_TEST_CXXFLAGS HOST_TEST_LDFLAGS
 export APP_DEFINITIONS APP_CXXFLAGS APP_INCLUDE_PATHS APP_STATIC_ARCHIVES APP_RUNTIME_MODULES
 export PACBREW_PACKAGES PACBREW_INCLUDE_PATHS PACBREW_STATIC_ARCHIVES
@@ -47,7 +49,7 @@ APP_DEFINITIONS += SDL_MAIN_HANDLED SDL_STATIC_LIB USING_GENERATED_CONFIG_H GL_G
 APP_INCLUDE_PATHS += include vendor/ps5/sdl/include vendor/ps5/sdl/include/SDL2 .deps/ui-kit/stage/src build/generated .deps/ps5-opengl/current/include
 APP_STATIC_ARCHIVES += vendor/ps5/sdl/lib/libSDL2.a .deps/ps5-opengl/libps5opengl-group.a
 
-.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps pacbrew pacbrew-list assets-check format format-check tidy lint check deploy undeploy clean distclean help
+.PHONY: all app build init doctor test test-deps test-unit test-integration libc deps deps-status llama-vulkan radv pacbrew pacbrew-list assets-check format format-check tidy lint check deploy undeploy clean distclean help
 
 all: app
 build: app
@@ -75,6 +77,32 @@ deps: test-deps
 	@printf '%s\n' '==> [deps] Fetching declared native dependencies'
 	@bash tools/setup-native-dependencies.sh
 	@bash tools/setup-pacbrew-dependencies.sh --environment
+	@python3 -B tools/deps.py fetch
+
+deps-status:
+	@python3 -B tools/deps.py status
+
+radv: deps ## Build RADV for the PS5 (libvulkan_radeon.ps5.a) from the pinned Mihawk checkouts
+	@bash tools/build-radv.sh
+
+llama-vulkan: deps ## Host llama-cli with the Vulkan backend, plus a PS5 syntax check of ggml-vulkan
+	@bash tools/build-llama-vulkan.sh
+
+.PHONY: llama-ps5 vulkan-smoke llama-vulkan-title app-vulkan app-vulkan-folder
+llama-ps5: deps ## Cross-build static llama.cpp and Vulkan libraries for PS5
+	@bash tools/build-llama-ps5.sh
+
+vulkan-smoke: ## Build PS5 Vulkan startup/device-discovery test folder (PPSA99023)
+	@bash tools/build-vulkan-smoke.sh
+
+llama-vulkan-title: llama-ps5 ## Build model inference test folder (requires build/vulkan-models/stories260K.gguf)
+	@LLAMA_SMOKE=1 bash tools/build-vulkan-smoke.sh
+
+app-vulkan: llama-ps5 ## Build ProsperoAI UI/API with llama.cpp Vulkan in test slot PPSA99023
+	@PROSPERO_VULKAN_APP=1 bash tools/build-vulkan-smoke.sh
+
+app-vulkan-folder: llama-ps5 ## Build the Vulkan app folder in test slot PPSA99023
+	@PROSPERO_VULKAN_APP=1 bash tools/build-vulkan-smoke.sh
 
 pacbrew:
 	@printf '%s\n' '==> [pacbrew] Fetching the pinned prebuilt ports sysroot'
@@ -144,7 +172,10 @@ help:
 	  'make test-deps       Fetch verified host-only GoogleTest source' \
 	  'make test-unit       Run host-native GoogleTest application tests' \
 	  'make test-integration  Run host tooling integration tests' \
-	  'make deps            Fetch native dependencies into .deps/' \
+	  'make deps            Fetch native and pinned dependencies (tools/deps.json)' \
+	  'make deps-status     Show each pinned dependency and whether it matches its pin' \
+	  'make llama-vulkan    Build llama.cpp with Vulkan on the host and syntax-check it for the PS5' \
+	  'make radv            Build RADV for the PS5 from the pinned Mihawk checkouts' \
 	  'make pacbrew         Fetch the pinned PacBrew ports sysroot' \
 	  'make pacbrew-list    List PacBrew pkg-config module names' \
 	  'make assets-check    Validate the current presentation assets' \

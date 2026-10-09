@@ -5,6 +5,9 @@
 #include "dev_script.hpp"
 #include "gfx/renderer.hpp"
 #include "gfx/gl_program.hpp"
+#ifdef PROSPERO_UI_VULKAN
+#include "backend.hpp"
+#endif
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GL/glcorearb.h>
@@ -207,6 +210,9 @@ int main(int argc, char **argv)
                 file.write(reinterpret_cast<char *>(pixel), 3);
             }
     }
+#ifdef PROSPERO_UI_VULKAN
+    assert(prospero::vkui::open(false, width, height));
+#else
     auto platform = reinterpret_cast<PFNEGLGETPLATFORMDISPLAYEXTPROC>(
         eglGetProcAddress("eglGetPlatformDisplayEXT"));
     EGLDisplay display = platform(EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, nullptr);
@@ -222,6 +228,7 @@ int main(int argc, char **argv)
     EGLContext context = eglCreateContext(display, EGL_NO_CONFIG_KHR, EGL_NO_CONTEXT, attributes);
     assert(context != EGL_NO_CONTEXT &&
            eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context));
+#endif
     hui::gfx::set_glsl_prefix("#version 450 core\n");
     hui::gfx::Renderer renderer;
     assert(renderer.init());
@@ -347,8 +354,8 @@ int main(int argc, char **argv)
             if (!script.capture().empty())
             {
                 const std::string path = script.capture();
-                const std::string name =
-                    path.substr(path.find_last_of('/') + 1, path.size() - path.find_last_of('/') - 5);
+                const std::string name = path.substr(path.find_last_of('/') + 1,
+                                                     path.size() - path.find_last_of('/') - 5);
                 capture(name.c_str());
                 script.capture_done(true);
             }
@@ -470,6 +477,16 @@ int main(int argc, char **argv)
         frames(120);
         render();
         glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, recording_pixels.data());
+        if (before != recording_pixels)
+        {
+            for (const auto &entry : {std::pair{"motion-before", &before},
+                                      std::pair{"motion-after", &recording_pixels}})
+            {
+                std::ofstream diagnostic(output + "/" + entry.first + ".rgb", std::ios::binary);
+                diagnostic.write(reinterpret_cast<const char *>(entry.second->data()),
+                                 entry.second->size());
+            }
+        }
         assert(before == recording_pixels);
         std::fprintf(stderr, "Reduced motion: identical frames after two seconds at rest.\n");
     }

@@ -107,8 +107,21 @@ mapfile -d '' -t source_paths < <(
         -print0 | sort -z
 )
 sources=()
+exclude_sources=()
+[[ -z ${APP_EXCLUDE_SOURCES:-} ]] || read -r -a exclude_sources <<< "$APP_EXCLUDE_SOURCES"
 for source in "${source_paths[@]}"; do
-    sources+=("${source#"$root/"}")
+    relative=${source#"$root/"}
+    skip=0
+    for excluded in "${exclude_sources[@]}"; do
+        [[ $relative != "$excluded" ]] || { skip=1; break; }
+    done
+    (( skip )) || sources+=("$relative")
+done
+# A variant build (e.g. the Vulkan backend) names extra sources outside src/
+# here; empty by default, so the standard app build is unaffected.
+[[ -z ${APP_EXTRA_SOURCES:-} ]] || read -r -a extra_sources <<< "$APP_EXTRA_SOURCES"
+for source in "${extra_sources[@]:-}"; do
+    [[ -z $source ]] || sources+=("$source")
 done
 (( ${#sources[@]} > 0 )) || { echo "src/ has no C or C++ sources" >&2; exit 2; }
 kit_prefix=${kit_stage#"$root/"}/src
@@ -174,7 +187,7 @@ fi
 
 objects=()
 for source in "${sources[@]}"; do
-    [[ $source =~ ^(src|\.deps/ui-kit/stage/src)/[A-Za-z0-9_./-]+\.(c|cc|cpp)$ && -f $root/$source ]] || {
+    [[ $source =~ ^(src|vulkan|\.deps/ui-kit/stage/src)/[A-Za-z0-9_./-]+\.(c|cc|cpp)$ && -f $root/$source ]] || {
         echo "invalid source: $source" >&2; exit 2;
     }
     object="$build/obj/$source.o"
@@ -269,10 +282,16 @@ if [[ -n ${pacbrew_root:-} ]]; then
         ninja_inputs+=("$input")
     done < <(find "$pacbrew_root" -type f \( -name '*.a' -o -name '*.so' \) -print0 | sort -z)
 fi
+# A variant build (e.g. the Vulkan backend) names extra raw linker arguments
+# here (--defsym renames, grouped static archives); empty by default, so the
+# standard app build's link line is unaffected.
+extra_link_flags=()
+[[ -z ${APP_EXTRA_LINK_FLAGS:-} ]] || read -r -a extra_link_flags <<< "$APP_EXTRA_LINK_FLAGS"
 ninja_edge LINK "$build/llvm-pie.elf" "$sdk_root/bin/prospero-lld" \
     -T "$native/ps5-pie.ld" --eh-frame-hdr --wrap=malloc --wrap=calloc \
     --wrap=posix_memalign --wrap=free --wrap=realloc --wrap=malloc_usable_size \
     --wrap=sceAgcInit --wrap=sceSystemServiceHideSplashScreen \
+    "${extra_link_flags[@]}" \
     --version-script "$native/app-symbols.map" \
     -L "$sdk_root/target/lib" -e _start -o "$build/llvm-pie.elf" "${link_inputs[@]}" \
     --as-needed "${sdk_stubs[@]}"

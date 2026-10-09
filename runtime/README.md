@@ -7,8 +7,14 @@ runtime implementation, proprietary SDK binary, or game file.
 The release artifact has SHA-256:
 
 ```text
-e6ff45d16adf687855cc3b33b0c8a4132b6504360b221e0a34c7e99fb3ba0036
+52fde33426885a3dda5d02ca76ba7f9a720e8f7b165a0293c121bd808aaf10f4
 ```
+
+> [!WARNING]
+> This digest was regenerated after adding the `libSceNet` import library for
+> the HTTP API/web UI (see `src/http_server.cpp`). It has not yet been
+> confirmed booting on PS5 hardware -- only build determinism is guaranteed
+> so far.
 
 Generate it from the repository root:
 
