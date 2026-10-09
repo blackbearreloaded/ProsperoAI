@@ -28,3 +28,13 @@ for name in archives+['libstable-diffusion.a']:
     source=root/'vendor/lib'/name;target=out/name
     if not target.exists() or max(source.stat().st_mtime,rename.stat().st_mtime)>target.stat().st_mtime:
         subprocess.run(['llvm-objcopy-18','--redefine-syms='+str(rename),str(source),str(target)],check=True)
+# The sound library names its model's files under /app0/models, where they no longer are:
+# its three ways of opening a file go to vulkan/vendor_paths.cpp.
+paths=out/'paths.map'
+content=('fopen prospero_path_fopen\nopen prospero_path_open\n'
+         '_ZNSt3__113basic_filebufIcNS_11char_traitsIcEEE4openEPKcj prospero_path_filebuf_open\n')
+if not paths.exists() or paths.read_text()!=content:
+    paths.write_text(content)
+source=root/'vendor/lib/libstable-audio.a';target=out/'libstable-audio.a'
+if not target.exists() or max(source.stat().st_mtime,paths.stat().st_mtime)>target.stat().st_mtime:
+    subprocess.run(['llvm-objcopy-18','--redefine-syms='+str(paths),str(source),str(target)],check=True)

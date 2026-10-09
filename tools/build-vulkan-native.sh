@@ -27,7 +27,8 @@ sources=(src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
  src/ps5_agc_backend.cpp src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
- vulkan/gpt_runtime_hybrid.cpp vulkan/sd_arena.cpp
+ vulkan/gpt_runtime_hybrid.cpp vulkan/sd_arena.cpp vulkan/gpt_runtime_agc_text.cpp vulkan/vendor_paths.cpp
+ src/backends/mistral/backend.c src/backends/qwen35/backend.c src/tokenizer.c
  vulkan/gpt_runtime_vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
 while IFS= read -r relative; do
@@ -43,6 +44,15 @@ for relative in "${sources[@]}"; do
  esac
  object="$work/obj/${relative//\//_}.o"
  ninja_inputs=("$root/$relative" "$root/tooling/prospero-clang18")
+ if [[ $relative == *.c ]]; then
+  # The AGC text backends, built as tools/build.sh builds them.
+  ninja_edge CC "$object" env PS5_PAYLOAD_SDK="$sdk" USE_CCACHE="${USE_CCACHE:-1}" sh "$root/tooling/prospero-clang18" \
+   -std=c11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -DPS5_DUAL_BACKEND -DPS5_SANDBOX_APP \
+   -DPS5_APP_HAS_DSO_HANDLE -DPS5_AGC_LINKED -I "$root/include" -I "$root/src" \
+   -MD -MF "$object.d" -c "$root/$relative" -o "$object"
+  objects+=("$object")
+  continue
+ fi
  ninja_edge CXX "$object" env PS5_PAYLOAD_SDK="$sdk" USE_CCACHE="${USE_CCACHE:-1}" sh "$root/tooling/prospero-clang18" \
   -std=c++20 -O2 -fexceptions -fcxx-exceptions -frtti -Wall -Wextra -Wno-missing-field-initializers \
   -ffunction-sections -fdata-sections -DPS5_LLAMA_VULKAN -DPROSPERO_UI_VULKAN -DPROSPERO_HYBRID_MEDIA \
@@ -95,7 +105,7 @@ MAP
  "$root/build/llama-ps5/ggml/src/libggml.a" "$root/build/llama-ps5/ggml/src/libggml-base.a" \
  "$root/build/llama-ps5/ggml/src/libggml-cpu.a" "$root/build/llama-ps5/ggml/src/ggml-vulkan/libggml-vulkan.a" \
  "$work/media/libstable-diffusion.a" "$work/media/libggml.a" "$work/media/libggml-cpu.a" "$work/media/libggml-base.a" \
- "$root/vendor/lib/libstable-audio.a" "$root/vendor/lib/libkokoro-tts.a" "$root/vendor/lib/libespeak-ng.a" \
+ "$work/media/libstable-audio.a" "$root/vendor/lib/libkokoro-tts.a" "$root/vendor/lib/libespeak-ng.a" \
  "$root/vendor/lib/libtts-ggml.a" "$root/vendor/lib/libtts-ggml-cpu.a" "$root/vendor/lib/libtts-ggml-base.a" "$root/vendor/lib/libcompat.a" --end-group \
  --defsym=vkGetInstanceProcAddr=radv_GetInstanceProcAddr --defsym=vkGetDeviceProcAddr=vk_common_GetDeviceProcAddr \
  --defsym=vkCmdCopyBuffer=vk_common_CmdCopyBuffer --defsym=vkGetPhysicalDeviceFeatures2=vk_common_GetPhysicalDeviceFeatures2 \

@@ -1,8 +1,8 @@
-# ProsperoAI - An image, a voice clip played back, and a sound, on a console.
+# ProsperoAI - A text answer, an image, a voice clip played back, and a sound, on a console.
 #
 # Played by the app itself, as tests/console/first-run.txt is. It expects the image,
-# voice and sound models (found by "sd-turbo", "kokoro" and "stable-audio") and needs no
-# text model. After the voice clip Triangle plays it: the status that follows must say
+# voice and sound models (found by "sd-turbo", "kokoro" and "stable-audio"); the text
+# part uses the models found by "mistral" and "qwen" when they are there. After the voice clip Triangle plays it: the status that follows must say
 # "Playing audio" and "sound: playing".
 limit 1500
 
@@ -10,6 +10,51 @@ until started 90
 wait 4
 status
 shot 01-start
+
+# Text (optional: without the model, its two "expect" lines say NO).
+press r1
+wait 1
+type mistral
+wait 1
+press cross
+wait 1
+press right
+press cross
+wait 2
+until idle 420
+expect model mistral
+backspace 7
+press l1
+wait 1
+type Say hello in five words.
+submit
+wait 2
+until idle 420
+expect answer
+wait 2
+status
+
+press r1
+wait 1
+type qwen
+wait 1
+press cross
+wait 1
+press right
+press cross
+wait 2
+until idle 420
+expect model qwen
+backspace 4
+press l1
+wait 1
+type Name three colours.
+submit
+wait 2
+until idle 420
+expect answer
+wait 2
+status
 
 # Image.
 press r1

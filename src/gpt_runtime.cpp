@@ -428,6 +428,7 @@ void read_model_metadata(const char *path, const char *fallback, char *name,
 RuntimeArchitecture directory_architecture(const char *purpose, const char *runtime,
                                            const char *model_file)
 {
+    (void)runtime; // names a media runtime; a build without them has no use for it
 #ifdef PS5_MEDIA_IMAGE
     if (std::strcmp(purpose, "text-to-image") == 0 &&
         std::strcmp(runtime, "stable-diffusion-cpp-sd2") == 0)
@@ -547,6 +548,12 @@ void load_models()
     sceKernelDebugOutText(0, line);
 }
 } // namespace
+
+#ifdef PROSPERO_RUNTIME_NAMESPACE
+// The Vulkan build keeps this runtime beside its own (vulkan/gpt_runtime_agc_text.cpp).
+namespace PROSPERO_RUNTIME_NAMESPACE
+{
+#endif
 
 bool gpt_runtime_available()
 {
@@ -989,3 +996,15 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned message
 void gpt_runtime_refresh_models()
 {
 }
+
+#ifdef PROSPERO_RUNTIME_NAMESPACE
+// Takes the resident text model out of memory; the next answer loads it again.
+void release_model_memory()
+{
+#ifdef PS5_DUAL_BACKEND
+    if (runtime_backend)
+        runtime_backend->shutdown();
+#endif
+}
+} // namespace PROSPERO_RUNTIME_NAMESPACE
+#endif
