@@ -30,15 +30,16 @@ how it is built, and what a run on a console showed.
 > on the PS5 GPU. It is not production software.
 
 > [!NOTE]
-> **Work in progress on this branch.** The GPU backend is being migrated from the
-> AGC kernels to llama.cpp's Vulkan backend on RADV, and the network layer is being
-> moved onto the Payload SDK's sockets. The Vulkan folder build has been verified on PS5 FW 12.70;
-> see [benchmark results](docs/VK_BENCHMARK_2026-10-08.md). Build steps are in [docs/BUILDING.md](docs/BUILDING.md).
+> Text inference and the native interface use Vulkan on RADV; media generation uses
+> the existing AGC backend in the same application. Voice generation and switching
+> back to text have been verified on PS5 FW 12.70. Image/Audio generation in the
+> combined build remains unverified. See [current status](docs/VK_ACTIVE.md) and
+> [build instructions](docs/BUILDING.md).
 
 ## Highlights
 
 - Runs supported models locally without an account, cloud API, or conversation upload.
-- Uses native PS5 AGC GPU compute for the model paths; this is not a ROCm port.
+- Uses Vulkan for text and native PS5 AGC for media compute.
 - Searches and filters installed text, image, audio, and speech models in a scrolling library.
 - Uses stable model IDs for selection and saved conversations, with no eight-model catalog limit.
 - Offers Midnight and Daylight themes, a living backdrop, interface sounds, notices, reduced motion,
@@ -46,7 +47,7 @@ how it is built, and what a run on a console showed.
 - Draws answers in Latin, Greek, Cyrillic, Chinese, Japanese and Korean with scalable faces.
 - Stores independent text, image, audio, and speech sessions under `/download0`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
-- Ships without model weights. Users choose and install curated model folders separately.
+- Ships without weights. Models offers verified presets and standalone GGUF downloads.
 
 > [!IMPORTANT]
 > ProsperoAI does not run on an unmodified retail console. It is intended for
@@ -80,7 +81,10 @@ The linked repositories contain the exact directory layout, integrity hashes,
 upstream provenance, licenses, and preparation recipe for each model. Do not
 rename or mix their internal files.
 
-### Prepare text models yourself
+### Legacy AGC text model preparation
+
+The hybrid release reads text GGUF files directly; these conversion tools apply to
+the legacy AGC-only text build.
 
 The open-source [model preparation tools](model-tools/) convert a supported
 single-file GGUF into ProsperoAI's deterministic `model.ps5lm`,
@@ -157,8 +161,8 @@ folders at launch and shows their friendly names and purposes in Models. If
 no compatible model is installed, the app opens normally and explains where to
 add one.
 
-Only the folder ZIP is distributed because models must be inserted before the
-title is mounted.
+The folder ZIP includes the model mount payload. Models can be downloaded while
+the app is running after that payload has been loaded.
 
 ## Using ProsperoAI
 
@@ -169,7 +173,9 @@ title is mounted.
 | Circle | Close a dialog, leave the conversation list, or return to the settings categories |
 | L1 / R1 | Switch between Workspace, Models, and Settings |
 | Square | Start a new conversation in Workspace; search in Models |
-| Triangle | Step through the model kinds, retry a failed answer, delete the focused conversation, or play saved audio |
+| L2 / R2 in Models | Previous / next model category |
+| Triangle | Insert Space while typing; otherwise retry, delete a focused conversation, or play saved audio |
+| R2 while typing | Done; send from Workspace |
 | Options | Ask to close the app, once nothing is running and the conversation is saved |
 | Right stick | Scroll through the current conversation |
 | Physical USB keyboard | Type in the prompt field or the model search; Enter sends |
@@ -190,8 +196,9 @@ sudo apt update
 sudo apt install ccache clang-18 clang-format-18 clang-tidy-18 lld-18 make \
   ninja-build pkg-config python3 python3-venv tar unzip wget
 
-make check
-make app
+make lint test
+# Set up Vulkan dependencies as documented in docs/BUILDING.md.
+make app-release
 ```
 
 Outputs:
