@@ -117,6 +117,9 @@ jobs:
       - name: Validate source and assets
         run: make lint
 
+      - name: Fetch pinned HTTP test headers
+        run: python3 tools/deps.py fetch llama-cpp
+
       - name: Run host regression tests
         run: make test
 
