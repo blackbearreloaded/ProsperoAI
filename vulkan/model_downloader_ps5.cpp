@@ -291,6 +291,95 @@ public:
     }
 };
 
+// Overlaps network reads with SHA-256 hashing and the disk write: a second
+// thread hashes and writes the previous chunk while the caller keeps calling
+// sceHttp2ReadData into the next free slot, instead of serializing
+// network -> hash -> disk per chunk as the straight-line loop did.
+class PipelinedSink {
+    enum class SlotState { Empty, Full };
+    struct Slot {
+        std::vector<std::uint8_t> data;
+        std::size_t length = 0;
+        std::atomic<SlotState> state{SlotState::Empty};
+    };
+    static constexpr std::size_t kSlots = 2;
+    static constexpr std::size_t kSlotBytes = 1024 * 1024;
+    std::array<Slot, kSlots> slots_{};
+    std::size_t next_fill_ = 0, next_drain_ = 0;
+    FILE *file_ = nullptr;
+    Sha256 hash_;
+    void *thread_ = nullptr;
+    std::atomic<bool> finished_{false};
+    std::atomic<bool> write_failed_{false};
+
+    static void *run(void *self) {
+        static_cast<PipelinedSink *>(self)->drain();
+        return nullptr;
+    }
+    void drain() {
+        for (;;) {
+            Slot &slot = slots_[next_drain_ % kSlots];
+            if (slot.state.load(std::memory_order_acquire) != SlotState::Full) {
+                if (finished_.load(std::memory_order_acquire)) return;
+                usleep(200);
+                continue;
+            }
+            if (!write_failed_.load(std::memory_order_acquire)) {
+                hash_.update(slot.data.data(), slot.length);
+                if (std::fwrite(slot.data.data(), 1, slot.length, file_) != slot.length)
+                    write_failed_.store(true, std::memory_order_release);
+            }
+            slot.state.store(SlotState::Empty, std::memory_order_release);
+            ++next_drain_;
+        }
+    }
+
+public:
+    bool start(FILE *file) {
+        file_ = file;
+        finished_.store(false, std::memory_order_release);
+        write_failed_.store(false, std::memory_order_release);
+        next_fill_ = next_drain_ = 0;
+        for (auto &slot : slots_) {
+            slot.data.assign(kSlotBytes, 0);
+            slot.length = 0;
+            slot.state.store(SlotState::Empty, std::memory_order_release);
+        }
+        pthread_attr_t attributes;
+        int rc = pthread_attr_init(&attributes);
+        const bool attributes_ready = rc == 0;
+        if (rc == 0) rc = pthread_attr_setstacksize(&attributes, 256 * 1024);
+        if (rc == 0) rc = scePthreadCreate(&thread_, &attributes, &PipelinedSink::run, this, "prosperoai-model-write");
+        if (attributes_ready) pthread_attr_destroy(&attributes);
+        return rc == 0;
+    }
+    // Blocks until a slot is free, then returns it for the caller to read network data into.
+    std::uint8_t *acquire(std::size_t *capacity) {
+        for (;;) {
+            Slot &slot = slots_[next_fill_ % kSlots];
+            if (slot.state.load(std::memory_order_acquire) == SlotState::Empty) {
+                *capacity = slot.data.size();
+                return slot.data.data();
+            }
+            usleep(200);
+        }
+    }
+    // Hands the just-filled slot to the writer thread.
+    void submit(std::size_t length) {
+        Slot &slot = slots_[next_fill_ % kSlots];
+        slot.length = length;
+        slot.state.store(SlotState::Full, std::memory_order_release);
+        ++next_fill_;
+    }
+    // Waits for every submitted chunk to be hashed and written, then returns the digest.
+    bool finish(std::string *digest) {
+        finished_.store(true, std::memory_order_release);
+        scePthreadJoin(thread_, nullptr);
+        if (digest) *digest = hash_.finish();
+        return !write_failed_.load(std::memory_order_acquire);
+    }
+};
+
 bool make_directories(const std::string &path) {
     for (std::size_t i = std::strlen(kModelRoot) + 1; i <= path.size(); ++i) {
         if (i != path.size() && path[i] != '/') continue;
@@ -311,25 +400,31 @@ bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile
     http.close_request();
     bool ok = http.get(std::string("https://huggingface.co/") + preset.repository +
                        "/resolve/" + preset.revision + "/" + encode_path(item.source));
-    Sha256 hash;
-    std::array<std::uint8_t, 256 * 1024> buffer{};
+    PipelinedSink sink;
+    bool sink_started = false;
+    if (ok) {
+        sink_started = sink.start(file);
+        if (!sink_started) { storage_error("Preset writer thread"); ok = false; }
+    }
     std::uint64_t done = 0;
     while (ok) {
-        int count = sceHttp2ReadData(http.request, buffer.data(), buffer.size());
+        std::size_t capacity = 0;
+        std::uint8_t *buffer = sink.acquire(&capacity);
+        int count = sceHttp2ReadData(http.request, buffer, capacity);
         if (count < 0) { set_error("Preset download", count); ok=false; break; }
         if (!count) break;
         if (done + static_cast<std::uint64_t>(count) > item.size) {
             set_status("Preset file is larger than its pinned manifest."); current.store(State::Failed); ok=false; break;
         }
-        if (std::fwrite(buffer.data(), 1, count, file) != static_cast<std::size_t>(count)) {
-            storage_error("Preset disk write"); ok=false; break;
-        }
-        hash.update(buffer.data(), count); done += count;
+        sink.submit(static_cast<std::size_t>(count));
+        done += count;
         completed_bytes.store(completed + done, std::memory_order_release);
     }
+    std::string digest;
+    const bool write_ok = sink_started ? sink.finish(&digest) : true;
+    if (ok && !write_ok) { storage_error("Preset disk write"); ok = false; }
     if (std::fclose(file) != 0 && ok) { storage_error("Preset final disk write"); ok=false; }
     if (ok) {
-        const auto digest = hash.finish();
         if (done != item.size || digest != item.sha256) {
             char error[160];
             std::snprintf(error, sizeof(error), "Verification failed: %s (%llu/%llu bytes).",
@@ -459,17 +554,24 @@ void *worker_impl(void *) {
         const std::string url="https://huggingface.co/"+repo+"/resolve/main/"+encode_path(item.name);
         bool ok=http.get(url);
         std::uint64_t expected=item.size;
-        Sha256 hash;
-        std::array<std::uint8_t, 1024*1024> buffer{};
+        PipelinedSink sink;
+        bool sink_started=false;
+        if (ok) { sink_started=sink.start(file); if(!sink_started){storage_error("Model writer thread");ok=false;} }
         std::uint64_t done=0;
-        while(ok){int n=sceHttp2ReadData(http.request,buffer.data(),buffer.size());if(n<0){set_error("Model download",n);ok=false;break;}if(n==0)break;
+        while(ok){
+            std::size_t capacity=0;
+            std::uint8_t *buffer=sink.acquire(&capacity);
+            int n=sceHttp2ReadData(http.request,buffer,capacity);if(n<0){set_error("Model download",n);ok=false;break;}if(n==0)break;
             if(done+static_cast<std::uint64_t>(n)>expected){set_error("Model size check",-1);ok=false;break;}
-            if(std::fwrite(buffer.data(),1,n,file)!=static_cast<std::size_t>(n)){storage_error("Disk write");ok=false;break;}
-            hash.update(buffer.data(),n);done+=n;completed_bytes.store(done,std::memory_order_release);
+            sink.submit(static_cast<std::size_t>(n));
+            done+=n;completed_bytes.store(done,std::memory_order_release);
         }
+        std::string digest;
+        const bool write_ok = sink_started ? sink.finish(&digest) : true;
+        if (ok && !write_ok) { storage_error("Disk write"); ok=false; }
         if (std::fclose(file) != 0 && ok) { storage_error("Final disk write"); ok=false; }
         total_bytes.store(expected,std::memory_order_release);
-        if(ok&&(done!=expected||hash.finish()!=item.sha256)){set_status("Download size or SHA-256 check failed; partial file removed.");current.store(State::Failed);ok=false;}
+        if(ok&&(done!=expected||digest!=item.sha256)){set_status("Download size or SHA-256 check failed; partial file removed.");current.store(State::Failed);ok=false;}
         if(ok&&rename(part_path.c_str(),final_path.c_str())!=0){set_status("Could not finalize downloaded model file.");current.store(State::Failed);ok=false;}
         if(!ok) std::remove(part_path.c_str());
         if(ok){char text[160];std::snprintf(text,sizeof(text),"Verified %s (%llu MiB). Restart not needed; refreshing models.",installed_name(repo,item.name).c_str(),static_cast<unsigned long long>(done/(1024*1024)));set_status(text);current.store(State::Complete,std::memory_order_release);}
