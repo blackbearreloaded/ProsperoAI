@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 01.002.000
 
 - Image generation works in the combined build: the image runtime has a memory region of
   its own again, shared with the GPU, instead of the app's heap.
