@@ -41,4 +41,12 @@ const Storage &storage();
 
 // What a sandbox path is on the console now; the path itself when it is not one.
 std::string real_path(const char *path);
+
+// True for a path under /data while /data is only a folder of the app's own sandbox.
+// ProsperoAI 01.001.000 started a helper that stays on the console until it restarts
+// and mounts the old model folder into the sandbox at every start, under a /data it
+// makes there. That folder takes files, so it would pass for filesystem access, and
+// everything written to it is lost with the sandbox. Such paths are refused, which
+// sends the request on to Lapy.
+bool private_data_path(const char *path);
 } // namespace prospero

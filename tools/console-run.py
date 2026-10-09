@@ -78,7 +78,8 @@ def read(ftp, path):
 
 
 def running(ftp):
-    return f"{TITLE}_000" in (names(ftp, "/mnt/sandbox") or {})
+    # The sandbox folder can outlive the app; the app's own folder mounted in it cannot.
+    return "app0" in (names(ftp, f"/mnt/sandbox/{TITLE}_000") or {})
 
 
 def errors(ftp):

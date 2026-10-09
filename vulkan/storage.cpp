@@ -17,6 +17,7 @@
 #include <vector>
 
 extern "C" int sceKernelDebugOutText(int, const char *);
+extern "C" int __real_stat(const char *, struct stat *);
 
 namespace prospero
 {
@@ -260,6 +261,11 @@ const Storage &prepare_storage()
 
     if (settled.granted() && settled.data_root == kData)
     {
+        // The helper of 01.001.000, if it is still on the console, is asked to leave: it
+        // looks for this file. With it gone the app's sandbox gets no /data of its own.
+        if (is_file("/data/prospero-model-mount.log"))
+            if (std::FILE *stop = std::fopen("/data/prospero-model-mount.stop", "wb"))
+                std::fclose(stop);
         settled.moved_models = adopt_models(kSharedModels);
         if (!settled.title_id.empty())
             settled.moved_models += adopt_models("/data/homebrew/" + settled.title_id + "/models");
@@ -276,6 +282,22 @@ const Storage &prepare_storage()
 const Storage &storage()
 {
     return settled;
+}
+
+bool private_data_path(const char *path)
+{
+    if (!path || std::strncmp(path, "/data", 5) != 0 || (path[5] != '/' && path[5] != '\0'))
+        return false;
+    // The sandbox's own root and a folder made in it are one device; the console's /data
+    // is a volume of its own, in a sandbox it was mounted into and outside one alike.
+    struct stat root
+    {
+    };
+    struct stat data
+    {
+    };
+    return __real_stat("/", &root) == 0 && __real_stat("/data", &data) == 0 &&
+           root.st_dev == data.st_dev;
 }
 
 std::string real_path(const char *path)

@@ -12,6 +12,7 @@
 #ifdef PROSPERO_UI_VULKAN
 #include "storage.hpp"
 
+#include <cerrno>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -50,6 +51,15 @@ bool sandbox_name(const char *path)
            (std::strncmp(path, "/app0", 5) == 0 || std::strncmp(path, "/download0", 10) == 0);
 }
 
+// A file that must not be made or opened: see prospero::private_data_path.
+bool refused(const char *path)
+{
+    if (!prospero::private_data_path(path))
+        return false;
+    errno = EACCES;
+    return true;
+}
+
 // `path`, or its real name in `real` when it is a sandbox name.
 const char *resolve(const char *path, std::string &real)
 {
@@ -62,6 +72,8 @@ const char *resolve(const char *path, std::string &real)
 
 extern "C" std::FILE *__wrap_fopen(const char *path, const char *mode)
 {
+    if (refused(path))
+        return nullptr;
     std::string real;
     return __real_fopen(resolve(path, real), mode);
 }
@@ -82,6 +94,8 @@ extern "C" int __wrap_open(const char *path, int flags, ...)
         mode = va_arg(arguments, int);
         va_end(arguments);
     }
+    if (refused(path))
+        return -1;
     std::string real;
     return __real_open(resolve(path, real), flags, mode);
 }
@@ -100,6 +114,8 @@ extern "C" int __wrap_lstat(const char *path, struct stat *info)
 
 extern "C" int __wrap_mkdir(const char *path, mode_t mode)
 {
+    if (refused(path))
+        return -1;
     std::string real;
     return __real_mkdir(resolve(path, real), mode);
 }
@@ -136,6 +152,8 @@ extern "C" int __wrap_access(const char *path, int mode)
 
 extern "C" DIR *__wrap_opendir(const char *path)
 {
+    if (refused(path))
+        return nullptr;
     std::string real;
     return __real_opendir(resolve(path, real));
 }

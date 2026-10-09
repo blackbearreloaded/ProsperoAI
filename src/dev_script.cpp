@@ -124,8 +124,8 @@ bool DevScript::load(const std::string &request, const std::string &output)
     output_ = output;
     const std::size_t parent = output.find_last_of('/');
     if (parent != std::string::npos && parent > 0)
-        mkdir(output.substr(0, parent).c_str(), 0755);
-    mkdir(output.c_str(), 0755);
+        mkdir(output.substr(0, parent).c_str(), 0777);
+    mkdir(output.c_str(), 0777);
     const std::string handled_path = output + "/handled-token.txt";
     std::string handled;
     if (hui::save::read_file(handled_path, &handled, 256) && handled == token)
