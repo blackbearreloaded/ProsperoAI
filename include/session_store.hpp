@@ -13,6 +13,9 @@ namespace prospero_session
 constexpr unsigned MessageCapacity = 64;
 constexpr unsigned CatalogCapacity = 64;
 constexpr unsigned MessageBytes = 4096;
+// Room for a downloaded file's ID, "<owner>-<repository>--<file>.gguf". At 48 bytes a
+// longer ID was cut, and the conversation no longer matched its model.
+constexpr unsigned ModelIdBytes = 384;
 
 struct Message
 {
@@ -25,8 +28,8 @@ struct Record
 {
     char id[48];
     char title[72];
-    char model_id[48];
-    char model_name[64];
+    char model_id[ModelIdBytes];
+    char model_name[ModelIdBytes];
     char purpose[24];
     char updated_time[9];
     std::uint64_t created_us;

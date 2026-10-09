@@ -17,6 +17,11 @@
 - Downloads use libcurl with a socket receive buffer of up to 4 MB instead of the
   console's 64 KB, which held distant servers to about 1 MB/s; they also work with
   storage access, where the console's own HTTPS client fails.
+- Saved conversations open again from the list: the store only accepted a time with
+  seconds, and the interface writes hours and minutes. A conversation also keeps its
+  model's whole ID, so one made with a downloaded GGUF file can be continued and finds its
+  model when it is opened again.
+- On a USB keyboard, Tab is R1 and Shift+Tab is L1.
 - A running model download can be cancelled: Triangle in Models, the Cancel button of the
   browser page, or `DELETE /api/models/download`. What was downloaded so far is removed.
 - Settings > Diagnostics > Debug log writes `/data/prosperoai/logs/debug-trace.txt` for

@@ -161,6 +161,30 @@ int find_model(const State &state, const char *id)
     return -1;
 }
 
+// The installed model a saved conversation belongs to, or -1. A conversation saved while
+// IDs were cut at 47 characters belongs to the one model whose ID begins with what is
+// left; its record then gets the whole ID and name back.
+int model_of(const State &state, prospero_session::Record *record)
+{
+    constexpr std::size_t kOldLength = 47;
+    int index = find_model(state, record->model_id);
+    if (index >= 0 || std::strlen(record->model_id) != kOldLength)
+        return index;
+    int matches = 0;
+    for (std::size_t i = 0; i < state.models.size(); ++i)
+        if (state.models[i].id.compare(0, kOldLength, record->model_id) == 0)
+        {
+            index = static_cast<int>(i);
+            ++matches;
+        }
+    if (matches != 1)
+        return -1;
+    const Model &model = state.models[static_cast<std::size_t>(index)];
+    std::snprintf(record->model_id, sizeof(record->model_id), "%s", model.id.c_str());
+    std::snprintf(record->model_name, sizeof(record->model_name), "%s", model.name.c_str());
+    return index;
+}
+
 std::string media_path(const char *text, const char *suffix)
 {
     const char *start = std::strstr(text, "/download0/");
@@ -578,12 +602,12 @@ void App::work()
             break;
         }
         messages.resize(record.message_count);
+        const int index = model_of(result_, &record);
         result_.session = record;
         result_.messages = std::move(messages);
         refresh_images();
         result_.retry_available = false;
         result_.stats_valid = false;
-        const int index = find_model(result_, record.model_id);
         result_.ready = index >= 0 && gpt_runtime_select_model(static_cast<unsigned>(index)) &&
                         gpt_runtime_prepare() == 0;
         if (index >= 0)

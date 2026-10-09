@@ -261,7 +261,7 @@ larger contexts, authentication and detailed compatibility notes.
 | R2 while typing | Done; send from Workspace |
 | Options | Ask to close the app, once nothing is running and the conversation is saved |
 | Right stick | Scroll through the current conversation |
-| Physical USB keyboard | Type in the prompt field or the model search; Enter sends |
+| Physical USB keyboard | Type in the prompt field or the model search; Enter sends; Tab is R1 and Shift+Tab is L1 |
 
 The row at the bottom right of every page names what the buttons do there.
 
