@@ -12,7 +12,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-PlayStation%205-003791?logo=playstation&amp;logoColor=white" alt="PlayStation 5">
-  <img src="https://img.shields.io/badge/compute-Vulkan%20%2B%20AGC%20GPU-5BBEFF" alt="Native AGC GPU">
+  <img src="https://img.shields.io/badge/compute-Vulkan%20%2B%20AGC%20GPU-5BBEFF" alt="Vulkan and native AGC GPU">
   <img src="https://img.shields.io/badge/models-text%20%7C%20image%20%7C%20audio%20%7C%20speech-5DDFA4" alt="Text, image, audio, and speech">
   <img src="https://img.shields.io/badge/status-alpha-EF8354" alt="Alpha">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
