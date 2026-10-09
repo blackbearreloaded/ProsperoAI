@@ -48,6 +48,10 @@ how it is built, and what a run on a console showed.
 - Stores independent text, image, audio, and speech sessions under `/download0`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
 - Ships without weights. Models offers verified presets and standalone GGUF downloads.
+- Includes an HTTP server with a browser Workspace, model downloads and progress at
+  `http://<PS5-IP>:11434/`.
+- Connects OpenCode and other OpenAI-compatible clients to local PS5 text inference,
+  with streaming responses and function-call support.
 
 > [!IMPORTANT]
 > ProsperoAI does not run on an unmodified retail console. It is intended for
