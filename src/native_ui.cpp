@@ -4,6 +4,11 @@
 
 #include "native_ui_impl.hpp"
 
+#include "debug_log.hpp"
+#if defined(PROSPERO_UI_VULKAN) && !defined(PROSPERO_HOST)
+#include "storage.hpp"
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -20,12 +25,21 @@
 
 namespace prospero
 {
+std::string logs_folder_text()
+{
+#if defined(PROSPERO_UI_VULKAN) && !defined(PROSPERO_HOST)
+    return real_path(debug::folder());
+#else
+    return debug::folder()[0] ? debug::folder() : "/data/prosperoai/logs";
+#endif
+}
+
 namespace
 {
 constexpr float kBootSeconds = 1.6f; // the opening is never shorter than its chime
 constexpr const char *kTabs[] = {"Workspace", "Models", "Settings"};
-constexpr const char *kCategories[] = {"Appearance", "Generation", "Sound", "Accessibility",
-                                       "About"};
+constexpr const char *kCategories[] = {"Appearance",    "Generation",  "Sound",
+                                       "Accessibility", "Diagnostics", "About"};
 enum DialogAction
 {
     kUseModel = 1,
@@ -837,6 +851,13 @@ void NativeUI::Impl::build_form()
         form_.add_toggle(5, "High contrast", p.high_contrast);
         form_.add_choice(8, "Reading size", {"Standard", "Large"}, static_cast<int>(p.text_size));
     }
+    else if (category_ == kDiagnostics)
+    {
+        // Technical wording, as the trace itself is.
+        form_.add_toggle(15, "Debug log", debug::enabled()).description =
+            "Timed trace of everything the app does, for reporting a problem. Off by default.";
+        form_.add_value(16, "Logs folder", logs_folder_text());
+    }
     else
     {
         const std::string label = PROSPERO_BUILD_LABEL;
@@ -871,6 +892,25 @@ void NativeUI::Impl::apply_form()
         p.high_contrast = form_.toggle_value(5);
         p.text_size = static_cast<unsigned>(form_.choice_index(8));
     }
+    else if (category_ == kDiagnostics)
+    {
+        // Not a preference: the switch is a file, so that it holds from the next start's
+        // first moment.
+        const bool wanted = form_.toggle_value(15);
+        if (wanted != debug::enabled())
+        {
+            if (!debug::set_enabled(wanted))
+                toasts_.push(ui::StatusKind::danger, "Could not switch the debug log",
+                             "Try again.");
+            else if (wanted)
+                toasts_.push(ui::StatusKind::info, "Debug log is on",
+                             "Repeat the problem, then send debug-trace.txt from the logs folder.",
+                             6);
+            form_.set_toggle(15, debug::enabled());
+        }
+        return;
+    }
+    debug::line("setting", "category %d changed", category_);
     app_.set_preferences(std::move(p));
     apply_theme();
 }

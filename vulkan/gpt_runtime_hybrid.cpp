@@ -79,7 +79,7 @@ void scan()
     {
         if (!preset.kind)
             continue;
-        const std::string root = std::string(prospero::kModelRoot) + "/" + preset.id;
+        const std::string root = std::string(prospero::model_root()) + "/" + preset.id;
         bool complete = true;
         for (std::size_t i = 0; i < preset.count; ++i)
         {

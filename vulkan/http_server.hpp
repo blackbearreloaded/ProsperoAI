@@ -17,4 +17,3 @@ void prospero_http_server_last_status(char *text, std::size_t capacity);
 
 // Ensure shared model storage is available, automatically starting the bundled
 // title-scoped helper through the console-local ELF loader when needed.
-bool prospero_prepare_model_storage();

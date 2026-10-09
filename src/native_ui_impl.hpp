@@ -24,6 +24,11 @@
 
 namespace prospero
 {
+// The Settings categories that are more than a form.
+constexpr int kDiagnostics = 4, kAbout = 5;
+// Where the debug log is written, as the console names the folder.
+std::string logs_folder_text();
+
 using namespace hui;
 using gfx::Color;
 using gfx::Rect;

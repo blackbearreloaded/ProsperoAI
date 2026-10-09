@@ -1,10 +1,13 @@
 // ProsperoAI native application controller.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_app.hpp"
+
+#include "debug_log.hpp"
 #ifdef PS5_LLAMA_VULKAN
 #include "http_server.hpp"
 #endif
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -485,12 +488,13 @@ void App::refresh_images()
 
 void App::work()
 {
+    const auto began = std::chrono::steady_clock::now();
+    const Job job = job_;
     switch (job_)
     {
     case Job::Discover:
     {
 #ifdef PS5_LLAMA_VULKAN
-        const bool storage_ready = prospero_prepare_model_storage();
         gpt_runtime_refresh_models();
 #endif
         result_.models.clear();
@@ -513,11 +517,6 @@ void App::work()
         result_.initialized = true;
         result_.status =
             result_.models.empty() ? "No models are installed yet" : "Your library is ready";
-#ifdef PS5_LLAMA_VULKAN
-        if (!storage_ready)
-            result_.status =
-                "Model storage unavailable. Start the console's ELF loader and reopen the app.";
-#endif
         break;
     }
     case Job::RefreshModels:
@@ -652,6 +651,32 @@ void App::work()
         }
 #endif
         break;
+    }
+    if (debug::enabled())
+    {
+        static constexpr const char *names[] = {
+            "find models",         "refresh models", "choose model", "open conversation",
+            "delete conversation", "answer",         "save",         "save settings",
+            "play sound"};
+        const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        const char *model =
+            result_.selected_model >= 0
+                ? result_.models[static_cast<std::size_t>(result_.selected_model)].id.c_str()
+                : "-";
+        debug::line(job == Job::Generate ? "answer" : "model",
+                    "%s: %.2f s, model=%s ready=%d models=%zu notice=%d \"%s\"",
+                    names[static_cast<int>(job)], seconds, model, result_.ready ? 1 : 0,
+                    result_.models.size(), static_cast<int>(result_.notice),
+                    result_.status.c_str());
+        if (job == Job::Generate && result_.stats_valid)
+            debug::line("answer", "tokens=%u prompt=%u prefill=%llu ms total=%llu ms",
+                        result_.stats.generated_tokens, result_.stats.prompt_tokens,
+                        static_cast<unsigned long long>(result_.stats.prefill_microseconds / 1000),
+                        static_cast<unsigned long long>(result_.stats.elapsed_microseconds / 1000));
+        if (job == Job::Discover || job == Job::RefreshModels)
+            for (const Model &found : result_.models)
+                debug::line("model", "found %s (%s)", found.id.c_str(), found.purpose.c_str());
     }
 }
 

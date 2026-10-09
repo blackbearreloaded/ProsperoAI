@@ -463,8 +463,10 @@ int main(int argc, char **argv)
     press(hui::Action::back);
     for (int i = 0; i < 4; ++i)
         press(hui::Action::down, hui::Direction::down);
+    capture("diagnostics");
+    press(hui::Action::down, hui::Direction::down);
     capture("about");
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
         press(hui::Action::up, hui::Direction::up);
     press(hui::Action::page_prev);
     press(hui::Action::page_prev);

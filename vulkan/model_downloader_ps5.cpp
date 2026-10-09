@@ -42,7 +42,6 @@ int scePthreadJoin(void *, void **);
 namespace prospero_model_download {
 namespace {
 using Json = nlohmann::json;
-constexpr const char *kModelRoot = prospero::kModelRoot;
 constexpr std::uint64_t kMaxCatalogBytes = 8 * 1024 * 1024;
 // Keep enough headroom for Vulkan allocations and KV cache on the console.
 constexpr std::uint64_t kMaxModelBytes = 7ULL * 1024 * 1024 * 1024;
@@ -244,10 +243,9 @@ bool ensure_model_root() {
     // The shared leaf may be mounted even though sandboxed parent directories
     // reject mkdir/access. Check the mounted directory itself first.
     struct stat directory{};
-    if (stat(kModelRoot, &directory) == 0 && S_ISDIR(directory.st_mode)) return true;
-    if (mkdir("/data/homebrew/prosperoai", 0777) != 0 && errno != EEXIST) return false;
-    return mkdir(kModelRoot, 0777) == 0 ||
-           (stat(kModelRoot, &directory) == 0 && S_ISDIR(directory.st_mode));
+    if (stat(prospero::model_root(), &directory) == 0 && S_ISDIR(directory.st_mode)) return true;
+    return mkdir(prospero::model_root(), 0777) == 0 ||
+           (stat(prospero::model_root(), &directory) == 0 && S_ISDIR(directory.st_mode));
 }
 void storage_error(const char *operation) {
     const int error = errno;
@@ -292,7 +290,7 @@ public:
 };
 
 bool make_directories(const std::string &path) {
-    for (std::size_t i = std::strlen(kModelRoot) + 1; i <= path.size(); ++i) {
+    for (std::size_t i = std::strlen(prospero::model_root()) + 1; i <= path.size(); ++i) {
         if (i != path.size() && path[i] != '/') continue;
         const auto directory = path.substr(0, i);
         if (mkdir(directory.c_str(), 0777) != 0 && errno != EEXIST) {
@@ -350,9 +348,9 @@ void install_preset() {
     if (!ensure_model_root()) { storage_error("Cannot open model storage"); return; }
     HttpSession http;
     if (!http.open()) return;
-    const std::string final = std::string(kModelRoot) + "/" + preset.id;
+    const std::string final = std::string(prospero::model_root()) + "/" + preset.id;
     // Hidden staging directory prevents partially downloaded bundles being discovered.
-    const std::string staging = std::string(kModelRoot) + "/." + preset.id + ".download";
+    const std::string staging = std::string(prospero::model_root()) + "/." + preset.id + ".download";
     std::uint64_t completed = 0;
     for (std::size_t i = 0; i < preset.count; ++i) {
         const auto &file = preset.files[i];
@@ -452,7 +450,7 @@ void *worker_impl(void *) {
             item=items[worker_index]; repo=worker_repo;
         }
         if (!ensure_model_root()) { storage_error("Cannot open model storage"); worker_done.store(true); return nullptr; }
-        const std::string final_path=std::string(kModelRoot)+"/"+installed_name(repo,item.name);
+        const std::string final_path=std::string(prospero::model_root())+"/"+installed_name(repo,item.name);
         const std::string part_path=final_path+".part";
         FILE *file=std::fopen(part_path.c_str(),"wb");
         if (!file) { storage_error("Cannot create model file"); worker_done.store(true); return nullptr; }
@@ -502,7 +500,7 @@ bool preset_installed(std::size_t index) {
     if (index >= preset_count) return false;
     const auto &preset = presets[index];
     for (std::size_t i = 0; i < preset.count; ++i) {
-        const std::string path = std::string(kModelRoot) + "/" + preset.id +
+        const std::string path = std::string(prospero::model_root()) + "/" + preset.id +
                                 (preset.kind == 0 ? "" : std::string("/") + preset.files[i].path);
         struct stat file{};
         if (stat(path.c_str(), &file) != 0 || !S_ISREG(file.st_mode) ||

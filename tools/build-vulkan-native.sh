@@ -27,7 +27,8 @@ sources=(src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
  src/ps5_agc_backend.cpp src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
- vulkan/gpt_runtime_hybrid.cpp vulkan/sd_arena.cpp vulkan/gpt_runtime_agc_text.cpp vulkan/vendor_paths.cpp
+ vulkan/gpt_runtime_hybrid.cpp vulkan/sd_arena.cpp vulkan/gpt_runtime_agc_text.cpp
+ vulkan/storage.cpp vulkan/storage_paths.cpp vulkan/elevation/elevation.cpp vulkan/debug_tee.cpp src/debug_log.cpp
  src/backends/mistral/backend.c src/backends/qwen35/backend.c src/tokenizer.c
  vulkan/gpt_runtime_vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
@@ -94,8 +95,14 @@ source "$ref/tools/radv-link.sh"
 export PS5_CLANG=${PS5_CLANG:-clang-18}
 radv_link_recipe "$ref" "$sdk" "$archive"
 for symbol in pthread_once strtof strtod fseek ftell strcasestr; do radv_link_flags+=("--defsym=$symbol=prospero_$symbol"); done
+# Every function that takes a path goes through vulkan/storage_paths.cpp, which turns a
+# sandbox name (/app0, /download0) into the real one once the app has filesystem access.
+for symbol in fopen freopen open stat lstat mkdir rmdir unlink remove rename access opendir \
+  sceKernelOpen sceKernelMkdir sceKernelRmdir sceKernelUnlink; do radv_link_flags+=("--wrap=$symbol"); done
+# What the app prints for the console's log is also kept by the debug log (vulkan/debug_tee.cpp).
+radv_link_flags+=(--wrap=sceKernelDebugOutText)
 cat > "$work/app-compat.map" <<'MAP'
-{ local: pthread_once; strtof; strtod; fseek; ftell; strcasestr; gl*; hui_release_splash; };
+{ local: pthread_once; strtof; strtod; fseek; ftell; strcasestr; gl*; hui_release_splash; __wrap_*; };
 MAP
 "$sdk/bin/prospero-lld" "${radv_linker_script[@]}" --eh-frame-hdr "${radv_link_flags[@]}" --wrap=sceAgcInit \
  --version-script "$work/app-compat.map" --version-script "$ref/tooling/native/app-symbols.map" --exclude-libs=ALL -e _start \
@@ -105,7 +112,7 @@ MAP
  "$root/build/llama-ps5/ggml/src/libggml.a" "$root/build/llama-ps5/ggml/src/libggml-base.a" \
  "$root/build/llama-ps5/ggml/src/libggml-cpu.a" "$root/build/llama-ps5/ggml/src/ggml-vulkan/libggml-vulkan.a" \
  "$work/media/libstable-diffusion.a" "$work/media/libggml.a" "$work/media/libggml-cpu.a" "$work/media/libggml-base.a" \
- "$work/media/libstable-audio.a" "$root/vendor/lib/libkokoro-tts.a" "$root/vendor/lib/libespeak-ng.a" \
+ "$root/vendor/lib/libstable-audio.a" "$root/vendor/lib/libkokoro-tts.a" "$root/vendor/lib/libespeak-ng.a" \
  "$root/vendor/lib/libtts-ggml.a" "$root/vendor/lib/libtts-ggml-cpu.a" "$root/vendor/lib/libtts-ggml-base.a" "$root/vendor/lib/libcompat.a" --end-group \
  --defsym=vkGetInstanceProcAddr=radv_GetInstanceProcAddr --defsym=vkGetDeviceProcAddr=vk_common_GetDeviceProcAddr \
  --defsym=vkCmdCopyBuffer=vk_common_CmdCopyBuffer --defsym=vkGetPhysicalDeviceFeatures2=vk_common_GetPhysicalDeviceFeatures2 \
@@ -143,7 +150,11 @@ import sys
 p=Path(sys.argv[1]);(p/'index.txt').write_text(''.join(f.name+'\n' for f in sorted(p.glob('*.wav'))))
 PYINDEX
 done
-PS5_PAYLOAD_SDK="$sdk" make -C "$root/payload/model_mount" TITLE="$title" OUTPUT="$work/mount/$title"
-mkdir -p "$app/assets/platform"
-cp "$work/mount/$title/model-mount.elf" "$app/assets/platform/model-mount.elf"
+# Lapy's one-request helper for this exact title, built from its pinned source and checked
+# against the manifest it comes with (tools/build-lapy-helper.py).
+python3 "$root/tools/build-lapy-helper.py" "$title" "$work/lapy/$title"
+rm -rf "$app/assets/platform"
+mkdir -p "$app/licenses"
+cp "$work/lapy/$title/lapy.elf" "$work/lapy/$title/lapy-manifest.json" "$app/"
+cp "$work/lapy/$title/Lapy-MIT.txt" "$app/licenses/Lapy-MIT.txt"
 echo "Native Vulkan app folder: $app"

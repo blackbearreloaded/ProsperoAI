@@ -1,0 +1,175 @@
+// ProsperoAI - The debug log a user can switch on and send to us.
+// Copyright (C) 2026 BlackBearReloaded
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "debug_log.hpp"
+
+#include <atomic>
+#include <chrono>
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <mutex>
+#include <string>
+
+#if __has_include("prospero_build.h")
+#include "prospero_build.h" // written by the build from sce_sys/param.json
+#endif
+#ifndef PROSPERO_VERSION
+#define PROSPERO_VERSION "development"
+#define PROSPERO_BUILD_LABEL ""
+#endif
+
+namespace prospero::debug
+{
+namespace
+{
+// A full trace keeps its beginning, where a problem's cause usually is.
+constexpr long kLimit = 8L * 1024 * 1024;
+
+const auto origin = std::chrono::steady_clock::now();
+std::mutex mutex;
+std::atomic<bool> on{false};
+std::string logs_folder;
+std::FILE *file;
+long written;
+bool full;
+
+double seconds()
+{
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - origin).count();
+}
+
+std::string switch_path()
+{
+    return logs_folder + "/debug-log.on";
+}
+
+// With `mutex` held.
+void write(const char *tag, const char *text)
+{
+    if (!file || full)
+        return;
+    std::size_t length = std::strlen(text);
+    while (length > 0 && (text[length - 1] == '\n' || text[length - 1] == '\r'))
+        --length;
+    const int head = std::fprintf(file, "[%9.3f] [%s] ", seconds(), tag);
+    std::fwrite(text, 1, length, file);
+    std::fputc('\n', file);
+    std::fflush(file);
+    written += (head > 0 ? head : 0) + static_cast<long>(length) + 1;
+    if (written > kLimit)
+    {
+        std::fputs("[trace] the debug log is full; nothing more is written\n", file);
+        std::fflush(file);
+        full = true;
+    }
+}
+
+// With `mutex` held. The first line says when the trace began, so that it can be
+// matched with what the user tells us.
+bool open_trace()
+{
+    if (file)
+        return true;
+    if (logs_folder.empty())
+        return false;
+    const std::string path = logs_folder + "/debug-trace.txt";
+    std::rename(path.c_str(), (logs_folder + "/debug-trace.prev.txt").c_str());
+    file = std::fopen(path.c_str(), "ab");
+    if (!file)
+        return false;
+#ifndef PROSPERO_HOST
+    // What the model runtimes print goes to the same file, a line at a time.
+    if (std::freopen(path.c_str(), "ab", stdout))
+        std::setvbuf(stdout, nullptr, _IOLBF, 0);
+    if (std::freopen(path.c_str(), "ab", stderr))
+        std::setvbuf(stderr, nullptr, _IONBF, 0);
+#endif
+    written = 0;
+    full = false;
+    char stamp[40] = "unknown time";
+    const std::time_t now = std::time(nullptr);
+    std::tm utc{};
+    if (gmtime_r(&now, &utc))
+        std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S UTC", &utc);
+    char header[192];
+    std::snprintf(header, sizeof(header), "ProsperoAI %s%s%s debug log, opened %s",
+                  PROSPERO_VERSION, PROSPERO_BUILD_LABEL[0] ? ", " : "", PROSPERO_BUILD_LABEL,
+                  stamp);
+    write("trace", header);
+    return true;
+}
+} // namespace
+
+void start(const char *folder)
+{
+    const std::lock_guard<std::mutex> lock(mutex);
+    logs_folder = folder ? folder : "";
+    if (logs_folder.empty())
+        return;
+    if (std::FILE *marker = std::fopen(switch_path().c_str(), "rb"))
+    {
+        std::fclose(marker);
+        on.store(open_trace(), std::memory_order_release);
+    }
+}
+
+bool enabled()
+{
+    return on.load(std::memory_order_acquire);
+}
+
+bool set_enabled(bool enable)
+{
+    const std::lock_guard<std::mutex> lock(mutex);
+    if (logs_folder.empty())
+        return false;
+    if (enable)
+    {
+        std::FILE *marker = std::fopen(switch_path().c_str(), "wb");
+        if (!marker)
+            return false;
+        std::fclose(marker);
+        if (!open_trace())
+            return false;
+        on.store(true, std::memory_order_release);
+        write("trace", "switched on in Settings");
+        return true;
+    }
+    if (file)
+    {
+        write("trace", "switched off in Settings");
+        std::fclose(file);
+        file = nullptr;
+    }
+    on.store(false, std::memory_order_release);
+    return std::remove(switch_path().c_str()) == 0;
+}
+
+void line(const char *tag, const char *format, ...)
+{
+    if (!enabled() || !format)
+        return;
+    char text[1024];
+    va_list arguments;
+    va_start(arguments, format);
+    std::vsnprintf(text, sizeof(text), format, arguments);
+    va_end(arguments);
+    const std::lock_guard<std::mutex> lock(mutex);
+    write(tag ? tag : "app", text);
+}
+
+void system_line(const char *text)
+{
+    if (!enabled() || !text)
+        return;
+    const std::lock_guard<std::mutex> lock(mutex);
+    write("sys", text);
+}
+
+const char *folder()
+{
+    return logs_folder.c_str();
+}
+} // namespace prospero::debug

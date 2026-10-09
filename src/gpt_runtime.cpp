@@ -479,11 +479,11 @@ void load_models()
         return;
     models_loaded = true;
 
-    int directory = sceKernelOpen(prospero::kModelRoot, 0, 0);
+    int directory = sceKernelOpen(prospero::model_root(), 0, 0);
     for (unsigned retry = 0; directory < 0 && retry < 60; ++retry)
     {
         usleep(50000);
-        directory = sceKernelOpen(prospero::kModelRoot, 0, 0);
+        directory = sceKernelOpen(prospero::model_root(), 0, 0);
     }
     int directory_bytes = -1;
     if (directory >= 0)
@@ -509,13 +509,13 @@ void load_models()
                     char name[64];
                     char purpose[24];
                     char runtime[48];
-                    std::snprintf(root, sizeof(root), "%s/%s", prospero::kModelRoot, entry->d_name);
+                    std::snprintf(root, sizeof(root), "%s/%s", prospero::model_root(), entry->d_name);
                     std::snprintf(model_file, sizeof(model_file), "%s/%s/model.ps5lm",
-                                  prospero::kModelRoot, entry->d_name);
+                                  prospero::model_root(), entry->d_name);
                     std::snprintf(tokenizer_file, sizeof(tokenizer_file), "%s/%s/tokenizer.ps5tok",
-                                  prospero::kModelRoot, entry->d_name);
+                                  prospero::model_root(), entry->d_name);
                     std::snprintf(metadata_file, sizeof(metadata_file), "%s/%s/model.json",
-                                  prospero::kModelRoot, entry->d_name);
+                                  prospero::model_root(), entry->d_name);
                     read_model_metadata(metadata_file, entry->d_name, name, sizeof(name), purpose,
                                         sizeof(purpose), runtime, sizeof(runtime));
                     add_model(entry->d_name, name, purpose, root, model_file, tokenizer_file,
@@ -544,7 +544,7 @@ void load_models()
     std::snprintf(line, sizeof(line),
                   "[prosperoai] models_found=%u directory_fd=%d "
                   "directory_bytes=%d path=%s\n",
-                  model_count, directory, directory_bytes, prospero::kModelRoot);
+                  model_count, directory, directory_bytes, prospero::model_root());
     sceKernelDebugOutText(0, line);
 }
 } // namespace

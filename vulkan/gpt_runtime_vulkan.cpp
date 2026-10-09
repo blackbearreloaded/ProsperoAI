@@ -66,7 +66,7 @@ void scan(const std::string &root, int depth) {
         }
         if (S_ISDIR(st.st_mode) && depth == 0) scan(path, 1);
         else if (S_ISREG(st.st_mode) && path.size() > 5 && path.substr(path.size() - 5) == ".gguf") {
-            std::string id = path.substr(std::strlen(prospero::kModelRoot) + 1);
+            std::string id = path.substr(std::strlen(prospero::model_root()) + 1);
             if (id.find_first_of("\"\\\r\n") == std::string::npos) files.push_back({id, path});
         }
     }
@@ -78,9 +78,9 @@ void scan_models() {
     // The per-boot mount helper attaches the shared folder as the title starts.
     // Discovery runs on the app worker; give that narrow mount time to appear.
     struct stat root;
-    for (unsigned retry = 0; retry < 60 && stat(prospero::kModelRoot, &root) != 0; ++retry)
+    for (unsigned retry = 0; retry < 60 && stat(prospero::model_root(), &root) != 0; ++retry)
         usleep(50000);
-    scan(prospero::kModelRoot, 0);
+    scan(prospero::model_root(), 0);
     std::sort(files.begin(), files.end(), [](const ModelFile &a, const ModelFile &b) { return a.id < b.id; });
     char line[128];
     std::snprintf(line, sizeof(line), "models: discovered %zu GGUF files\n", files.size());
