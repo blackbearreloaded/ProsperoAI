@@ -1,8 +1,23 @@
 # Changelog
 
-## Unreleased
+## 01.001.000
 
-- Replaced the RmlUi interface with a native OpenGL one built on ps5-homebrew-ui: Workspace,
+- Combined Vulkan llama.cpp text inference with the existing AGC Image, Audio and Voice
+  backends in one app. Kokoro Voice generation and returning to Vulkan text are verified
+  on PS5; Image/Audio in this combined build remain unverified on console.
+- Added pinned downloadable Text, Image, Audio and Voice presets, verified bundle staging,
+  aggregate progress bars and Downloading states in both native and HTTP Models.
+- Fixed HTTPS/CDN redirects and writes into the sandbox-mounted shared model directory.
+  Standalone GGUF downloads are capped at 7 GiB and exclude split/mmproj files.
+- Models category navigation uses L2/R2; search typing uses Triangle Space and R2 Done.
+- Web Workspace cards select the corresponding installed model or open its preset category.
+  Conversations can be deleted with confirmation and Back to Workspace retains history.
+- Updated the PS5 icon and background, removed competing launch artwork and lowered
+  native splash lettering. README uses the same golden doorway icon.
+- Bundled the shared-model mount payload for PPSA99004; load it once after each console
+  boot before using the app. The model-free release contains no downloaded weights.
+
+- Replaced the RmlUi interface with a native Vulkan one built on ps5-homebrew-ui: Workspace,
   Models and Settings pages, a model library without the eight-model limit, search and
   filters, Midnight and Daylight themes with three accents, an opening sequence, a backdrop
   that follows the model in focus, notices, interface sounds, reduced motion, high contrast

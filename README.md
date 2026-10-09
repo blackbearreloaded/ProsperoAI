@@ -12,7 +12,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-PlayStation%205-003791?logo=playstation&amp;logoColor=white" alt="PlayStation 5">
-  <img src="https://img.shields.io/badge/compute-native%20AGC%20GPU-5BBEFF" alt="Native AGC GPU">
+  <img src="https://img.shields.io/badge/compute-Vulkan%20%2B%20AGC%20GPU-5BBEFF" alt="Native AGC GPU">
   <img src="https://img.shields.io/badge/models-text%20%7C%20image%20%7C%20audio%20%7C%20speech-5DDFA4" alt="Text, image, audio, and speech">
   <img src="https://img.shields.io/badge/status-alpha-EF8354" alt="Alpha">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
@@ -124,30 +124,32 @@ generation. Both are functional demonstrations rather than real-time paths.
    [GitHub release](https://github.com/blackbearreloaded/ProsperoAI/releases).
 2. Extract it. The archive contains a complete `PPSA99004/` app folder and an
    intentionally empty `PPSA99004/models/` directory.
-3. Open one of the curated Hugging Face repositories above, download the whole
-   repository, and copy its named model folder into `PPSA99004/models/`.
-4. Repeat step 3 for any other models you want available in Models.
-5. Upload the complete `PPSA99004` directory to `/data/homebrew/`, producing
-   `/data/homebrew/PPSA99004/eboot.bin`.
-6. Refresh or restart your homebrew loader, then launch ProsperoAI.
+3. Upload the complete `PPSA99004` directory to `/data/homebrew/`.
+4. Load the included `payloads/prospero-model-mount.elf` with your ELF payload loader
+   once after each console boot. It exposes the shared model directory to this title.
+5. Register or refresh the app folder in your homebrew loader, then launch ProsperoAI.
+6. Open **Models** and download a Text, Image, Audio or Voice preset. Alternatively,
+   copy standalone text GGUF files or complete curated media folders to
+   `/data/homebrew/prosperoai/models/`.
+
+The browser interface is at `http://<PS5-IP>:11434/`. Both interfaces show verified
+preset downloads and progress. Text inference uses Vulkan; media uses AGC. Kokoro
+Voice and switching back to text are verified on PS5; Image/Audio generation in the
+combined release has not yet been console-tested.
 
 For example:
 
 ```text
-PPSA99004/
-├── eboot.bin
-├── models/
-│   ├── README.txt
-│   ├── mistral-7b-instruct-v0.3-q4-0/
-│   │   ├── model.ps5lm
-│   │   ├── tokenizer.ps5tok
-│   │   └── model.json
-│   └── sd-turbo-fp16/
-│       ├── model.json
-│       ├── text_encoder/
-│       ├── unet/
-│       └── vae/
-└── sce_sys/
+/data/homebrew/
+├── PPSA99004/
+│   ├── eboot.bin
+│   ├── payloads/prospero-model-mount.elf
+│   ├── models/README.txt
+│   └── sce_sys/
+└── prosperoai/models/
+    ├── Mistral-7B-Instruct-v0.3.Q4_0.gguf
+    ├── kokoro-82m-fp16/
+    └── sd-turbo-fp16/
 ```
 
 Keep each downloaded model folder intact. ProsperoAI discovers all valid model
@@ -217,7 +219,8 @@ nothing; a build on `main` is started by hand (**Run workflow**). It:
 1. restores dependency and ccache data;
 2. validates source, metadata, presentation assets, and the executable writer;
 3. reproduces and verifies the clean-room runtime shim;
-4. builds the complete model-free folder and `PPSA99004.zip` with Ninja;
+4. builds pinned RADV and llama.cpp inputs, then the hybrid model-free folder and
+   `PPSA99004.zip` with Ninja;
 5. rejects an artifact containing model data;
 6. writes `SHA256SUMS` and uploads both release files; and
 7. publishes those verified files when triggered by a version tag.
@@ -260,7 +263,7 @@ tools/               Build, dependency, validation, packaging, and deploy script
 | --- | --- |
 | Shell title | `ProsperoAI` |
 | Title ID | `PPSA99004` |
-| Current app version | `01.000.000` |
+| Current app version | `01.001.000` |
 | Writable data | `/download0` |
 | Compute backend | Native PS5 AGC GPU |
 

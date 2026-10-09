@@ -6,14 +6,18 @@ ref="$root/.deps/mihawk-vulkan-review"
 sdk="$ref/.deps/native/ps5-payload-sdk"
 archive="$ref/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a"
 work="$root/build/prospero-vulkan-native"
-app="$work/PPSA99023"
+title=${PROSPERO_APP_TITLE:-PPSA99023}
+[[ $title =~ ^PPSA[0-9]{5}$ ]] || { echo "Invalid title ID" >&2; exit 2; }
+app="$work/$title"
+label=${BUILD_LABEL:-Vulkan}
+[[ $label =~ ^[A-Za-z0-9\ ,._#-]{1,40}$ ]] || { echo "Invalid build label" >&2; exit 2; }
 kit_stage=$(bash "$root/tools/prepare-ui-kit.sh")
 kit=$(bash "$root/tools/prepare-ui-kit.sh" --kit)
 fonts=$(bash "$root/tools/bake-fonts.sh")
 mkdir -p "$work/obj" "$work/stubs" "$app/sce_sys" "$app/sce_module" "$work/generated"
 python3 "$root/tools/prepare-vulkan-ui-shaders.py" --kit "$kit_stage/src" --output "$work/generated"
 version=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["contentVersion"])' "$root/sce_sys/param.json")
-printf '#define PROSPERO_VERSION "%s"\n#define PROSPERO_BUILD_LABEL "Vulkan"\n' "$version" > "$work/generated/prospero_build.h"
+printf '#define PROSPERO_VERSION "%s"\n#define PROSPERO_BUILD_LABEL "%s"\n' "$version" "$label" > "$work/generated/prospero_build.h"
 cc(){ PS5_PAYLOAD_SDK="$sdk" sh "$root/tooling/prospero-clang18" "$@"; }
 export CCACHE_DIR=${CCACHE_DIR:-$root/build/ccache}
 source "$root/tools/ninja-build.sh"
@@ -103,9 +107,11 @@ MAP
 "$root/build/host/ps5-native-tool" self --sign --in "$work/eboot.elf" --out "$app/eboot.bin" --magic 0x1D3D154F
 cp "$root/runtime/libc.prx" "$app/sce_module/"
 cp -a "$root/sce_sys/." "$app/sce_sys/"
-python3 - "$app/sce_sys/param.json" <<'PY'
+python3 - "$app/sce_sys/param.json" "$title" <<'PY'
 import json,sys
-p=json.load(open(sys.argv[1]));p.update(titleId='PPSA99023',conceptId='99023',contentId='UP9000-PPSA99023_00-PROSPEROVKSMOKE1X')
+p=json.load(open(sys.argv[1]));title=sys.argv[2]
+if title != p['titleId']:
+    p.update(titleId=title,conceptId=title[4:],contentId=f'UP9000-{title}_00-PROSPEROVKSMOKE1X')
 with open(sys.argv[1],'w') as f:json.dump(p,f,indent=2)
 PY
 mkdir -p "$app/assets/fonts" "$app/assets/audio/sfx"

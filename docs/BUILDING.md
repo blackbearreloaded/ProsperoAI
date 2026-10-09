@@ -194,3 +194,16 @@ The HTTP UI exposes the same presets through `/api/models/presets` and shows dow
 progress from `/api/models/download`. Workspace category buttons start a conversation
 with an installed model of that type, or open its Models category when none is installed.
 Back to Workspace preserves browser history; each history row has a confirmed delete action.
+
+## Hybrid release packaging
+
+`make app-release` builds the standard dependencies, Vulkan llama.cpp archives and
+the native Vulkan/AGC app, then packages `dist/PPSA99004.zip` using the identity and
+version from `sce_sys/param.json`. It includes a mount payload scoped to PPSA99004
+and `INSTALL.txt`; no models are bundled. A production release build is never
+automatically deployed to the console.
+
+The GitHub workflow uses Ubuntu 24.04 LLVM 19 host libraries with the pinned Mesa
+and SDK sources via `tools/setup-vulkan-ci.sh`, then builds the application with
+Clang 18. The existing developer `make radv` path remains available on Debian.
+Tag releases are built and attested in CI; published ZIPs are never overwritten.
