@@ -46,7 +46,8 @@ static const button_map_t buttons[] = {
     {UINT32_C(0x00000008), GPT_INPUT_OPTIONS}, {UINT32_C(0x00000400), GPT_INPUT_L1},
     {UINT32_C(0x00000800), GPT_INPUT_R1},      {UINT32_C(0x00000010), GPT_INPUT_UP},
     {UINT32_C(0x00000040), GPT_INPUT_DOWN},    {UINT32_C(0x00000080), GPT_INPUT_LEFT},
-    {UINT32_C(0x00000020), GPT_INPUT_RIGHT},
+    {UINT32_C(0x00000020), GPT_INPUT_RIGHT},   {UINT32_C(0x00000100), GPT_INPUT_L2},
+    {UINT32_C(0x00000200), GPT_INPUT_R2},
 };
 
 static gpt_input_event_t queue[INPUT_QUEUE_SIZE];
@@ -235,6 +236,11 @@ static void process_sample(const unsigned char *sample)
 {
     uint32_t current;
     memcpy(&current, sample, sizeof(current));
+    // Remote Play can report triggers only through their analog values.
+    if (sample[8] >= 128U)
+        current |= UINT32_C(0x00000100);
+    if (sample[9] >= 128U)
+        current |= UINT32_C(0x00000200);
     const bool neutral = sample[76] == 0 || (current & PAD_BUTTON_INTERCEPTED) != 0;
     if (neutral)
         current = 0;

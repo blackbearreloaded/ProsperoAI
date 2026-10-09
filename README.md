@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="sce_sys/icon0.png" width="128" alt="ProsperoAI icon">
+  <a href="sce_sys/icon0.png"><img src="sce_sys/icon0.png" width="128" alt="ProsperoAI golden doorway icon used on PS5"></a>
 </p>
 
 <h1 align="center">ProsperoAI</h1>

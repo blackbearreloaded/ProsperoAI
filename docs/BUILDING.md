@@ -149,7 +149,7 @@ read another title's model directory. Read the report through FTP at
 `/mnt/sandbox/PPSA99019_000/download0/prospero-load-benchmark.txt` while the test is running.
 Installation and repeated launches within a console-testing task are covered by the authorization rules in `AGENTS.md`.
 
-The Vulkan build also exposes `/v1/models` and `/v1/chat/completions`, including SSE and portable function calls. See [OpenCode configuration](OPENCODE.md) for bearer keys, context sizing and protocol limits. Image, audio and speech remain on the existing AGC build; their Vulkan migration is planned.
+The Vulkan build also exposes `/v1/models` and `/v1/chat/completions`, including SSE and portable function calls. See [OpenCode configuration](OPENCODE.md) for bearer keys, context sizing and protocol limits. The native Vulkan title links the existing AGC media backend alongside Vulkan text inference. Voice generation and switching back to Vulkan text have been verified on console; Image and Audio generation in this combined build have not yet been exercised.
 
 Default Vulkan backend logging forwards WARN/ERROR. Create `/app0/vulkan_verbose_logging.txt` only for detailed diagnosis; synchronous full debug output materially slows loading. For first-load-only benchmark runs, add `/app0/load_parallel_only.txt` (three optimized loads per launch).
 
@@ -159,3 +159,38 @@ Default Vulkan backend logging forwards WARN/ERROR. Create `/app0/vulkan_verbose
 in PPSA99019. This verifies graphics presentation without OpenGL or a model;
 upstream UI design remains unchanged. See [migration stages](VK_UI_MIGRATION.md)
 and [current evidence](VK_ACTIVE.md).
+
+### Download presets
+
+The native Models library includes pinned Text (Mistral 7B Q4_0, Qwen3.5 9B Q4_0),
+Image (SD-Turbo FP16), Audio (Stable Audio Open Small FP16), and Voice (Kokoro 82M FP16)
+presets. Cross downloads the selected preset; L2/R2 change category and arrows select
+cards. The progress bar shows bytes and percentage for the entire bundle. Search typing
+uses Triangle for Space and R2 for Done.
+
+Text presets download standalone GGUF files for Vulkan. Media presets download complete
+prepared folders, including their licenses, for the AGC media backend in the same native
+Vulkan title. Only one inference backend owns model allocations at a time. The hybrid
+build isolates the older SD ggml symbols from the newer Vulkan llama.cpp ABI. Every
+file is pinned to a repository commit and checked against its size and SHA-256. Media
+bundles are staged in hidden directories until all files pass verification. Failed
+staging files are overwritten on retry and never appear as usable model bundles.
+
+`model-tools/presets.json` records the pinned media manifests; Text uses the source
+entries in the existing conversion recipes. Run `python3 tools/generate-model-presets.py`
+after changing these records to regenerate `include/model_presets.hpp` without network
+access. Refreshing manifests requires fetching every repository tree page and computing
+SHA-256 for small files whose Hub entry has no LFS hash. Never use a truncated tree as
+a complete bundle.
+
+A shared model directory exposed by nullfs may be readable/writable even when its parent
+directories reject sandboxed `mkdir` or `access`. The downloader first checks the mounted
+leaf with `stat`. After a console reboot reload the scoped model-mount payload described
+above. Storage errors include errno and distinguish missing storage access from disk
+write failures. Hugging Face CDN redirects are followed explicitly because automatic
+redirects on this firmware returned HTTP 200 with an empty file body.
+
+The HTTP UI exposes the same presets through `/api/models/presets` and shows download
+progress from `/api/models/download`. Workspace category buttons start a conversation
+with an installed model of that type, or open its Models category when none is installed.
+Back to Workspace preserves browser history; each history row has a confirmed delete action.

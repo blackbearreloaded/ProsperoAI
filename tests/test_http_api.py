@@ -56,11 +56,24 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn("/v1/chat/completions", body)
         self.assertIn("/api/models/search", body)
         for route in ("/v1/models", "/api/tags", "/api/models/download",
-                      "/api/models/search", "/../api_key.txt", "/fonts/../../api_key.txt"):
+                      "/api/models/search", "/api/models/presets", "/../api_key.txt", "/fonts/../../api_key.txt"):
             header, _ = self.request(route, key="private")
             self.assertIn("401 Unauthorized", header)
         header, _ = self.request("/../api_key.txt")
         self.assertIn("404 Not Found", header)
+
+    def test_presets_and_download_progress(self):
+        _, body = self.request("/api/models/presets")
+        presets = json.loads(body)["data"]
+        self.assertEqual({preset["kind"] for preset in presets}, {0, 1, 2, 3})
+        self.assertTrue(all(preset["size"] > 0 for preset in presets))
+        head, _ = self.request("/api/models/presets", body={"index":4})
+        self.assertIn("200 OK", head)
+        head, _ = self.request("/api/models/presets", body={"index":99})
+        self.assertIn("400 Bad Request", head)
+        _, body = self.request("/api/models/download")
+        progress = json.loads(body)
+        self.assertEqual((progress["completed"], progress["total"]), (50, 100))
 
     def test_sse_unicode_usage_and_finish(self):
         body = {"model":"tiny.gguf", "messages":[{"role":"user","content":"x"}],

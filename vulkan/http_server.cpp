@@ -583,7 +583,12 @@ void handle_model_download_status(const NetApi &api, int sock)
     std::strncat(body, state, sizeof(body) - std::strlen(body) - 1);
     std::strncat(body, "\",\"status\":\"", sizeof(body) - std::strlen(body) - 1);
     json_append_escaped(body, sizeof(body), status);
-    std::strncat(body, "\",\"items\":[", sizeof(body) - std::strlen(body) - 1);
+    std::uint64_t completed=0, total=0;
+    prospero_model_download::progress(&completed, &total);
+    char progress[200];
+    std::snprintf(progress,sizeof(progress), "\",\"completed\":%llu,\"total\":%llu,\"active_preset\":%d,\"items\":[",
+        static_cast<unsigned long long>(completed),static_cast<unsigned long long>(total),prospero_model_download::active_preset());
+    std::strncat(body,progress,sizeof(body)-std::strlen(body)-1);
     for (std::size_t i = 0; i < prospero_model_download::candidate_count(); ++i) {
         prospero_model_download::Candidate candidate{};
         if (!prospero_model_download::candidate(i, &candidate)) continue;
@@ -599,6 +604,30 @@ void handle_model_download_status(const NetApi &api, int sock)
     }
     std::strncat(body, "]}", sizeof(body) - std::strlen(body) - 1);
     send_json(api, sock, body);
+}
+
+void handle_model_presets(const NetApi &api, int sock, const char *body = nullptr)
+{
+    if (body) {
+        const char *value = json_value_start(body, "index");
+        char *end = nullptr;
+        const long index = value ? std::strtol(value, &end, 10) : -1;
+        if (!value || end == value || index < 0 || static_cast<std::size_t>(index) >= prospero_model_download::preset_count) {
+            send_status(api, sock, "400 Bad Request", "application/json", "{\"error\":\"a valid preset index is required\"}"); return;
+        }
+        if (!prospero_model_download::download_preset(index)) {
+            send_status(api, sock, "409 Conflict", "application/json", "{\"error\":\"Downloader is busy or this preset is already installed.\"}"); return;
+        }
+    }
+    nlohmann::json items = nlohmann::json::array();
+    for (std::size_t i=0; i<prospero_model_download::preset_count; ++i) {
+        const auto &preset=prospero_model_download::presets[i];
+        items.push_back({{"index",i},{"id",preset.id},{"name",preset.name},{"kind",preset.kind},
+                         {"source_filename",preset.kind==0 ? preset.files[0].source : ""},
+                         {"size",preset.size},{"installed",prospero_model_download::preset_installed(i)}});
+    }
+    const auto response=nlohmann::json{{"data",items}}.dump();
+    send_json(api,sock,response.c_str());
 }
 
 void handle_model_search_request(const NetApi &api, int sock, const char *body)
@@ -749,6 +778,10 @@ void handle_connection(const NetApi &api, int sock)
         handle_openai_chat(api, sock, body);
 #endif
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+    else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/presets") == 0)
+        handle_model_presets(api, sock);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/presets") == 0)
+        handle_model_presets(api, sock, body);
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/download") == 0)
         handle_model_download_status(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/search") == 0)

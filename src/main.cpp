@@ -95,6 +95,9 @@ void input_event(const gpt_input_event_t &event, hui::InputFrame &input, prosper
         if (event.key >= GPT_INPUT_UP)
             input.nav = directions[event.key - GPT_INPUT_UP];
     }
+    else if (event.key == GPT_INPUT_L2 || event.key == GPT_INPUT_R2)
+        input.pressed |=
+            hui::action_bit(event.key == GPT_INPUT_L2 ? Action::jump_prev : Action::jump_next);
     else if (event.key == GPT_INPUT_SCROLL_UP)
         ui.scroll(-120);
     else if (event.key == GPT_INPUT_SCROLL_DOWN)
@@ -116,6 +119,9 @@ int main()
     ps5SetInterfaceThread();
     if (ps5_agc_backend_reserve_memory() != 0)
         hui::sys::log("[prosperoai] the inference scratch could not be reserved");
+#elif defined(PROSPERO_HYBRID_MEDIA)
+    if (ps5_agc_backend_reserve_memory() != 0)
+        hui::sys::log("[prosperoai] the media inference scratch could not be reserved");
 #endif
     prospero_setup_sdl_memory();
     SDL_Init(0); // Existing media decoder, clock and IME helpers; no SDL video.

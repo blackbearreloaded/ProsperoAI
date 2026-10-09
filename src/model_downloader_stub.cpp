@@ -6,8 +6,27 @@
 
 namespace prospero_model_download
 {
+bool preset_installed(std::size_t)
+{
+    return false;
+}
+bool download_preset(std::size_t)
+{
+    return false;
+}
 void poll()
 {
+}
+void progress(std::uint64_t *completed, std::uint64_t *total)
+{
+    if (completed)
+        *completed = 0;
+    if (total)
+        *total = 0;
+}
+int active_preset()
+{
+    return -1;
 }
 State state()
 {

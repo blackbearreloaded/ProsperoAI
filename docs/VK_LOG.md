@@ -223,3 +223,38 @@ No screenshot: active Remote Play manager/session unavailable. API success does
 not prove pixel correctness, UI parity, text rendering or inference concurrency.
 Probe then closed and optimized legacy PPSA99023 relaunched. No reboot or main
 PPSA99004 changes. Migration stages are documented in VK_UI_MIGRATION.md.
+
+
+## 2026-10-09 — Native Models presets, HTTP workspace and hybrid AGC Voice
+
+- PPSA99023 only: updated artwork/splash and Models trigger navigation; Triangle Space,
+  R2 Done. New pinned Text/Image/Audio/Voice presets with hidden staging, size/SHA-256
+  verification and aggregate progress. User confirmed matching graphics after restarting.
+- Fixed mounted-leaf storage validation and explicit HTTPS/CDN redirects. Kokoro bundle
+  (34 pinned files, 165171053 bytes) downloaded and installed on console.
+- Native Vulkan title now links the AGC media stack with isolated old SD ggml symbols;
+  global AGC lifecycle wrapper and early scratch reservation retained. Link/sign succeeded:
+  17 NEEDED entries (no added module, prior Vulkan build had 18), entry 0x120, 14 headers.
+- Initial hybrid boot exposed both Mistral and Kokoro but Voice HTTP stalled in a nested
+  runtime-lock path. Replaced it with short catalog locks and a separate inference lock;
+  metadata can be read during generation and conflicting operations fail promptly.
+- Updated hybrid binary SHA-256:
+  `0fb9d58fbcf9bb0866ac82eb9426a267a0953e5bf13796639e953c7a715028d3`.
+  HTTP Kokoro prompt “Hello.” succeeded and produced PCM16 mono 24000 Hz WAV:
+  64844 bytes, 32400 frames, 1.35 s, peak 9847, 19502 nonzero samples.
+  Subsequent Mistral request in the same process returned a valid 10-token response.
+  Results: `build/prospero-hybrid-{voice,text}-result.json`,
+  `build/prospero-voice-agc-test.wav`. Image/Audio generation not console-tested.
+- HTTP UI now lists all preset categories and download progress, confirms conversation
+  deletion, supports Back to Workspace without losing history, and makes all Workspace
+  category cards actionable. Speak selects installed Voice; empty media categories open
+  their Models presets. Browser interaction checks passed; screenshot
+  `build/prospero-web-presets-test.png`.
+- `HOST_CXX=clang++-18 make test`: 27 passed. An initial model I/O test failed because
+  `/tmp` was full; moving task-created binary backups to `build/` restored space and the
+  full suite passed. Default `make app` also succeeded. Main PPSA99004 untouched.
+- Final web assets uploaded only after PPSA99023 reported `mounted:false`; title
+  relaunched. Live browser test against the console HTTP server passed: Speak selects
+  Kokoro, Back preserves history, current-conversation deletion returns to Workspace,
+  and empty Image opens the SD-Turbo preset. Screenshot `build/prospero-web-live-test.png`.
+  Final native rebuild reproduced the same binary SHA-256. Test title remains running.

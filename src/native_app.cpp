@@ -222,6 +222,11 @@ void App::join()
     running_ = false;
 }
 
+bool App::refresh_models()
+{
+    return !busy() && start(Job::RefreshModels);
+}
+
 void App::shutdown()
 {
     if (running_)
@@ -501,6 +506,33 @@ void App::work()
         result_.status =
             result_.models.empty() ? "No models are installed yet" : "Your library is ready";
         break;
+    case Job::RefreshModels:
+    {
+        gpt_runtime_refresh_models();
+        const std::string selected =
+            result_.selected_model >= 0
+                ? result_.models[static_cast<std::size_t>(result_.selected_model)].id
+                : std::string();
+        result_.models.clear();
+        result_.model_counts = {};
+        result_.selected_model = -1;
+        for (unsigned i = 0, count = gpt_runtime_model_count(); i < count; ++i)
+        {
+            Model model{gpt_runtime_model_id(i), gpt_runtime_model_name(i),
+                        gpt_runtime_model_purpose(i)};
+            if (model.purpose == "text-to-image")
+                model.capability = Capability::Image;
+            else if (model.purpose == "text-to-audio")
+                model.capability = Capability::Audio;
+            else if (model.purpose == "text-to-speech")
+                model.capability = Capability::Voice;
+            if (model.id == selected)
+                result_.selected_model = static_cast<int>(i);
+            ++result_.model_counts[static_cast<std::size_t>(model.capability)];
+            result_.models.push_back(std::move(model));
+        }
+        break;
+    }
     case Job::Select:
 #if !defined(PROSPERO_HOST) && !defined(PS5_LLAMA_VULKAN)
         ps5_agc_backend_reserve();

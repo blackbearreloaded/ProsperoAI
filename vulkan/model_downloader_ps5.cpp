@@ -8,6 +8,7 @@
 #include <array>
 #include <atomic>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <mutex>
@@ -30,6 +31,8 @@ int sceHttp2CreateRequestWithURL(int, const char *, const char *, std::uint64_t)
 int sceHttp2DeleteRequest(int);
 int sceHttp2SendRequest(int, const void *, std::size_t);
 int sceHttp2GetStatusCode(int, int *);
+int sceHttp2SetAutoRedirect(int, int);
+int sceHttp2GetAllResponseHeaders(int, char **, std::size_t *);
 int sceHttp2GetResponseContentLength(int, std::uint64_t *);
 int sceHttp2ReadData(int, void *, std::size_t);
 int scePthreadCreate(void **, const void *, void *(*)(void *), void *, const char *);
@@ -45,6 +48,7 @@ constexpr std::uint64_t kMaxCatalogBytes = 8 * 1024 * 1024;
 constexpr std::uint64_t kMaxModelBytes = 7ULL * 1024 * 1024 * 1024;
 struct Item { std::string name, sha256; std::uint64_t size = 0; };
 std::mutex state_mutex;
+std::mutex job_mutex;
 std::vector<Item> items;
 std::atomic<State> current{State::Idle};
 std::atomic<std::uint64_t> completed_bytes{0}, total_bytes{0};
@@ -54,6 +58,7 @@ std::atomic<bool> worker_done{false};
 std::string worker_query;
 std::string worker_repo;
 std::size_t worker_index;
+std::atomic<int> worker_preset{-1};
 
 void set_status(const char *text) {
     std::lock_guard<std::mutex> lock(state_mutex);
@@ -83,7 +88,8 @@ bool safe_filename(const std::string &name) {
     for (char c : name)
         if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.' || c == '/')) return false;
     return name.size() > 5 && name.compare(name.size() - 5, 5, ".gguf") == 0 &&
-           name.find("mmproj") == std::string::npos;
+           name.find("mmproj") == std::string::npos &&
+           name.find("-of-") == std::string::npos;
 }
 std::string encode_path(const std::string &path) {
     static const char hex[] = "0123456789ABCDEF";
@@ -119,17 +125,56 @@ struct HttpSession {
     }
     ~HttpSession() { close(); }
     bool get(const std::string &url) {
-        request = sceHttp2CreateRequestWithURL(tmpl, "GET", url.c_str(), 0);
-        if (request < 0) { set_error("HTTPS request", request); return false; }
-        int result = sceHttp2SendRequest(request, nullptr, 0);
-        if (result < 0) { set_error("HTTPS send", result); close_request(); return false; }
-        int status = 0;
-        result = sceHttp2GetStatusCode(request, &status);
-        if (result < 0 || status != 200) {
-            set_error("Hugging Face response", result < 0 ? result : status);
-            close_request(); return false;
+        std::string address = url;
+        // Follow redirects explicitly. The firmware's automatic redirect path can
+        // report HTTP 200 while returning an empty body for Hugging Face CDN files.
+        for (int hop = 0; hop < 8; ++hop) {
+            close_request();
+            request = sceHttp2CreateRequestWithURL(tmpl, "GET", address.c_str(), 0);
+            if (request < 0) { set_error("HTTPS request", request); return false; }
+            int result = sceHttp2SetAutoRedirect(request, 0);
+            if (result < 0) { set_error("HTTPS redirect setup", result); return false; }
+            result = sceHttp2SendRequest(request, nullptr, 0);
+            if (result < 0) { set_error("HTTPS send", result); close_request(); return false; }
+            int status = 0;
+            result = sceHttp2GetStatusCode(request, &status);
+            if (result < 0) { set_error("HTTPS response", result); return false; }
+            if (status == 200) return true;
+            if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308) {
+                set_error("Hugging Face response", status); return false;
+            }
+            char *headers = nullptr;
+            std::size_t length = 0;
+            result = sceHttp2GetAllResponseHeaders(request, &headers, &length);
+            if (result < 0 || !headers || length > 65536) { set_error("HTTPS redirect headers", result); return false; }
+            std::string redirect;
+            const std::string text(headers, length);
+            for (std::size_t start = 0; start < text.size();) {
+                const auto end = text.find('\n', start);
+                std::string line = text.substr(start, end == std::string::npos ? end : end - start);
+                std::string key = line.substr(0, 9);
+                std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return std::tolower(c); });
+                if (key == "location:") {
+                    redirect = line.substr(9);
+                    const auto first = redirect.find_first_not_of(" \t");
+                    if (first != std::string::npos) redirect.erase(0, first);
+                    const auto last = redirect.find_last_not_of(std::string("\r\n \t\0", 5));
+                    if (last != std::string::npos) redirect.resize(last + 1);
+                    break;
+                }
+                if (end == std::string::npos) break;
+                start = end + 1;
+            }
+            if (!redirect.empty() && redirect.front() == '/') {
+                const auto host_end = address.find('/', 8);
+                redirect = address.substr(0, host_end) + redirect;
+            }
+            if (redirect.compare(0, 8, "https://") != 0) {
+                set_status("Model host returned an invalid HTTPS redirect."); current.store(State::Failed); return false;
+            }
+            address = std::move(redirect);
         }
-        return true;
+        set_status("Model host returned too many redirects."); current.store(State::Failed); return false;
     }
 };
 
@@ -196,9 +241,24 @@ std::string installed_name(const std::string &repo, const std::string &filename)
     return repo_name + "--" + leaf;
 }
 bool ensure_model_root() {
-    if (mkdir("/data/homebrew/prosperoai", 0777) != 0 && access("/data/homebrew/prosperoai", F_OK) != 0) return false;
-    if (mkdir(kModelRoot, 0777) != 0 && access(kModelRoot, F_OK) != 0) return false;
-    return true;
+    // The shared leaf may be mounted even though sandboxed parent directories
+    // reject mkdir/access. Check the mounted directory itself first.
+    struct stat directory{};
+    if (stat(kModelRoot, &directory) == 0 && S_ISDIR(directory.st_mode)) return true;
+    if (mkdir("/data/homebrew/prosperoai", 0777) != 0 && errno != EEXIST) return false;
+    return mkdir(kModelRoot, 0777) == 0 ||
+           (stat(kModelRoot, &directory) == 0 && S_ISDIR(directory.st_mode));
+}
+void storage_error(const char *operation) {
+    const int error = errno;
+    char message[160];
+    std::snprintf(message, sizeof(message), "%s: %s (%d).%s", operation,
+                  std::strerror(error), error,
+                  error == EACCES || error == ENOENT
+                      ? " Shared model storage must be connected after console restart."
+                      : " Check available storage.");
+    set_status(message);
+    current.store(State::Failed);
 }
 
 // Streaming SHA-256 so multi-gigabyte files never need to be loaded into RAM.
@@ -231,8 +291,87 @@ public:
     }
 };
 
+bool make_directories(const std::string &path) {
+    for (std::size_t i = std::strlen(kModelRoot) + 1; i <= path.size(); ++i) {
+        if (i != path.size() && path[i] != '/') continue;
+        const auto directory = path.substr(0, i);
+        if (mkdir(directory.c_str(), 0777) != 0 && errno != EEXIST) {
+            storage_error("Cannot create bundle directory"); return false;
+        }
+    }
+    return true;
+}
+bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile &item,
+                       const std::string &target, std::uint64_t &completed) {
+    const auto separator = target.find_last_of('/');
+    if (!make_directories(target.substr(0, separator))) return false;
+    const std::string part = target + ".part";
+    FILE *file = std::fopen(part.c_str(), "wb");
+    if (!file) { storage_error("Cannot create preset file"); return false; }
+    http.close_request();
+    bool ok = http.get(std::string("https://huggingface.co/") + preset.repository +
+                       "/resolve/" + preset.revision + "/" + encode_path(item.source));
+    Sha256 hash;
+    std::array<std::uint8_t, 256 * 1024> buffer{};
+    std::uint64_t done = 0;
+    while (ok) {
+        int count = sceHttp2ReadData(http.request, buffer.data(), buffer.size());
+        if (count < 0) { set_error("Preset download", count); ok=false; break; }
+        if (!count) break;
+        if (done + static_cast<std::uint64_t>(count) > item.size) {
+            set_status("Preset file is larger than its pinned manifest."); current.store(State::Failed); ok=false; break;
+        }
+        if (std::fwrite(buffer.data(), 1, count, file) != static_cast<std::size_t>(count)) {
+            storage_error("Preset disk write"); ok=false; break;
+        }
+        hash.update(buffer.data(), count); done += count;
+        completed_bytes.store(completed + done, std::memory_order_release);
+    }
+    if (std::fclose(file) != 0 && ok) { storage_error("Preset final disk write"); ok=false; }
+    if (ok) {
+        const auto digest = hash.finish();
+        if (done != item.size || digest != item.sha256) {
+            char error[160];
+            std::snprintf(error, sizeof(error), "Verification failed: %s (%llu/%llu bytes).",
+                item.path, static_cast<unsigned long long>(done), static_cast<unsigned long long>(item.size));
+            std::fprintf(stderr, "[preset] %s sha256=%s expected=%s\n", error, digest.c_str(), item.sha256);
+            set_status(error); current.store(State::Failed); ok=false;
+        }
+    }
+    if (ok && rename(part.c_str(), target.c_str()) != 0) {
+        storage_error("Cannot finalize preset file"); ok=false;
+    }
+    if (!ok) std::remove(part.c_str());
+    if (ok) completed += done;
+    return ok;
+}
+void install_preset() {
+    const auto &preset = presets[worker_preset.load()];
+    if (!ensure_model_root()) { storage_error("Cannot open model storage"); return; }
+    HttpSession http;
+    if (!http.open()) return;
+    const std::string final = std::string(kModelRoot) + "/" + preset.id;
+    // Hidden staging directory prevents partially downloaded bundles being discovered.
+    const std::string staging = std::string(kModelRoot) + "/." + preset.id + ".download";
+    std::uint64_t completed = 0;
+    for (std::size_t i = 0; i < preset.count; ++i) {
+        const auto &file = preset.files[i];
+        const std::string target = preset.kind == 0 ? final : staging + "/" + file.path;
+        if (!fetch_preset_file(http, preset, file, target, completed)) return;
+    }
+    if (preset.kind != 0 && rename(staging.c_str(), final.c_str()) != 0) {
+        storage_error("Cannot install completed bundle"); return;
+    }
+    set_status(preset.kind == 0 ? "Preset verified and installed. Refreshing models."
+                              : "Bundle verified and installed. Refreshing models.");
+    current.store(State::Complete, std::memory_order_release);
+}
+
 void *worker_impl(void *) {
     const State action = current.load(std::memory_order_acquire);
+    if (action == State::Downloading && worker_preset >= 0) {
+        install_preset(); worker_done.store(true, std::memory_order_release); return nullptr;
+    }
     if (action == State::Searching) {
         HttpSession http;
         if (!http.open() || !http.get("https://huggingface.co/api/models?search=" +
@@ -264,6 +403,13 @@ void *worker_impl(void *) {
             Item item;
             item.name = entry["id"].get<std::string>();
             if (!safe_repo(item.name)) continue;
+            set_status("Checking repositories for GGUF files within the 7 GiB download limit...");
+            std::vector<Item> eligible;
+            if (!read_catalog(item.name, &eligible)) {
+                current.store(State::Searching, std::memory_order_release);
+                continue;
+            }
+            if (eligible.empty()) continue;
             if (entry.contains("downloads") && entry["downloads"].is_number_integer()) {
                 const auto count = entry["downloads"].get<std::int64_t>();
                 if (count > 0) item.size = static_cast<std::uint64_t>(count);
@@ -274,7 +420,8 @@ void *worker_impl(void *) {
         {
             std::lock_guard<std::mutex> lock(state_mutex);
             items = std::move(found);
-            std::snprintf(current_status, sizeof(current_status), "%zu matching repositories found.", items.size());
+            std::snprintf(current_status, sizeof(current_status),
+                          "%zu repositories with GGUF files up to 7 GiB found.", items.size());
         }
         current.store(State::SearchReady, std::memory_order_release);
         worker_done.store(true, std::memory_order_release);
@@ -284,7 +431,12 @@ void *worker_impl(void *) {
         std::vector<Item> found;
         if (read_catalog(worker_repo, &found)) {
             std::lock_guard<std::mutex> lock(state_mutex); items=std::move(found);
-            std::snprintf(current_status, sizeof(current_status), "%zu GGUF files found in %s.", items.size(), worker_repo.c_str());
+            if (items.empty())
+                std::snprintf(current_status, sizeof(current_status),
+                              "No verified single GGUF files within the 7 GiB download limit.");
+            else
+                std::snprintf(current_status, sizeof(current_status),
+                              "%zu GGUF files within the 7 GiB limit.", items.size());
             current.store(State::Ready, std::memory_order_release);
         }
         worker_done.store(true, std::memory_order_release);
@@ -299,11 +451,11 @@ void *worker_impl(void *) {
             if (worker_index >= items.size()) { current.store(State::Failed); worker_done.store(true); return nullptr; }
             item=items[worker_index]; repo=worker_repo;
         }
-        if (!ensure_model_root()) { set_status("Cannot write /data/homebrew/prosperoai/models."); current.store(State::Failed); worker_done.store(true); return nullptr; }
+        if (!ensure_model_root()) { storage_error("Cannot open model storage"); worker_done.store(true); return nullptr; }
         const std::string final_path=std::string(kModelRoot)+"/"+installed_name(repo,item.name);
         const std::string part_path=final_path+".part";
         FILE *file=std::fopen(part_path.c_str(),"wb");
-        if (!file) { set_status("Cannot create the model file in /data/homebrew/prosperoai/models."); current.store(State::Failed); worker_done.store(true); return nullptr; }
+        if (!file) { storage_error("Cannot create model file"); worker_done.store(true); return nullptr; }
         const std::string url="https://huggingface.co/"+repo+"/resolve/main/"+encode_path(item.name);
         bool ok=http.get(url);
         std::uint64_t expected=item.size;
@@ -312,10 +464,11 @@ void *worker_impl(void *) {
         std::uint64_t done=0;
         while(ok){int n=sceHttp2ReadData(http.request,buffer.data(),buffer.size());if(n<0){set_error("Model download",n);ok=false;break;}if(n==0)break;
             if(done+static_cast<std::uint64_t>(n)>expected){set_error("Model size check",-1);ok=false;break;}
-            if(std::fwrite(buffer.data(),1,n,file)!=static_cast<std::size_t>(n)){set_error("Disk write",-1);ok=false;break;}
+            if(std::fwrite(buffer.data(),1,n,file)!=static_cast<std::size_t>(n)){storage_error("Disk write");ok=false;break;}
             hash.update(buffer.data(),n);done+=n;completed_bytes.store(done,std::memory_order_release);
         }
-        std::fclose(file);total_bytes.store(expected,std::memory_order_release);
+        if (std::fclose(file) != 0 && ok) { storage_error("Final disk write"); ok=false; }
+        total_bytes.store(expected,std::memory_order_release);
         if(ok&&(done!=expected||hash.finish()!=item.sha256)){set_status("Download size or SHA-256 check failed; partial file removed.");current.store(State::Failed);ok=false;}
         if(ok&&rename(part_path.c_str(),final_path.c_str())!=0){set_status("Could not finalize downloaded model file.");current.store(State::Failed);ok=false;}
         if(!ok) std::remove(part_path.c_str());
@@ -345,18 +498,45 @@ bool start() {
     return true;
 }
 }
+bool preset_installed(std::size_t index) {
+    if (index >= preset_count) return false;
+    const auto &preset = presets[index];
+    for (std::size_t i = 0; i < preset.count; ++i) {
+        const std::string path = std::string(kModelRoot) + "/" + preset.id +
+                                (preset.kind == 0 ? "" : std::string("/") + preset.files[i].path);
+        struct stat file{};
+        if (stat(path.c_str(), &file) != 0 || !S_ISREG(file.st_mode) ||
+            static_cast<std::uint64_t>(file.st_size) != preset.files[i].size) return false;
+    }
+    return true;
+}
+bool download_preset(std::size_t index) {
+    poll();
+    std::lock_guard<std::mutex> job_lock(job_mutex);
+    if (index >= preset_count || worker_thread || preset_installed(index)) return false;
+    worker_preset = static_cast<int>(index);
+    completed_bytes.store(0); total_bytes.store(presets[index].size);
+    current.store(State::Downloading); set_status("Downloading pinned preset bundle...");
+    return start();
+}
 void poll() {
+    std::lock_guard<std::mutex> job_lock(job_mutex);
     if(worker_thread && worker_done.load(std::memory_order_acquire)) {
         scePthreadJoin(worker_thread,nullptr);worker_thread=nullptr;
-        if(current.load()==State::Complete)gpt_runtime_refresh_models();
+
     }
 }
 State state(){return current.load(std::memory_order_acquire);}
+int active_preset() { return state() == State::Downloading ? worker_preset.load() : -1; }
+void progress(std::uint64_t *completed, std::uint64_t *total) {
+    if (completed) *completed = completed_bytes.load(std::memory_order_acquire);
+    if (total) *total = total_bytes.load(std::memory_order_acquire);
+}
 void status(char *out,std::size_t cap){if(!cap)return;std::lock_guard<std::mutex> lock(state_mutex);std::snprintf(out,cap,"%s",current_status);if(state()==State::Downloading){auto total=total_bytes.load();auto done=completed_bytes.load();if(total){char text[160];std::snprintf(text,sizeof(text),"Downloading: %llu / %llu MiB (%u%%)",static_cast<unsigned long long>(done/(1024*1024)),static_cast<unsigned long long>(total/(1024*1024)),static_cast<unsigned>((done*100)/total));std::snprintf(out,cap,"%s",text);}}}
 std::size_t candidate_count(){std::lock_guard<std::mutex> lock(state_mutex);return items.size();}
 bool candidate(std::size_t i,Candidate*out){if(!out)return false;std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;std::snprintf(out->name,sizeof(out->name),"%s",items[i].name.c_str());out->size=items[i].size;return true;}
-bool search(const char *query){poll();if(!query||state()==State::Searching||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(query);if(value.size()<2||value.size()>96){set_status("Enter at least two characters for model search.");current.store(State::Failed);return false;}for(unsigned char c:value)if(!(std::isalnum(c)||std::isspace(c)||c=='-'||c=='_'||c=='.'||c=='+')){set_status("Use letters, numbers, spaces, dots, dashes or underscores.");current.store(State::Failed);return false;}worker_query=value;items.clear();current.store(State::Searching);set_status("Searching public GGUF repositories...");return start();}
-bool browse(const char *repo){poll();if(!repo||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(repo);if(!safe_repo(value)){set_status("Enter a repository as owner/name.");current.store(State::Failed);return false;}worker_repo=value;items.clear();current.store(State::Loading);set_status("Connecting to Hugging Face over HTTPS...");return start();}
-bool download(std::size_t i){poll();if(state()!=State::Ready||worker_thread)return false;{std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;worker_index=i;}completed_bytes.store(0);total_bytes.store(items[i].size);current.store(State::Downloading);set_status("Starting model download...");return start();}
+bool search(const char *query){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(!query||state()==State::Searching||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(query);if(value.size()<2||value.size()>96){set_status("Enter at least two characters for model search.");current.store(State::Failed);return false;}for(unsigned char c:value)if(!(std::isalnum(c)||std::isspace(c)||c=='-'||c=='_'||c=='.'||c=='+')){set_status("Use letters, numbers, spaces, dots, dashes or underscores.");current.store(State::Failed);return false;}worker_query=value;{std::lock_guard<std::mutex> lock(state_mutex);items.clear();}current.store(State::Searching);set_status("Searching public GGUF repositories...");return start();}
+bool browse(const char *repo){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(!repo||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(repo);if(!safe_repo(value)){set_status("Enter a repository as owner/name.");current.store(State::Failed);return false;}worker_repo=value;{std::lock_guard<std::mutex> lock(state_mutex);items.clear();}current.store(State::Loading);set_status("Connecting to Hugging Face over HTTPS...");return start();}
+bool download(std::size_t i){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(state()!=State::Ready||worker_thread)return false;worker_preset=-1;{std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;worker_index=i;}completed_bytes.store(0);total_bytes.store(items[i].size);current.store(State::Downloading);set_status("Starting model download...");return start();}
 }
 #endif // PS5_LLAMA_VULKAN

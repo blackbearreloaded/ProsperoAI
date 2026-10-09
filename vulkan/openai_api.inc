@@ -58,7 +58,8 @@ void handle_openai_models(const NetApi &api, int sock) {
     ApiJson data = ApiJson::array();
     for (unsigned i = 0; i < gpt_runtime_model_count(); ++i)
         data.push_back({{"id", gpt_runtime_model_id(i)}, {"object", "model"},
-                        {"created", 0}, {"owned_by", "prosperoai"}});
+                        {"created", 0}, {"owned_by", "prosperoai"},
+                        {"name", gpt_runtime_model_name(i)}, {"purpose", gpt_runtime_model_purpose(i)}});
     auto body = ApiJson{{"object", "list"}, {"data", data}}.dump();
     send_json(api, sock, body.c_str());
 }

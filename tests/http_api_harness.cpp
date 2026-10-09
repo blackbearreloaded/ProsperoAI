@@ -11,6 +11,26 @@ static unsigned current_model;
 namespace prospero_model_download
 {
 static State current = State::Idle;
+bool preset_installed(std::size_t)
+{
+    return false;
+}
+bool download_preset(std::size_t index)
+{
+    current = State::Downloading;
+    return index < prospero_model_download::preset_count;
+}
+int active_preset()
+{
+    return current == State::Downloading ? 4 : -1;
+}
+void progress(std::uint64_t *completed, std::uint64_t *total)
+{
+    if (completed)
+        *completed = 50;
+    if (total)
+        *total = 100;
+}
 void poll()
 {
 }
@@ -75,6 +95,10 @@ void gpt_runtime_refresh_models()
 const char *gpt_runtime_model_id(unsigned i)
 {
     return i == 0 ? "tiny.gguf" : "second.gguf";
+}
+const char *gpt_runtime_model_name(unsigned index)
+{
+    return gpt_runtime_model_id(index);
 }
 const char *gpt_runtime_model_purpose(unsigned)
 {

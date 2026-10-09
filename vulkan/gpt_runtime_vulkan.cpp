@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #ifdef PS5_LLAMA_VULKAN
 #include "gpt_runtime.hpp"
+#ifdef PROSPERO_HYBRID_MEDIA
+#include "runtime_vulkan.hpp"
+#endif
 #include "model_paths.hpp"
 #include "llama.h"
 #include "ggml-backend.h"
@@ -17,6 +20,9 @@
 #include <unistd.h>
 #include <vector>
 
+#ifdef PROSPERO_HYBRID_MEDIA
+namespace prospero_vulkan {
+#endif
 extern "C" int sceKernelDebugOutText(int, const char *);
 namespace {
 struct ModelFile { std::string id, path; };
@@ -287,4 +293,8 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
         return 1;
     }
 }
+#ifdef PROSPERO_HYBRID_MEDIA
+void release_model_memory() { std::lock_guard<std::mutex> lock(runtime_mutex); release_model(); }
+} // namespace prospero_vulkan
+#endif
 #endif
