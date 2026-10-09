@@ -26,6 +26,72 @@ class BuildLabelTests(unittest.TestCase):
         # A contributor's code is never built with write access or secrets.
         self.assertNotIn("pull_request_target:", workflow)
 
+    def test_release_zip_is_attested_before_upload(self):
+        workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        # The finished ZIP, and only the ZIP, is attested before it is uploaded: pinned action,
+        # never for a pull request or in a private repository.
+        attest = workflow.index("- name: Attest the release ZIP")
+        upload = workflow.index("- name: Upload build")
+        self.assertLess(workflow.index("- name: Verify and archive release"), attest)
+        self.assertLess(attest, upload)
+        step = workflow[attest:upload]
+        self.assertIn(
+            "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2", step
+        )
+        self.assertIn(
+            "if: github.event_name != 'pull_request' && !github.event.repository.private", step
+        )
+        self.assertIn("subject-path: dist/${{ env.TITLE_ID }}.zip\n", step)
+        self.assertNotIn("SHA256SUMS", step)
+        build_job = workflow[workflow.index("\n  build:") : workflow.index("\n  release:")]
+        for permission in ("contents: read", "id-token: write", "attestations: write"):
+            self.assertIn(f"      {permission}\n", build_job)
+        self.assertNotIn("id-token", workflow.replace(build_job, ""))
+
+    def test_automation_builds_the_zip_only(self):
+        workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        self.assertIn("run: make app", workflow)
+        self.assertIn('sha256sum "$TITLE_ID.zip" > SHA256SUMS', workflow)
+        self.assertIn("assets=(release/PPSA99004.zip release/SHA256SUMS)", workflow)
+        # The compressed image is gone: nothing that builds may name it or its tool again.
+        build_files = (
+            ".github/workflows/build.yml",
+            "Makefile",
+            "build.ps1",
+            "tools/build.sh",
+            "tools/setup-packaging-dependencies.sh",
+        )
+        for name in build_files:
+            text = (ROOT / name).read_text(encoding="utf-8").lower()
+            self.assertNotIn("ffpfsc", text, name)
+            self.assertNotIn("mkpfs", text, name)
+        self.assertFalse((ROOT / "tools/setup-mkpfs-tooling.ps1").exists())
+        # Asked for by name, the removed formats are refused before anything is built.
+        for removed in ("Ffpfsc", "All"):
+            result = subprocess.run(
+                ["bash", str(ROOT / "tools/build.sh"), removed],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2, removed)
+            self.assertIn("usage: tools/build.sh [Folder|Ffpkg]", result.stderr)
+
+    def test_release_job_never_replaces_published_files(self):
+        workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+        # The release job creates a release, or fills one that has no ZIP; it never replaces,
+        # deletes or rewrites anything on a release that exists.
+        for forbidden in ("--clobber", "delete-asset", "gh release edit"):
+            self.assertNotIn(forbidden, workflow)
+        publish = workflow[workflow.index("- name: Publish GitHub release") :]
+        self.assertIn('gh release create "$TAG" ', publish)
+        self.assertIn('gh release upload "$TAG" ', publish)
+        self.assertIn("--json assets --jq '.assets[].name'", publish)
+        self.assertIn("if [[ $name == *.zip ]]; then", publish)
+        self.assertIn("::warning title=Release files not from this run::", publish)
+        self.assertLess(publish.index("gh release create"), publish.index("::warning"))
+        self.assertLess(publish.index("::warning"), publish.index("gh release upload"))
+
     def test_build_checks_the_label_first_and_writes_it(self):
         build = (ROOT / "tools/build.sh").read_text(encoding="utf-8")
         self.assertIn("printf '%s\\n' \"$BUILD_LABEL\" > \"$app/build-label.txt\"", build)

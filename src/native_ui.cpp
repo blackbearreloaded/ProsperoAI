@@ -407,25 +407,61 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
 
 void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedback)
 {
+    const auto state = prospero_model_download::state();
+    const bool has_download_results = state == prospero_model_download::State::Ready ||
+                                      state == prospero_model_download::State::SearchReady;
+    const auto open_search = [&]
+    {
+        search_open_ = true;
+        search_.set_active(true);
+        keyboard_.style.max_length = filters_.active() == 0 ? 128 : 64;
+        keyboard_.set_length(search_.length());
+        keyboard_.enter();
+        feedback.play(audio::Cue::modal_open);
+    };
+
+    if (filters_focus_)
+    {
+        if (input.is_pressed(Action::north))
+        {
+            filters_.step(1, input, feedback);
+            download_focus_ = 0;
+            empty_models_download_focus_ = app_.state().models.empty() && filters_.active() != 0;
+            refresh_models();
+        }
+        else if (input.nav == Direction::left || input.nav == Direction::right)
+        {
+            if (filters_.handle(input, feedback) == ui::Event::changed)
+            {
+                download_focus_ = 0;
+                empty_models_download_focus_ = app_.state().models.empty() && filters_.active() != 0;
+                refresh_models();
+            }
+        }
+        else if (input.nav == Direction::down || input.is_pressed(Action::confirm))
+        {
+            filters_focus_ = false;
+            filters_.set_focused(false);
+            empty_models_download_focus_ = app_.state().models.empty() && filters_.active() != 0;
+        }
+        else if (input.is_pressed(Action::west))
+            open_search();
+        return;
+    }
+
     if (filters_.active() == 0)
     {
-        const auto state = prospero_model_download::state();
-        if (input.is_pressed(Action::west))
+        if (input.nav == Direction::up && (!has_download_results || download_focus_ == 0))
         {
-            search_open_ = true;
-            search_.set_active(true);
-            keyboard_.style.max_length = 128;
-            keyboard_.set_length(search_.length());
-            keyboard_.enter();
-            feedback.play(audio::Cue::modal_open);
+            filters_focus_ = true;
+            filters_.set_focused(true);
+            return;
         }
-        else if (input.is_pressed(Action::up) &&
-                 (state == prospero_model_download::State::Ready ||
-                  state == prospero_model_download::State::SearchReady))
+        if (input.is_pressed(Action::west))
+            open_search();
+        else if (input.nav == Direction::up && has_download_results)
             download_focus_ = std::max(0, download_focus_ - 1);
-        else if (input.is_pressed(Action::down) &&
-                 (state == prospero_model_download::State::Ready ||
-                  state == prospero_model_download::State::SearchReady))
+        else if (input.nav == Direction::down && has_download_results)
             download_focus_ = std::min(static_cast<int>(prospero_model_download::candidate_count()) - 1,
                                        download_focus_ + 1);
         else if (input.is_pressed(Action::confirm))
@@ -462,28 +498,31 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
     }
     if (app_.state().models.empty())
     {
-        // The empty library has no model filters; Cross/Square opens its downloader.
-        if (input.is_pressed(Action::confirm) || input.is_pressed(Action::west))
+        if (input.nav == Direction::up && empty_models_download_focus_)
+        {
+            empty_models_download_focus_ = false;
+            filters_focus_ = true;
+            filters_.set_focused(true);
+        }
+        else if (input.nav == Direction::down)
+            empty_models_download_focus_ = true;
+        else if (input.is_pressed(Action::confirm) && empty_models_download_focus_)
         {
             filters_.set_active(0);
+            filters_focus_ = false;
+            filters_.set_focused(false);
             feedback.play(audio::Cue::tab);
         }
-        else if (input.is_pressed(Action::north))
-            feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.6f);
+        else if (input.is_pressed(Action::west))
+            open_search();
     }
-    else if (input.is_pressed(Action::north))
+    else if (input.nav == Direction::up)
     {
-        filters_.step(1, input, feedback);
-        refresh_models();
+        filters_focus_ = true;
+        filters_.set_focused(true);
     }
     else if (input.is_pressed(Action::west))
-    {
-        search_open_ = true;
-        search_.set_active(true);
-        keyboard_.set_length(search_.length());
-        keyboard_.enter();
-        feedback.play(audio::Cue::modal_open);
-    }
+        open_search();
     else if (models_.handle(input, feedback) == ui::Event::activated && !visible_models_.empty())
     {
         const int index = visible_models_[static_cast<std::size_t>(models_.focus())];
@@ -1143,12 +1182,76 @@ void NativeUI::Impl::draw_boot(gfx::DrawList &list) const
     list.push_opacity(veil);
     list.gradient_rect({0, 0, gfx::kVirtualWidth, gfx::kVirtualHeight}, 0, palette_.page_top,
                        palette_.page_bottom);
-    // The sculpture draws itself in, then turns slowly.
-    const float grow = reduced_motion() ? 1 : tween::cubic_out(std::min(boot_age_ / 1.1f, 1.0f));
+    // The doors part to reveal the warm light beyond the ProsperoAI arch.
+    const float opening = reduced_motion()
+                              ? 1.0f
+                              : tween::cubic_out(std::clamp((boot_age_ - 0.12f) / 0.95f, 0.0f,
+                                                            1.0f));
     const float lift = (1 - veil) * -24;
-    list.glow({820, 318 + lift, 280, 200}, 100, 150, palette_.accent.with_alpha(0.10f * grow));
-    draw_sculpture(list, 960, 420 + lift, 190 + 26 * grow, palette_.accent.with_alpha(grow),
-                   clock_ + 4, 44);
+    constexpr float center = 960.0f;
+    constexpr float floor = 742.0f;
+    const float side = 220.0f;
+    const float arch_y = 438.0f + lift;
+    const float arch_rx = 220.0f;
+    const float arch_ry = 214.0f;
+    const Color gold = palette_.accent;
+    list.glow({center - (10 + 120 * opening), arch_y - 110, 20 + 240 * opening, 350}, 30,
+              145, gold.with_alpha(0.08f + 0.13f * opening));
+
+    // Nested arch strokes stay fixed while the two inset door leaves slide outward.
+    for (int ring = 0; ring < 3; ++ring)
+    {
+        const float inset = static_cast<float>(ring) * 18.0f;
+        const float rx = arch_rx - inset;
+        const float ry = arch_ry - inset;
+        float last_x = center - rx;
+        float last_y = arch_y;
+        for (int step = 1; step <= 32; ++step)
+        {
+            const float angle = 3.14159265f + 3.14159265f * static_cast<float>(step) / 32.0f;
+            const float x = center + std::cos(angle) * rx;
+            const float y = arch_y + std::sin(angle) * ry;
+            list.line(last_x, last_y, x, y, ring == 0 ? 3.0f : 1.4f,
+                      gold.with_alpha((ring == 0 ? 0.82f : 0.38f) * veil));
+            last_x = x;
+            last_y = y;
+        }
+        list.line(center - rx, arch_y, center - rx, floor, ring == 0 ? 3.0f : 1.4f,
+                  gold.with_alpha((ring == 0 ? 0.82f : 0.38f) * veil));
+        list.line(center + rx, arch_y, center + rx, floor, ring == 0 ? 3.0f : 1.4f,
+                  gold.with_alpha((ring == 0 ? 0.82f : 0.38f) * veil));
+    }
+
+    const float left_outer = center - side;
+    const float right_outer = center + side;
+    const float left_top = center - 10 - 140 * opening;
+    const float left_bottom = center - 10 - 122 * opening;
+    const float right_top = center + 10 + 140 * opening;
+    const float right_bottom = center + 10 + 122 * opening;
+    const float door_top = arch_y;
+    const Color door = gfx::mix(palette_.page_top, palette_.depth, 0.38f).with_alpha(0.92f * veil);
+    const float left_leaf[] = {left_outer, door_top, left_top, door_top + 12,
+                               left_bottom, floor - 8, left_outer, floor};
+    const float right_leaf[] = {right_top, door_top + 12, right_outer, door_top,
+                                right_outer, floor, right_bottom, floor - 8};
+    list.polygon(left_leaf, 4, door);
+    list.polygon(right_leaf, 4, door);
+    list.line(left_outer, door_top, left_top, door_top + 12, 2.0f, gold.with_alpha(0.82f * veil));
+    list.line(left_top, door_top + 12, left_bottom, floor - 8, 2.0f,
+              gold.with_alpha(0.82f * veil));
+    list.line(left_bottom, floor - 8, left_outer, floor, 2.0f, gold.with_alpha(0.82f * veil));
+    list.line(right_top, door_top + 12, right_outer, door_top, 2.0f,
+              gold.with_alpha(0.82f * veil));
+    list.line(right_outer, door_top, right_outer, floor, 2.0f, gold.with_alpha(0.82f * veil));
+    list.line(right_outer, floor, right_bottom, floor - 8, 2.0f,
+              gold.with_alpha(0.82f * veil));
+    const float seam = 1 - opening;
+    if (seam > 0.01f)
+        list.glow({center - 3, door_top + 70, 6, 190}, 3, 38,
+                  gold.with_alpha(0.20f * seam * veil));
+    list.circle(left_top + 16, 555 + lift, 3.2f, gold.with_alpha(0.8f * veil));
+    list.circle(right_top - 16, 555 + lift, 3.2f, gold.with_alpha(0.8f * veil));
+
     const float words =
         reduced_motion() ? 1 : tween::cubic_out(std::clamp((boot_age_ - 0.25f) / 0.6f, 0.0f, 1.0f));
     list.push_opacity(words);

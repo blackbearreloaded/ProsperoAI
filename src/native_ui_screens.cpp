@@ -402,8 +402,10 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
                  label(list, "MODEL LIBRARY", kLeft, 222, palette_.accent);
                  text(list, "Find your next model.", 92, 300, 52, palette_.ink, true);
                  const Rect download_button{kLeft, 378, 344, 66};
-                 list.bordered_rect(download_button, 20, palette_.accent, 1,
-                                    palette_.accent.with_alpha(0.8f));
+                 list.bordered_rect(download_button, 20, palette_.accent,
+                                    empty_models_download_focus_ ? 2.0f : 1.0f,
+                                    empty_models_download_focus_ ? palette_.ink.with_alpha(0.78f)
+                                                                 : palette_.accent.with_alpha(0.8f));
                  text(list, "Download a model", download_button.cx(), download_button.cy() + 8,
                       23, palette_.on_accent, true, gfx::Align::center);
                  text(list, "Cross to browse verified GGUF downloads", 470, 421, 21,

@@ -222,6 +222,16 @@ nothing; a build on `main` is started by hand (**Run workflow**). It:
 6. writes `SHA256SUMS` and uploads both release files; and
 7. publishes those verified files when triggered by a version tag.
 
+A release is made by pushing the version tag: the workflow builds, attests and publishes
+`PPSA99004.zip` and `SHA256SUMS`; release files are not attached by hand. If no release exists
+for the tag, the workflow creates it with the notes from `CHANGELOG.md`. If one exists without
+a ZIP (notes written in advance, or a draft), it adds the two files and leaves the title and
+notes alone. If one already has a ZIP, nothing is replaced and the run ends with a warning.
+
+A release ZIP built by the workflow can be checked with
+`gh attestation verify PPSA99004.zip -R blackbearreloaded/ProsperoAI` (GitHub CLI); this covers
+releases built by GitHub Actions from now on, not earlier ones.
+
 Every pull request gets an installable build named by its number and commit:
 see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md).
 
