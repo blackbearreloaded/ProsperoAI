@@ -40,6 +40,10 @@ extern "C"
         assert(!enabled);
         return 0;
     }
+    int sceHttp2AddRequestHeader(int, const char *, const char *, unsigned int)
+    {
+        return 0;
+    }
     int sceHttp2SendRequest(int, const void *, std::size_t)
     {
         return 0;

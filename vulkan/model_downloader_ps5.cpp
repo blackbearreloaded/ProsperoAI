@@ -32,6 +32,7 @@ int sceHttp2DeleteRequest(int);
 int sceHttp2SendRequest(int, const void *, std::size_t);
 int sceHttp2GetStatusCode(int, int *);
 int sceHttp2SetAutoRedirect(int, int);
+int sceHttp2AddRequestHeader(int, const char *, const char *, unsigned int);
 int sceHttp2GetAllResponseHeaders(int, char **, std::size_t *);
 int sceHttp2GetResponseContentLength(int, std::uint64_t *);
 int sceHttp2ReadData(int, void *, std::size_t);
@@ -124,7 +125,15 @@ struct HttpSession {
         if (pool >= 0) sceNetPoolDestroy(pool);
     }
     ~HttpSession() { close(); }
-    bool get(const std::string &url) {
+    // `range`, when given, is sent as the literal value of a Range header
+    // (e.g. "bytes=1048576-2097151") so callers can fetch a slice of a file
+    // or resume partway through one. NOTE: sceHttp2AddRequestHeader's exact
+    // signature is not declared anywhere in this repo's vendored PS5 SDK
+    // headers; the (id, name, value, mode) shape used here follows Sony's
+    // established sceHttp*AddRequestHeader convention from other platforms
+    // but has not been confirmed against this console's firmware — verify
+    // on console before relying on ranged/resumed downloads.
+    bool get(const std::string &url, const char *range = nullptr) {
         std::string address = url;
         // Follow redirects explicitly. The firmware's automatic redirect path can
         // report HTTP 200 while returning an empty body for Hugging Face CDN files.
@@ -134,12 +143,17 @@ struct HttpSession {
             if (request < 0) { set_error("HTTPS request", request); return false; }
             int result = sceHttp2SetAutoRedirect(request, 0);
             if (result < 0) { set_error("HTTPS redirect setup", result); return false; }
+            if (range) {
+                result = sceHttp2AddRequestHeader(request, "Range", range, 0);
+                if (result < 0) { set_error("HTTPS range header", result); return false; }
+            }
             result = sceHttp2SendRequest(request, nullptr, 0);
             if (result < 0) { set_error("HTTPS send", result); close_request(); return false; }
             int status = 0;
             result = sceHttp2GetStatusCode(request, &status);
             if (result < 0) { set_error("HTTPS response", result); return false; }
-            if (status == 200) return true;
+            // 206 Partial Content is the expected success status for a ranged GET.
+            if (status == 200 || status == 206) return true;
             if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308) {
                 set_error("Hugging Face response", status); return false;
             }
@@ -291,11 +305,12 @@ public:
     }
 };
 
-// Overlaps network reads with SHA-256 hashing and the disk write: a second
-// thread hashes and writes the previous chunk while the caller keeps calling
-// sceHttp2ReadData into the next free slot, instead of serializing
-// network -> hash -> disk per chunk as the straight-line loop did.
-class PipelinedSink {
+// Overlaps network reads with the disk write: a second thread writes the
+// previous chunk while the caller keeps calling sceHttp2ReadData into the
+// next free slot, instead of blocking on fwrite after every read. Hashing
+// is handled separately (see fetch_ranged below) since ranged/parallel
+// downloads can't hash incrementally in network-arrival order.
+class PipelinedWriter {
     enum class SlotState { Empty, Full };
     struct Slot {
         std::vector<std::uint8_t> data;
@@ -307,13 +322,12 @@ class PipelinedSink {
     std::array<Slot, kSlots> slots_{};
     std::size_t next_fill_ = 0, next_drain_ = 0;
     FILE *file_ = nullptr;
-    Sha256 hash_;
     void *thread_ = nullptr;
     std::atomic<bool> finished_{false};
     std::atomic<bool> write_failed_{false};
 
     static void *run(void *self) {
-        static_cast<PipelinedSink *>(self)->drain();
+        static_cast<PipelinedWriter *>(self)->drain();
         return nullptr;
     }
     void drain() {
@@ -324,11 +338,9 @@ class PipelinedSink {
                 usleep(200);
                 continue;
             }
-            if (!write_failed_.load(std::memory_order_acquire)) {
-                hash_.update(slot.data.data(), slot.length);
-                if (std::fwrite(slot.data.data(), 1, slot.length, file_) != slot.length)
-                    write_failed_.store(true, std::memory_order_release);
-            }
+            if (!write_failed_.load(std::memory_order_acquire) &&
+                std::fwrite(slot.data.data(), 1, slot.length, file_) != slot.length)
+                write_failed_.store(true, std::memory_order_release);
             slot.state.store(SlotState::Empty, std::memory_order_release);
             ++next_drain_;
         }
@@ -349,7 +361,7 @@ public:
         int rc = pthread_attr_init(&attributes);
         const bool attributes_ready = rc == 0;
         if (rc == 0) rc = pthread_attr_setstacksize(&attributes, 256 * 1024);
-        if (rc == 0) rc = scePthreadCreate(&thread_, &attributes, &PipelinedSink::run, this, "prosperoai-model-write");
+        if (rc == 0) rc = scePthreadCreate(&thread_, &attributes, &PipelinedWriter::run, this, "prosperoai-model-write");
         if (attributes_ready) pthread_attr_destroy(&attributes);
         return rc == 0;
     }
@@ -371,14 +383,212 @@ public:
         slot.state.store(SlotState::Full, std::memory_order_release);
         ++next_fill_;
     }
-    // Waits for every submitted chunk to be hashed and written, then returns the digest.
-    bool finish(std::string *digest) {
+    // Waits for every submitted chunk to be written.
+    bool finish() {
         finished_.store(true, std::memory_order_release);
         scePthreadJoin(thread_, nullptr);
-        if (digest) *digest = hash_.finish();
         return !write_failed_.load(std::memory_order_acquire);
     }
 };
+
+// A file at or above this size is split across kMaxRangeConnections
+// concurrent HTTPS connections; below it, a single connection is used since
+// splitting adds more TLS/HTTP setup overhead than it saves.
+constexpr int kMaxRangeConnections = 4;
+constexpr std::uint64_t kMinRangedBytes = 32ULL * 1024 * 1024;
+// How often (in bytes landed) each connection checkpoints its progress to
+// the .resume sidecar file, so a later retry can skip bytes already on disk
+// instead of redownloading the whole file.
+constexpr std::uint64_t kResumeCheckpointBytes = 16ULL * 1024 * 1024;
+
+struct RangeWorker;
+// Shared state every connection of one download needs to checkpoint
+// progress: the sidecar path, the file's total size (for validating a
+// resume file against the current request), a mutex serializing writes to
+// that sidecar from multiple connection threads, and a pointer back to all
+// sibling jobs (so a checkpoint captures every connection's progress, not
+// just the one that triggered it).
+struct RangeContext {
+    std::string resume_path;
+    std::uint64_t expected = 0;
+    std::mutex mutex;
+    std::vector<RangeWorker> *jobs = nullptr;
+};
+struct RangeWorker {
+    std::string path, url;
+    std::uint64_t slice_start = 0, slice_end = 0; // this connection's fixed [start, end) byte range
+    std::atomic<std::uint64_t> resume_from{0};    // how far into the slice is confirmed written; persisted
+    RangeContext *ctx = nullptr;
+    std::atomic<bool> ok{false};
+    void *thread = nullptr;
+};
+
+void write_resume(const std::string &resume_path, std::uint64_t expected, const std::vector<RangeWorker> &jobs) {
+    FILE *file = std::fopen(resume_path.c_str(), "wb");
+    if (!file) return;
+    std::fprintf(file, "%llu %llu\n", static_cast<unsigned long long>(jobs.size()),
+                 static_cast<unsigned long long>(expected));
+    for (const auto &job : jobs)
+        std::fprintf(file, "%llu %llu %llu\n", static_cast<unsigned long long>(job.slice_start),
+                     static_cast<unsigned long long>(job.slice_end),
+                     static_cast<unsigned long long>(job.resume_from.load(std::memory_order_acquire)));
+    std::fclose(file);
+}
+// Loads a .resume sidecar and validates it against the partition the
+// current request would produce (same connection count, same slice
+// boundaries, same expected size); any mismatch or malformed line is
+// treated as "can't resume" rather than trusted partially.
+bool load_resume(const std::string &resume_path, std::uint64_t expected, int connections,
+                  std::vector<std::uint64_t> *offsets) {
+    FILE *file = std::fopen(resume_path.c_str(), "rb");
+    if (!file) return false;
+    unsigned long long file_connections = 0, file_expected = 0;
+    bool ok = std::fscanf(file, "%llu %llu", &file_connections, &file_expected) == 2 &&
+              file_connections == static_cast<unsigned long long>(connections) && file_expected == expected;
+    offsets->assign(static_cast<std::size_t>(connections), 0);
+    const std::uint64_t each = expected / static_cast<std::uint64_t>(connections);
+    for (int i = 0; ok && i < connections; ++i) {
+        unsigned long long start = 0, end = 0, offset = 0;
+        if (std::fscanf(file, "%llu %llu %llu", &start, &end, &offset) != 3) { ok = false; break; }
+        const std::uint64_t want_start = each * static_cast<std::uint64_t>(i);
+        const std::uint64_t want_end = (i + 1 == connections) ? expected : each * static_cast<std::uint64_t>(i + 1);
+        if (start != want_start || end != want_end || offset < want_start || offset > want_end) { ok = false; break; }
+        (*offsets)[static_cast<std::size_t>(i)] = static_cast<std::uint64_t>(offset);
+    }
+    std::fclose(file);
+    return ok;
+}
+
+void *range_worker_run(void *argument) {
+    auto &job = *static_cast<RangeWorker *>(argument);
+    std::uint64_t offset = job.resume_from.load(std::memory_order_relaxed);
+    if (offset >= job.slice_end) { job.ok.store(true, std::memory_order_release); return nullptr; }
+    char range_header[64];
+    std::snprintf(range_header, sizeof(range_header), "bytes=%llu-%llu",
+                  static_cast<unsigned long long>(offset), static_cast<unsigned long long>(job.slice_end - 1));
+    HttpSession http;
+    bool ok = http.open() && http.get(job.url, range_header);
+    FILE *file = ok ? std::fopen(job.path.c_str(), "r+b") : nullptr;
+    if (ok && (!file || ::fseeko(file, static_cast<off_t>(offset), SEEK_SET) != 0)) ok = false;
+    PipelinedWriter writer;
+    bool writer_started = false;
+    if (ok) { writer_started = writer.start(file); if (!writer_started) ok = false; }
+    std::uint64_t last_checkpoint = offset / kResumeCheckpointBytes;
+    while (ok) {
+        std::size_t capacity = 0;
+        std::uint8_t *buffer = writer.acquire(&capacity);
+        const std::size_t want = static_cast<std::size_t>(std::min<std::uint64_t>(capacity, job.slice_end - offset));
+        int n = sceHttp2ReadData(http.request, buffer, want);
+        if (n < 0) { ok = false; break; }
+        if (n == 0) break;
+        writer.submit(static_cast<std::size_t>(n));
+        offset += static_cast<std::uint64_t>(n);
+        job.resume_from.store(offset, std::memory_order_release);
+        completed_bytes.fetch_add(static_cast<std::uint64_t>(n), std::memory_order_relaxed);
+        const std::uint64_t bucket = offset / kResumeCheckpointBytes;
+        if (bucket != last_checkpoint) {
+            last_checkpoint = bucket;
+            std::lock_guard<std::mutex> lock(job.ctx->mutex);
+            write_resume(job.ctx->resume_path, job.ctx->expected, *job.ctx->jobs);
+        }
+        if (offset >= job.slice_end) break;
+    }
+    const bool write_ok = writer_started ? writer.finish() : true;
+    if (file) std::fclose(file);
+    const bool done = ok && write_ok && offset == job.slice_end;
+    job.ok.store(done, std::memory_order_release);
+    if (done) {
+        std::lock_guard<std::mutex> lock(job.ctx->mutex);
+        write_resume(job.ctx->resume_path, job.ctx->expected, *job.ctx->jobs);
+    }
+    return nullptr;
+}
+
+// Downloads `url` into `part_path`, splitting the known `expected` size
+// across up to kMaxRangeConnections concurrent HTTPS connections. If a
+// `.part` file of exactly the right size and a matching `.resume` sidecar
+// already exist (from an interrupted previous attempt against the same
+// target), each connection resumes from its last checkpoint instead of
+// redownloading bytes already on disk; otherwise the file is (re)created
+// and every connection starts from its slice's beginning. On success the
+// whole file is verified with one sequential SHA-256 pass — chunks can
+// arrive out of order across connections, so the digest can't be
+// accumulated incrementally the way the single-connection path used to.
+// On failure the `.part` and `.resume` files are left in place so the next
+// call for the same target can resume rather than start over.
+bool fetch_ranged(const std::string &url, const std::string &part_path, std::uint64_t expected,
+                   std::string *digest) {
+    const std::string resume_path = part_path + ".resume";
+    const int connections = expected >= kMinRangedBytes ? kMaxRangeConnections : 1;
+    const std::uint64_t each = expected / static_cast<std::uint64_t>(connections);
+
+    struct stat existing{};
+    const bool part_matches = stat(part_path.c_str(), &existing) == 0 && S_ISREG(existing.st_mode) &&
+                               static_cast<std::uint64_t>(existing.st_size) == expected;
+    std::vector<std::uint64_t> resume_offsets;
+    const bool resuming = part_matches && load_resume(resume_path, expected, connections, &resume_offsets);
+
+    if (!resuming) {
+        std::remove(resume_path.c_str());
+        FILE *sizing = std::fopen(part_path.c_str(), "wb");
+        if (!sizing) { storage_error("Cannot create download file"); return false; }
+        bool sized = expected == 0;
+        if (expected > 0)
+            sized = ::fseeko(sizing, static_cast<off_t>(expected - 1), SEEK_SET) == 0 && std::fputc(0, sizing) != EOF;
+        if (std::fclose(sizing) != 0 || !sized) {
+            storage_error("Cannot size download file"); std::remove(part_path.c_str()); return false;
+        }
+    }
+
+    RangeContext ctx;
+    ctx.resume_path = resume_path;
+    ctx.expected = expected;
+    std::vector<RangeWorker> jobs(static_cast<std::size_t>(connections));
+    for (int i = 0; i < connections; ++i) {
+        auto &job = jobs[static_cast<std::size_t>(i)];
+        job.path = part_path;
+        job.url = url;
+        job.ctx = &ctx;
+        job.slice_start = each * static_cast<std::uint64_t>(i);
+        job.slice_end = (i + 1 == connections) ? expected : each * static_cast<std::uint64_t>(i + 1);
+        job.resume_from.store(resuming ? resume_offsets[static_cast<std::size_t>(i)] : job.slice_start,
+                              std::memory_order_relaxed);
+    }
+    ctx.jobs = &jobs;
+
+    for (auto &job : jobs) {
+        pthread_attr_t attributes;
+        int rc = pthread_attr_init(&attributes);
+        const bool attributes_ready = rc == 0;
+        if (rc == 0) rc = pthread_attr_setstacksize(&attributes, 512 * 1024);
+        if (rc == 0) rc = scePthreadCreate(&job.thread, &attributes, range_worker_run, &job, "prosperoai-model-range");
+        if (attributes_ready) pthread_attr_destroy(&attributes);
+        if (rc != 0) job.thread = nullptr;
+    }
+    bool ok = true;
+    for (auto &job : jobs) {
+        if (job.thread) scePthreadJoin(job.thread, nullptr);
+        else job.ok.store(false, std::memory_order_release);
+        ok = ok && job.ok.load(std::memory_order_acquire);
+    }
+    if (!ok) return false;
+
+    FILE *verify = std::fopen(part_path.c_str(), "rb");
+    if (!verify) { storage_error("Cannot verify downloaded file"); return false; }
+    Sha256 hash;
+    std::array<std::uint8_t, 4 * 1024 * 1024> buffer{};
+    for (;;) {
+        const std::size_t n = std::fread(buffer.data(), 1, buffer.size(), verify);
+        if (n) hash.update(buffer.data(), n);
+        if (n < buffer.size()) break;
+    }
+    const bool read_ok = std::feof(verify) != 0;
+    std::fclose(verify);
+    if (!read_ok) { storage_error("Cannot verify downloaded file"); return false; }
+    std::remove(resume_path.c_str());
+    if (digest) *digest = hash.finish();
+    return true;
+}
 
 bool make_directories(const std::string &path) {
     for (std::size_t i = std::strlen(kModelRoot) + 1; i <= path.size(); ++i) {
@@ -390,69 +600,38 @@ bool make_directories(const std::string &path) {
     }
     return true;
 }
-bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile &item,
-                       const std::string &target, std::uint64_t &completed) {
+bool fetch_preset_file(const Preset &preset, const PresetFile &item, const std::string &target) {
     const auto separator = target.find_last_of('/');
     if (!make_directories(target.substr(0, separator))) return false;
     const std::string part = target + ".part";
-    FILE *file = std::fopen(part.c_str(), "wb");
-    if (!file) { storage_error("Cannot create preset file"); return false; }
-    http.close_request();
-    bool ok = http.get(std::string("https://huggingface.co/") + preset.repository +
-                       "/resolve/" + preset.revision + "/" + encode_path(item.source));
-    PipelinedSink sink;
-    bool sink_started = false;
-    if (ok) {
-        sink_started = sink.start(file);
-        if (!sink_started) { storage_error("Preset writer thread"); ok = false; }
-    }
-    std::uint64_t done = 0;
-    while (ok) {
-        std::size_t capacity = 0;
-        std::uint8_t *buffer = sink.acquire(&capacity);
-        int count = sceHttp2ReadData(http.request, buffer, capacity);
-        if (count < 0) { set_error("Preset download", count); ok=false; break; }
-        if (!count) break;
-        if (done + static_cast<std::uint64_t>(count) > item.size) {
-            set_status("Preset file is larger than its pinned manifest."); current.store(State::Failed); ok=false; break;
-        }
-        sink.submit(static_cast<std::size_t>(count));
-        done += count;
-        completed_bytes.store(completed + done, std::memory_order_release);
-    }
+    const std::string url = std::string("https://huggingface.co/") + preset.repository + "/resolve/" +
+                            preset.revision + "/" + encode_path(item.source);
     std::string digest;
-    const bool write_ok = sink_started ? sink.finish(&digest) : true;
-    if (ok && !write_ok) { storage_error("Preset disk write"); ok = false; }
-    if (std::fclose(file) != 0 && ok) { storage_error("Preset final disk write"); ok=false; }
-    if (ok) {
-        if (done != item.size || digest != item.sha256) {
-            char error[160];
-            std::snprintf(error, sizeof(error), "Verification failed: %s (%llu/%llu bytes).",
-                item.path, static_cast<unsigned long long>(done), static_cast<unsigned long long>(item.size));
-            std::fprintf(stderr, "[preset] %s sha256=%s expected=%s\n", error, digest.c_str(), item.sha256);
-            set_status(error); current.store(State::Failed); ok=false;
-        }
+    bool ok = fetch_ranged(url, part, item.size, &digest);
+    if (ok && digest != item.sha256) {
+        char error[160];
+        std::snprintf(error, sizeof(error), "Verification failed: %s (sha256 mismatch).", item.path);
+        std::fprintf(stderr, "[preset] %s sha256=%s expected=%s\n", error, digest.c_str(), item.sha256);
+        set_status(error); current.store(State::Failed); ok = false;
+        // A wrong digest means the completed download is corrupt, not merely
+        // interrupted, so there is nothing worth resuming from.
+        std::remove(part.c_str()); std::remove((part + ".resume").c_str());
     }
     if (ok && rename(part.c_str(), target.c_str()) != 0) {
-        storage_error("Cannot finalize preset file"); ok=false;
+        storage_error("Cannot finalize preset file"); ok = false;
     }
-    if (!ok) std::remove(part.c_str());
-    if (ok) completed += done;
     return ok;
 }
 void install_preset() {
     const auto &preset = presets[worker_preset.load()];
     if (!ensure_model_root()) { storage_error("Cannot open model storage"); return; }
-    HttpSession http;
-    if (!http.open()) return;
     const std::string final = std::string(kModelRoot) + "/" + preset.id;
     // Hidden staging directory prevents partially downloaded bundles being discovered.
     const std::string staging = std::string(kModelRoot) + "/." + preset.id + ".download";
-    std::uint64_t completed = 0;
     for (std::size_t i = 0; i < preset.count; ++i) {
         const auto &file = preset.files[i];
         const std::string target = preset.kind == 0 ? final : staging + "/" + file.path;
-        if (!fetch_preset_file(http, preset, file, target, completed)) return;
+        if (!fetch_preset_file(preset, file, target)) return;
     }
     if (preset.kind != 0 && rename(staging.c_str(), final.c_str()) != 0) {
         storage_error("Cannot install completed bundle"); return;
@@ -537,8 +716,6 @@ void *worker_impl(void *) {
         worker_done.store(true, std::memory_order_release);
         return nullptr;
     } else {
-        HttpSession http;
-        if (!http.open()) { worker_done.store(true, std::memory_order_release); return nullptr; }
         Item item;
         std::string repo;
         {
@@ -549,32 +726,16 @@ void *worker_impl(void *) {
         if (!ensure_model_root()) { storage_error("Cannot open model storage"); worker_done.store(true); return nullptr; }
         const std::string final_path=std::string(kModelRoot)+"/"+installed_name(repo,item.name);
         const std::string part_path=final_path+".part";
-        FILE *file=std::fopen(part_path.c_str(),"wb");
-        if (!file) { storage_error("Cannot create model file"); worker_done.store(true); return nullptr; }
         const std::string url="https://huggingface.co/"+repo+"/resolve/main/"+encode_path(item.name);
-        bool ok=http.get(url);
-        std::uint64_t expected=item.size;
-        PipelinedSink sink;
-        bool sink_started=false;
-        if (ok) { sink_started=sink.start(file); if(!sink_started){storage_error("Model writer thread");ok=false;} }
-        std::uint64_t done=0;
-        while(ok){
-            std::size_t capacity=0;
-            std::uint8_t *buffer=sink.acquire(&capacity);
-            int n=sceHttp2ReadData(http.request,buffer,capacity);if(n<0){set_error("Model download",n);ok=false;break;}if(n==0)break;
-            if(done+static_cast<std::uint64_t>(n)>expected){set_error("Model size check",-1);ok=false;break;}
-            sink.submit(static_cast<std::size_t>(n));
-            done+=n;completed_bytes.store(done,std::memory_order_release);
-        }
+        total_bytes.store(item.size,std::memory_order_release);
         std::string digest;
-        const bool write_ok = sink_started ? sink.finish(&digest) : true;
-        if (ok && !write_ok) { storage_error("Disk write"); ok=false; }
-        if (std::fclose(file) != 0 && ok) { storage_error("Final disk write"); ok=false; }
-        total_bytes.store(expected,std::memory_order_release);
-        if(ok&&(done!=expected||digest!=item.sha256)){set_status("Download size or SHA-256 check failed; partial file removed.");current.store(State::Failed);ok=false;}
+        bool ok = fetch_ranged(url, part_path, item.size, &digest);
+        if(ok&&digest!=item.sha256){
+            set_status("Download SHA-256 check failed; partial file removed.");current.store(State::Failed);ok=false;
+            std::remove(part_path.c_str()); std::remove((part_path+".resume").c_str());
+        }
         if(ok&&rename(part_path.c_str(),final_path.c_str())!=0){set_status("Could not finalize downloaded model file.");current.store(State::Failed);ok=false;}
-        if(!ok) std::remove(part_path.c_str());
-        if(ok){char text[160];std::snprintf(text,sizeof(text),"Verified %s (%llu MiB). Restart not needed; refreshing models.",installed_name(repo,item.name).c_str(),static_cast<unsigned long long>(done/(1024*1024)));set_status(text);current.store(State::Complete,std::memory_order_release);}
+        if(ok){char text[160];std::snprintf(text,sizeof(text),"Verified %s (%llu MiB). Restart not needed; refreshing models.",installed_name(repo,item.name).c_str(),static_cast<unsigned long long>(item.size/(1024*1024)));set_status(text);current.store(State::Complete,std::memory_order_release);}
     }
     worker_done.store(true, std::memory_order_release);
     return nullptr;
