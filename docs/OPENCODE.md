@@ -6,9 +6,10 @@ chunks, finish reasons, usage, and `[DONE]`. The existing console layout is unch
 
 ## Configure the console
 
-Build with `make app-vulkan-folder`. Install raw GGUF models under the app's `models/`
-folder or use the Vulkan app's Models screen to browse a public Hugging Face repository and
-download a model. Vulkan GGUF and AGC prepared models are stored in the shared `/data/homebrew/prosperoai/models` directory; the runtime
+Install the latest app-folder ZIP from the release, or build with `make app-release`.
+Launch the app and keep it running while using OpenCode. Use Models to download a
+Text preset, or copy a raw GGUF to the shared model directory. Vulkan GGUF and AGC
+prepared models are stored in `/data/homebrew/prosperoai/models`; the runtime
 registers them immediately and returns their IDs from `/v1/models`. Use the exact model ID
 returned by `/v1/models`.
 
@@ -17,7 +18,7 @@ every HTTP route (including the older Ollama routes) accepts unauthenticated req
 The API uses plain HTTP, so only expose it on a network you trust.
 
 To require a bearer key instead, create a file named `api_key.txt` in the deployed
-app's root (`/data/homebrew/PPSA99023/api_key.txt` in the test slot), containing your
+app's root (`/data/homebrew/PPSA99004/api_key.txt` for the release), containing your
 key on one line, at most 256 bytes including a trailing newline, and restart the
 title to load it. The server then requires `Authorization: Bearer <key>` on all HTTP
 routes; the built-in web page does not supply this header, so adding a key breaks it.
@@ -88,6 +89,7 @@ must use Content-Length; chunked request bodies are rejected. Unknown model IDs
 return 404. Concurrent API generations return 503. Connection workers are bounded
 and completed threads are joined rather than leaked.
 
-OpenAI endpoints are enabled in the Vulkan build. The original AGC build remains
-available for image, audio and speech; migration of these workloads to Vulkan is
-**planned**, not implemented in this change.
+The hybrid release serves text through Vulkan and Image, Audio and Voice through
+AGC in the same app. OpenCode's coding workflow uses a text model. Voice generation
+and switching back to Vulkan text are verified; Image/Audio generation in the
+combined release remains unverified on console.

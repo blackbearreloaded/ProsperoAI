@@ -164,6 +164,64 @@ add one.
 Only the app-folder ZIP is distributed. The app automatically exposes shared model
 storage through the console-local loader, so models can be downloaded while it runs.
 
+## HTTP server and browser interface
+
+The HTTP server starts automatically when ProsperoAI launches. Keep the app running
+on the PS5 and connect your computer or phone to the same network. Replace
+`<PS5-IP>` below with your console's local IP address.
+
+1. Open `http://<PS5-IP>:11434/` in your browser.
+2. Use **Models** to download a preset or select an installed model. Download progress
+   is shown while the files are fetched and verified.
+3. Open **Workspace** and choose **Converse**, **Imagine**, **Compose** or **Speak**.
+   A card selects an installed model for that purpose, or opens its Models category.
+4. Use **Back to Workspace** to return; conversations can be deleted from their list.
+
+Closing the PS5 app also stops its HTTP server. The API uses plain HTTP and requires
+no key by default; use it on a trusted local network. Optional bearer authentication
+and its effect on the browser interface are explained in [the API guide](docs/OPENCODE.md).
+
+### Connect OpenCode to the PS5
+
+ProsperoAI exposes an OpenAI-compatible API at `http://<PS5-IP>:11434/v1`, including
+streaming text and function calls. OpenCode runs on your computer and uses the PS5
+for model inference. First install a text model and check its exact ID:
+
+```bash
+curl 'http://<PS5-IP>:11434/v1/models'
+```
+
+Add this provider to your project's `opencode.json`. Replace `<PS5-IP>` and, if
+needed, the model ID with the value returned above:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "prosperoai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "PS5 ProsperoAI",
+      "options": { "baseURL": "http://<PS5-IP>:11434/v1" },
+      "models": {
+        "Mistral-7B-Instruct-v0.3.Q4_0.gguf": {
+          "name": "Mistral PS5",
+          "limit": { "context": 4096, "output": 512 },
+          "tool_call": true
+        }
+      }
+    }
+  },
+  "model": "prosperoai/Mistral-7B-Instruct-v0.3.Q4_0.gguf"
+}
+```
+
+Run `opencode` in that project, or select the model with `/models`. This follows
+OpenCode's [custom provider configuration](https://opencode.ai/docs/providers/#custom-provider).
+Streaming and a tool-call roundtrip have been verified on PS5. Automatic tool
+selection depends on the model; the tested Mistral model is not yet reliable for
+autonomous coding tasks. See [OpenCode setup and API limits](docs/OPENCODE.md) for
+larger contexts, authentication and detailed compatibility notes.
+
 ## Using ProsperoAI
 
 | Input | Action |
