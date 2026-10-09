@@ -106,7 +106,11 @@ MAP
  --module-sdk 0x02000009 --companion-sdk 0x08050001 --file-name eboot.elf
 "$root/build/host/ps5-native-tool" self --sign --in "$work/eboot.elf" --out "$app/eboot.bin" --magic 0x1D3D154F
 cp "$root/runtime/libc.prx" "$app/sce_module/"
-cp -a "$root/sce_sys/." "$app/sce_sys/"
+# What the console reads; the pictures' sources stay in the repository.
+rm -f "$app/sce_sys/"*-source.png
+for asset in param.json icon0.png pic0.dds pic1.dds snd0.at9; do
+ cp "$root/sce_sys/$asset" "$app/sce_sys/"
+done
 python3 - "$app/sce_sys/param.json" "$title" <<'PY'
 import json,sys
 p=json.load(open(sys.argv[1]));title=sys.argv[2]

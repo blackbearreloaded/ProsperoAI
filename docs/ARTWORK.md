@@ -17,11 +17,15 @@ watermark.
 Sources: `sce_sys/icon0.png` and `sce_sys/background-source.png`. PS5 selection
 art is `sce_sys/pic0.dds` (3840×2160 BC7).
 
-`launch-background-source.png` and `pic1.dds` deliberately contain only the native
-UI's dark vertical gradient. The system keeps this launch frame visible during
-renderer initialization; the application then presents its animated doorway.
-This removes the separate illustrated splash before the animation on fresh
-process launches, including reopening after closing the application.
+Launch picture: the same doorway seen straight on from standing height, its two
+black marble leaves almost closed on a narrow line of warm light; the whole arched
+frame is visible and takes about three quarters of the height, with dark space on
+both sides. No text, people or logos. The system shows it from the moment the app is
+started until the app has drawn its first frame, so nothing is black in between.
 
-DDS conversion used AMD Compressonator 4.5.52, `-fd BC7 -nomipmap`; icon and
+Sources: `sce_sys/launch-background-source.png` (3840×2160); the console's copy is
+`sce_sys/pic1.dds`. The source pictures stay in the repository and are not packaged.
+
+DDS conversion: `pic0.dds` with AMD Compressonator 4.5.52, `-fd BC7 -nomipmap`;
+`pic1.dds` with DirectXTex texconv, `-f BC7_UNORM -m 1`; icon and
 background resizing used Pillow Lanczos.
