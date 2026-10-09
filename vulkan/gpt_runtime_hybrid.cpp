@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #ifdef PROSPERO_HYBRID_MEDIA
 #include "gpt_runtime.hpp"
+#include "runtime_agc.hpp"
 #include "runtime_vulkan.hpp"
 #include "model_paths.hpp"
 #include "model_presets.hpp"
@@ -21,21 +22,41 @@ extern "C"
     void ps5_sd_shutdown();
     void ps5_media_stop();
     int ps5_agc_backend_release_scratch();
+    int ps5_agc_backend_reserve_memory();
+    std::int64_t sceKernelGetDirectMemorySize();
+    int sceKernelAvailableDirectMemorySize(std::int64_t, std::int64_t, std::size_t, std::int64_t *,
+                                           std::size_t *);
+    int sceKernelDebugOutText(int, const char *);
 }
 namespace
 {
+// A model's kind: the presets' numbers for image, sound and voice, and two ways to text.
+enum Kind
+{
+    kVulkanText = 0, // a GGUF file, llama.cpp on Vulkan
+    kImage = 1,
+    kAudio = 2,
+    kSpeech = 3,
+    kAgcText = 4, // a model.ps5lm bundle, as ProsperoAI 01.000.000 installed them
+};
+bool is_media(int kind)
+{
+    return kind >= kImage && kind <= kSpeech;
+}
 struct Model
 {
     std::string id, name, root;
     int kind;
-    unsigned text_index;
+    unsigned text_index; // in the Vulkan runtime's list, or in the AGC text runtime's
 };
 std::vector<Model> models;
 unsigned selected = 0;
 bool scanned = false;
 std::mutex mutex;
 std::mutex inference_mutex;
-const char *purposes[] = {"text-to-text", "text-to-image", "text-to-audio", "text-to-speech"};
+bool agc_text_resident = false; // under inference_mutex
+const char *purposes[] = {"text-to-text", "text-to-image", "text-to-audio", "text-to-speech",
+                          "text-to-text"};
 bool exists(const std::string &path)
 {
     struct stat st
@@ -50,12 +71,15 @@ void scan()
     scanned = true;
     for (unsigned i = 0, n = prospero_vulkan::gpt_runtime_model_count(); i < n; ++i)
         models.push_back({prospero_vulkan::gpt_runtime_model_id(i),
-                          prospero_vulkan::gpt_runtime_model_name(i), "", 0, i});
+                          prospero_vulkan::gpt_runtime_model_name(i), "", kVulkanText, i});
+    for (unsigned i = 0, n = prospero_agc::gpt_runtime_model_count(); i < n; ++i)
+        models.push_back({prospero_agc::gpt_runtime_model_id(i),
+                          prospero_agc::gpt_runtime_model_name(i), "", kAgcText, i});
     for (const auto &preset : prospero_model_download::presets)
     {
         if (!preset.kind)
             continue;
-        const std::string root = std::string(prospero::kModelRoot) + "/" + preset.id;
+        const std::string root = std::string(prospero::model_root()) + "/" + preset.id;
         bool complete = true;
         for (std::size_t i = 0; i < preset.count; ++i)
         {
@@ -69,6 +93,20 @@ void scan()
         if (complete)
             models.push_back({preset.id, preset.name, root, preset.kind, 0});
     }
+}
+// Written at every change of model, after the one in memory was let go: with one
+// model in memory at a time, the largest free block comes back to what it was.
+void log_change(const Model &from, const Model &to)
+{
+    std::int64_t start = 0;
+    std::size_t free_bytes = 0;
+    sceKernelAvailableDirectMemorySize(0, sceKernelGetDirectMemorySize(), 0x4000, &start,
+                                       &free_bytes);
+    char line[256];
+    std::snprintf(line, sizeof(line),
+                  "[prosperoai] model change: %s -> %s, largest free block %zu MiB\n",
+                  from.id.c_str(), to.id.c_str(), free_bytes >> 20);
+    sceKernelDebugOutText(0, line);
 }
 void stop_media()
 {
@@ -126,16 +164,21 @@ const char *gpt_runtime_backend()
 {
     std::lock_guard<std::mutex> lock(mutex);
     scan();
-    return selected < models.size() && models[selected].kind
-               ? "Native AGC GPU · Media"
-               : prospero_vulkan::gpt_runtime_backend();
+    if (selected < models.size() && is_media(models[selected].kind))
+        return "Native AGC GPU · Media";
+    if (selected < models.size() && models[selected].kind == kAgcText)
+        return prospero_agc::gpt_runtime_backend();
+    return prospero_vulkan::gpt_runtime_backend();
 }
 bool gpt_runtime_context_full()
 {
     std::lock_guard<std::mutex> lock(mutex);
     scan();
-    return selected < models.size() && !models[selected].kind &&
-           prospero_vulkan::gpt_runtime_context_full();
+    if (selected >= models.size())
+        return false;
+    if (models[selected].kind == kAgcText)
+        return prospero_agc::gpt_runtime_context_full();
+    return models[selected].kind == kVulkanText && prospero_vulkan::gpt_runtime_context_full();
 }
 namespace
 {
@@ -146,15 +189,42 @@ bool select_model_locked(unsigned index)
         return false;
     if (index == selected)
         return true;
-    // Release the other backend's resident allocations before changing model.
-    if (selected < models.size() && models[selected].kind)
+    // One model in memory: what the other runtimes hold goes before the next is loaded.
+    const int from = models[selected].kind;
+    const int to = models[index].kind;
+    if (is_media(from))
         stop_media();
-    if (models[index].kind)
+    if (from == kAgcText && to != kAgcText)
+    {
+        prospero_agc::release_model_memory();
+        agc_text_resident = false;
+    }
+    if (to != kVulkanText)
         prospero_vulkan::release_model_memory();
-    else if (!prospero_vulkan::gpt_runtime_select_model(models[index].text_index))
+    log_change(models[selected], models[index]);
+    if (to == kVulkanText && !prospero_vulkan::gpt_runtime_select_model(models[index].text_index))
         return false;
+    if (to == kAgcText)
+    {
+        if (!prospero_agc::gpt_runtime_select_model(models[index].text_index))
+            return false;
+        agc_text_resident = false; // another bundle of the same runtime is loaded afresh
+    }
     selected = index;
     return true;
+}
+// A model.ps5lm bundle is mapped where the media scratch area lies, at an address the
+// AGC backend hands over when that area is released: it is mapped if it was not, and
+// released, right before the bundle is loaded.
+bool make_room_for_agc_text()
+{
+    if (agc_text_resident)
+        return true;
+    ps5_media_stop();
+    ps5_sd_shutdown();
+    prospero_vulkan::release_model_memory();
+    ps5_agc_backend_reserve_memory();
+    return ps5_agc_backend_release_scratch() == 0;
 }
 } // namespace
 bool gpt_runtime_select_model(unsigned index)
@@ -194,7 +264,15 @@ int gpt_runtime_prepare()
             return 1;
         kind = models[selected].kind;
     }
-    return kind ? 0 : prospero_vulkan::gpt_runtime_prepare();
+    if (kind == kVulkanText)
+        return prospero_vulkan::gpt_runtime_prepare();
+    if (kind != kAgcText)
+        return 0;
+    if (!make_room_for_agc_text())
+        return 2;
+    const int result = prospero_agc::gpt_runtime_prepare();
+    agc_text_resident = result == 0;
+    return result;
 }
 int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
                          const gpt_runtime_settings_t &settings, char *output, std::size_t capacity,
@@ -225,9 +303,21 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
     }
     // Inference owns its backend, but does not hold the catalog lock. HTTP model
     // lists and the native UI remain responsive while media generation runs.
-    if (!model.kind)
+    if (model.kind == kVulkanText)
         return prospero_vulkan::gpt_runtime_generate(messages, count, settings, output, capacity,
                                                      stats, progress);
+    if (model.kind == kAgcText)
+    {
+        if (!make_room_for_agc_text())
+        {
+            std::snprintf(output, capacity, "The model could not be given its memory.");
+            return 2;
+        }
+        const int result = prospero_agc::gpt_runtime_generate(messages, count, settings, output,
+                                                              capacity, stats, progress);
+        agc_text_resident = agc_text_resident || result == 0;
+        return result;
+    }
     const char *prompt = nullptr;
     for (unsigned i = count; i > 0; --i)
         if (messages[i - 1].role && messages[i - 1].content &&
@@ -252,15 +342,5 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
         stats->elapsed_microseconds = elapsed;
     }
     return result;
-}
-// RADV's platform allocator already supplies direct-memory allocations. SD's
-// original allocator arena is not used in this build.
-extern "C" bool ps5SdIsDirectArenaRange(const void *, std::size_t)
-{
-    return false;
-}
-extern "C" bool ps5SdReleaseDirectArenaIfEmpty()
-{
-    return true;
 }
 #endif

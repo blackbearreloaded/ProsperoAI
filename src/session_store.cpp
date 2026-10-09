@@ -167,7 +167,7 @@ bool read_metadata(const char *id, Record *record)
     if (!valid_id(id) || !record)
         return false;
     char path[256];
-    char json[1024];
+    char json[4096];
     make_path(path, sizeof(path), id, "session.json");
     if (!read_file(path, json, sizeof(json)))
         return false;
@@ -241,14 +241,18 @@ bool read_message(const char *id, unsigned index, Message *message)
     }
     role[std::strcspn(role, "\r\n")] = '\0';
     timestamp[std::strcspn(timestamp, "\r\n")] = '\0';
+    // "HH:MM" as the interface writes it now, or "HH:MM:SS" as the first one did. Only
+    // the longer form was accepted here, so no conversation the current interface saved
+    // could be opened again.
+    const std::size_t stamp = std::strlen(timestamp);
     if ((std::strcmp(role, "user") != 0 && std::strcmp(role, "assistant") != 0) ||
-        std::strlen(timestamp) != 8)
+        (stamp != 5 && stamp != 8))
     {
         std::fclose(file);
         return false;
     }
     std::memcpy(parsed.role, role, std::strlen(role) + 1);
-    std::memcpy(parsed.timestamp, timestamp, 9);
+    std::memcpy(parsed.timestamp, timestamp, stamp + 1);
     const std::size_t bytes = std::fread(parsed.content, 1, sizeof(parsed.content) - 1, file);
     parsed.content[bytes] = '\0';
     std::fclose(file);

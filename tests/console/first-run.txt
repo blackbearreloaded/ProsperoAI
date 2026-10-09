@@ -29,6 +29,7 @@ press down
 press down
 press down
 press down
+press down
 wait 1
 shot 05-about
 press l1

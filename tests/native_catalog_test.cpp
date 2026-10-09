@@ -18,14 +18,14 @@ extern "C"
     std::FILE *__real_fopen(const char *, const char *);
     std::FILE *__wrap_fopen(const char *path, const char *mode)
     {
-        const auto mapped = std::string(path).find(std::string(prospero::kModelRoot) + "/") == 0
-                                ? root + (path + std::strlen(prospero::kModelRoot))
+        const auto mapped = std::string(path).find(std::string(prospero::model_root()) + "/") == 0
+                                ? root + (path + std::strlen(prospero::model_root()))
                                 : std::string(path);
         return __real_fopen(mapped.c_str(), mode);
     }
     int sceKernelOpen(const char *path, int, int)
     {
-        assert(std::strcmp(path, prospero::kModelRoot) == 0);
+        assert(std::strcmp(path, prospero::model_root()) == 0);
         directory = opendir(root.c_str());
         return directory ? 1 : -1;
     }

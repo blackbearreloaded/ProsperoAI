@@ -22,3 +22,19 @@ uint32_t *sceAgcCbDispatch(void *command, uint32_t x, uint32_t y, uint32_t z, ui
     (void)flags;
     return 0;
 }
+// The AGC text backends wait on a memory word between their passes.
+uint32_t *sceAgcDcbWaitRegMem(void *command, int mode, uint8_t compare, uint8_t control,
+                              uint8_t policy, uint64_t address, uint64_t reference, uint64_t mask,
+                              uint32_t poll)
+{
+    (void)command;
+    (void)mode;
+    (void)compare;
+    (void)control;
+    (void)policy;
+    (void)address;
+    (void)reference;
+    (void)mask;
+    (void)poll;
+    return 0;
+}

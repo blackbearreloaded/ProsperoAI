@@ -37,6 +37,9 @@ if len(sys.argv) != 4:
 host, script, results = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 ftp_port = int(os.environ.get("PS5_FTP_PORT", "2121"))
 install = f"{os.environ.get('PS5_INSTALL_ROOT', '/data/homebrew')}/{TITLE}"
+# Where the app keeps its files: /data/prosperoai once it has filesystem access, its
+# sandbox otherwise. Its report names files by their sandbox paths either way.
+data = "/data/prosperoai"
 storage = f"/mnt/sandbox/{TITLE}_000/download0/ProsperoAI"
 history = "/system_data/priv/error/history"
 protocol = Path(os.environ.get("PS5_PROTOCOL", Path.home() / "ps5-homebrew-dev-protocol"))
@@ -75,7 +78,18 @@ def read(ftp, path):
 
 
 def running(ftp):
-    return f"{TITLE}_000" in (names(ftp, "/mnt/sandbox") or {})
+    # The sandbox folder can outlive the app; the app's own folder mounted in it cannot.
+    # A folder left behind makes the console number the next one (_001, ...).
+    for name in names(ftp, "/mnt/sandbox") or {}:
+        if name.startswith(TITLE + "_") and "app0" in (names(ftp, f"/mnt/sandbox/{name}") or {}):
+            return True
+    # With filesystem access the app is no longer seen through its sandbox folder; its
+    # HTTP interface answers for as long as it runs.
+    try:
+        with socket.create_connection((host, int(os.environ.get("PS5_APP_PORT", "11434"))), timeout=2):
+            return True
+    except OSError:
+        return False
 
 
 def errors(ftp):
@@ -166,30 +180,33 @@ while True:
         ftp = connect()
         alive = running(ftp)
         appeared |= alive
-        report = read(ftp, f"{storage}/dev/report.txt") if alive else None
-        if report:
-            lines = report.decode(errors="replace").splitlines()
+        report, lines = None, []
+        for root in (data, storage):
+            found = read(ftp, f"{root}/dev/report.txt") if alive or root == data else None
             # A report left by an earlier run stays until this one starts writing.
-            if not any(token in line for line in lines[:1]):
-                lines = []
+            if found and token in found.decode(errors="replace").split("\n", 1)[0]:
+                report, lines = found, found.decode(errors="replace").splitlines()
+                break
+        if report:
             for line in lines[seen_lines:]:
                 say(f"| {line}")
                 last_news = time.time()
                 if "picture " in line and " saved" in line:
                     path = line.split("picture ", 1)[1].rsplit(" saved", 1)[0]
-                    data = read(ftp, f"/mnt/sandbox/{TITLE}_000{path}")
-                    if data:
-                        (results / Path(path).name).write_bytes(data)
+                    picture = (read(ftp, path.replace("/download0/ProsperoAI", data, 1)) or
+                               read(ftp, f"/mnt/sandbox/{TITLE}_000{path}"))
+                    if picture:
+                        (results / Path(path).name).write_bytes(picture)
                         fetched.add(Path(path).name)
                 if "RESULT:" in line:
                     result = line
             seen_lines = max(seen_lines, len(lines))
             if lines:
                 (results / "report.txt").write_bytes(report)
-        if alive:
-            log = read(ftp, f"{storage}/logs/app.log")
+        for name in ("debug-trace.txt", "app.log"):
+            log = read(ftp, f"{data}/logs/{name}") or (read(ftp, f"{storage}/logs/{name}") if alive else None)
             if log:
-                (results / "app.log").write_bytes(log)
+                (results / name).write_bytes(log)
         ftp.quit()
     except all_errors as error:
         say(f"console did not answer: {error}")

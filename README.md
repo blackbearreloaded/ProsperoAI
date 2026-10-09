@@ -128,31 +128,33 @@ generation. Both are functional demonstrations rather than real-time paths.
 2. Extract it. The archive contains a complete `PPSA99004/` app folder and an
    intentionally empty `PPSA99004/models/` directory.
 3. Upload the complete `PPSA99004` directory to `/data/homebrew/`.
-4. Keep the console's local ELF loader available. ProsperoAI automatically starts its
-   bundled storage helper when needed; no separate payload upload is required.
+4. Keep the console's local ELF loader (TCP port 9021) available. At launch ProsperoAI
+   asks [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) for
+   access to the console's storage: a Lapy service that is already running is asked
+   first, otherwise the app starts the one-request helper it ships with (`lapy.elf`).
+   No separate payload upload is required.
 5. Register or refresh the app folder in your homebrew loader, then launch ProsperoAI.
 6. Open **Models** and download a Text, Image, Audio or Voice preset. Alternatively,
-   copy standalone text GGUF files or complete curated media folders to
-   `/data/homebrew/prosperoai/models/`.
+   copy standalone text GGUF files or complete curated model folders to
+   `/data/prosperoai/models/`.
 
 The browser interface is at `http://<PS5-IP>:11434/`. Both interfaces show verified
-preset downloads and progress. Text inference uses Vulkan; media uses AGC. Kokoro
-Voice and switching back to text are verified on PS5; Image/Audio generation in the
-combined release has not yet been console-tested.
+preset downloads and progress. Text inference uses Vulkan (GGUF) or AGC (prepared
+`.ps5lm` bundles); image, audio and voice use AGC.
 
-For example:
+Everything the app keeps is under `/data/prosperoai/`:
 
 ```text
-/data/homebrew/
-├── PPSA99004/
-│   ├── eboot.bin
-│   ├── assets/
-│   ├── models/README.txt
-│   └── sce_sys/
-└── prosperoai/models/
-    ├── Mistral-7B-Instruct-v0.3.Q4_0.gguf
-    ├── kokoro-82m-fp16/
-    └── sd-turbo-fp16/
+/data/
+├── homebrew/PPSA99004/        the app folder
+└── prosperoai/
+    ├── models/
+    │   ├── Mistral-7B-Instruct-v0.3.Q4_0.gguf
+    │   ├── kokoro-82m-fp16/
+    │   └── sd-turbo-fp16/
+    ├── sessions/              conversations, generated images and audio
+    ├── logs/                  the debug log, when it is switched on
+    └── prosperoai.cfg         settings
 ```
 
 Keep each downloaded model folder intact. ProsperoAI discovers all valid model
@@ -160,8 +162,27 @@ folders at launch and shows their friendly names and purposes in Models. If
 no compatible model is installed, the app opens normally and explains where to
 add one.
 
-Only the app-folder ZIP is distributed. The app automatically exposes shared model
-storage through the console-local loader, so models can be downloaded while it runs.
+Coming from 01.001.000: models in `/data/homebrew/prosperoai/models/` are moved to
+`/data/prosperoai/models/` the first time this version starts, and settings and
+conversations are copied over once. The storage helper of that version is no longer
+used; if it is still running it is told to stop.
+
+Without storage access (no ELF loader and no Lapy service) the app still opens and
+keeps its data in its own sandboxed folder; models copied to `/data/prosperoai/models/`
+are not visible to it then.
+
+Only the app-folder ZIP is distributed; it contains no model weights.
+
+### Reporting a problem
+
+**Settings > Diagnostics > Debug log** makes the app write a timed trace of what it does:
+the models it found, each request with its result and figures, every message it showed,
+downloads with their speed, and what the model runtimes themselves report. It is off by
+default. Switch it on, repeat what went wrong, close the app and send us
+`/data/prosperoai/logs/debug-trace.txt` (the run before it is kept beside it as
+`debug-trace.prev.txt`) in a
+[GitHub issue](https://github.com/blackbearreloaded/ProsperoAI/issues). The log holds
+your prompts and the answers of that run; read it before you share it.
 
 ## HTTP server and browser interface
 
@@ -231,16 +252,16 @@ larger contexts, authentication and detailed compatibility notes.
 | L1 / R1 | Switch between Workspace, Models, and Settings |
 | Square | Start a new conversation in Workspace; search in Models |
 | L2 / R2 in Models | Previous / next model category |
-| Triangle | Insert Space while typing; otherwise retry, delete a focused conversation, or play saved audio |
+| Triangle | Insert Space while typing; otherwise retry, delete a focused conversation, or play saved audio; in Models, cancel the running download |
 | R2 while typing | Done; send from Workspace |
 | Options | Ask to close the app, once nothing is running and the conversation is saved |
 | Right stick | Scroll through the current conversation |
-| Physical USB keyboard | Type in the prompt field or the model search; Enter sends |
+| Physical USB keyboard | Type in the prompt field or the model search; Enter sends; Tab is R1 and Shift+Tab is L1 |
 
 The row at the bottom right of every page names what the buttons do there.
 
 Each conversation is an independent session. Text and metadata are saved under
-`/download0/ProsperoAI/sessions/`; generated image and audio files live inside
+`/data/prosperoai/sessions/`; generated image and audio files live inside
 the matching session directory. Deleting a session removes its associated
 content. ProsperoAI does not send these files to a network service.
 

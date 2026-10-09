@@ -27,7 +27,9 @@ sources=(src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
  src/ps5_agc_backend.cpp src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
- vulkan/gpt_runtime_hybrid.cpp
+ vulkan/gpt_runtime_hybrid.cpp vulkan/sd_arena.cpp vulkan/gpt_runtime_agc_text.cpp
+ vulkan/storage.cpp vulkan/storage_paths.cpp vulkan/elevation/elevation.cpp vulkan/debug_tee.cpp src/debug_log.cpp
+ src/backends/mistral/backend.c src/backends/qwen35/backend.c src/tokenizer.c
  vulkan/gpt_runtime_vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
 while IFS= read -r relative; do
@@ -43,6 +45,15 @@ for relative in "${sources[@]}"; do
  esac
  object="$work/obj/${relative//\//_}.o"
  ninja_inputs=("$root/$relative" "$root/tooling/prospero-clang18")
+ if [[ $relative == *.c ]]; then
+  # The AGC text backends, built as tools/build.sh builds them.
+  ninja_edge CC "$object" env PS5_PAYLOAD_SDK="$sdk" USE_CCACHE="${USE_CCACHE:-1}" sh "$root/tooling/prospero-clang18" \
+   -std=c11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -DPS5_DUAL_BACKEND -DPS5_SANDBOX_APP \
+   -DPS5_APP_HAS_DSO_HANDLE -DPS5_AGC_LINKED -I "$root/include" -I "$root/src" \
+   -MD -MF "$object.d" -c "$root/$relative" -o "$object"
+  objects+=("$object")
+  continue
+ fi
  ninja_edge CXX "$object" env PS5_PAYLOAD_SDK="$sdk" USE_CCACHE="${USE_CCACHE:-1}" sh "$root/tooling/prospero-clang18" \
   -std=c++20 -O2 -fexceptions -fcxx-exceptions -frtti -Wall -Wextra -Wno-missing-field-initializers \
   -ffunction-sections -fdata-sections -DPS5_LLAMA_VULKAN -DPROSPERO_UI_VULKAN -DPROSPERO_HYBRID_MEDIA \
@@ -63,6 +74,31 @@ for index in "${!objects[@]}"; do
    objects[$index]="${objects[$index]%.o}.sd.o";;
  esac
 done
+# The model downloader's HTTPS (vulkan/net): libcurl with OpenSSL, libpsl and zstd from the
+# pinned PacBrew prefix, linked into one object with console_curl.c. What that file puts in
+# place of libc for them (name lookup, fcntl on sockets, a few more functions) gets a name of
+# its own there, so the rest of the app keeps the functions it had. zlib is not taken from
+# the prefix: the Vulkan driver's archive already has it.
+pacbrew=$(bash "$root/tools/setup-pacbrew-dependencies.sh" --all | tail -n 1)/user/homebrew
+[[ -f $pacbrew/lib/libcurl.a && -f $pacbrew/lib/libcrypto.a ]] || {
+ echo "libcurl is missing from the PacBrew prefix ($pacbrew): run make pacbrew" >&2; exit 2; }
+net_objects=()
+for name in console_curl https_get; do
+ cc -std=c11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -DCURL_STATICLIB=1 \
+  -I "$pacbrew/include" -I "$root/vulkan/net" -c "$root/vulkan/net/$name.c" -o "$work/obj/net_$name.o"
+ net_objects+=("$work/obj/net_$name.o")
+done
+net_rename=(--redefine-sym fcntl=__wrap_fcntl --redefine-sym __real_fcntl=fcntl)
+for name in getaddrinfo freeaddrinfo gai_strerror gethostbyname getnameinfo fnmatch getpwuid_r \
+  _setjmp _longjmp openlog closelog dladdr if_nametoindex pipe2 recvmmsg sendmmsg popen pclose \
+  isatty mkstemp gmtime_r ZSTD_trace_compress_begin ZSTD_trace_compress_end \
+  ZSTD_trace_decompress_begin ZSTD_trace_decompress_end; do
+ net_rename+=(--redefine-sym "$name=console_curl_$name")
+done
+ld.lld-18 -r -o "$work/obj/net.all.o" "${net_objects[@]}" --start-group "$pacbrew/lib/libcurl.a" \
+ "$pacbrew/lib/libpsl.a" "$pacbrew/lib/libssl.a" "$pacbrew/lib/libcrypto.a" "$pacbrew/lib/libzstd.a" --end-group
+llvm-objcopy-18 "${net_rename[@]}" "$work/obj/net.all.o" "$work/obj/net.o"
+objects+=("$work/obj/net.o")
 for name in app_crt app_cpp_runtime; do
  cc -std=c++20 -O2 -fno-exceptions -fno-rtti -ffunction-sections -fdata-sections -c "$ref/tooling/native/$name.cpp" -o "$work/obj/$name.o"
 done
@@ -84,8 +120,14 @@ source "$ref/tools/radv-link.sh"
 export PS5_CLANG=${PS5_CLANG:-clang-18}
 radv_link_recipe "$ref" "$sdk" "$archive"
 for symbol in pthread_once strtof strtod fseek ftell strcasestr; do radv_link_flags+=("--defsym=$symbol=prospero_$symbol"); done
+# Every function that takes a path goes through vulkan/storage_paths.cpp, which turns a
+# sandbox name (/app0, /download0) into the real one once the app has filesystem access.
+for symbol in fopen freopen open stat lstat mkdir rmdir unlink remove rename access opendir \
+  sceKernelOpen sceKernelMkdir sceKernelRmdir sceKernelUnlink; do radv_link_flags+=("--wrap=$symbol"); done
+# What the app prints for the console's log is also kept by the debug log (vulkan/debug_tee.cpp).
+radv_link_flags+=(--wrap=sceKernelDebugOutText)
 cat > "$work/app-compat.map" <<'MAP'
-{ local: pthread_once; strtof; strtod; fseek; ftell; strcasestr; gl*; hui_release_splash; };
+{ local: pthread_once; strtof; strtod; fseek; ftell; strcasestr; gl*; hui_release_splash; __wrap_*; };
 MAP
 "$sdk/bin/prospero-lld" "${radv_linker_script[@]}" --eh-frame-hdr "${radv_link_flags[@]}" --wrap=sceAgcInit \
  --version-script "$work/app-compat.map" --version-script "$ref/tooling/native/app-symbols.map" --exclude-libs=ALL -e _start \
@@ -106,7 +148,11 @@ MAP
  --module-sdk 0x02000009 --companion-sdk 0x08050001 --file-name eboot.elf
 "$root/build/host/ps5-native-tool" self --sign --in "$work/eboot.elf" --out "$app/eboot.bin" --magic 0x1D3D154F
 cp "$root/runtime/libc.prx" "$app/sce_module/"
-cp -a "$root/sce_sys/." "$app/sce_sys/"
+# What the console reads; the pictures' sources stay in the repository.
+rm -f "$app/sce_sys/"*-source.png
+for asset in param.json icon0.png pic0.dds pic1.dds snd0.at9; do
+ cp "$root/sce_sys/$asset" "$app/sce_sys/"
+done
 python3 - "$app/sce_sys/param.json" "$title" <<'PY'
 import json,sys
 p=json.load(open(sys.argv[1]));title=sys.argv[2]
@@ -129,7 +175,11 @@ import sys
 p=Path(sys.argv[1]);(p/'index.txt').write_text(''.join(f.name+'\n' for f in sorted(p.glob('*.wav'))))
 PYINDEX
 done
-PS5_PAYLOAD_SDK="$sdk" make -C "$root/payload/model_mount" TITLE="$title" OUTPUT="$work/mount/$title"
-mkdir -p "$app/assets/platform"
-cp "$work/mount/$title/model-mount.elf" "$app/assets/platform/model-mount.elf"
+# Lapy's one-request helper for this exact title, built from its pinned source and checked
+# against the manifest it comes with (tools/build-lapy-helper.py).
+python3 "$root/tools/build-lapy-helper.py" "$title" "$work/lapy/$title"
+rm -rf "$app/assets/platform"
+mkdir -p "$app/licenses"
+cp "$work/lapy/$title/lapy.elf" "$work/lapy/$title/lapy-manifest.json" "$app/"
+cp "$work/lapy/$title/Lapy-MIT.txt" "$app/licenses/Lapy-MIT.txt"
 echo "Native Vulkan app folder: $app"

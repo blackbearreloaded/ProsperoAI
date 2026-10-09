@@ -1,6 +1,7 @@
 // Deterministic host fixtures for rendering the production frontend with Mesa.
 // No model weights, console connection, or deployment is involved.
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "model_downloader_ps5.hpp"
 #include "native_ui.hpp"
 #include "dev_script.hpp"
 #include "gfx/renderer.hpp"
@@ -137,6 +138,75 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
     stats->elapsed_microseconds = 4890000;
     return 0;
 }
+void gpt_runtime_refresh_models()
+{
+}
+
+// Nothing is fetched on a PC; one scene pretends that a preset is being downloaded.
+namespace prospero_model_download
+{
+static State preview_state = State::Idle;
+bool preset_installed(std::size_t)
+{
+    return false;
+}
+bool download_preset(std::size_t)
+{
+    return false;
+}
+void poll()
+{
+}
+State state()
+{
+    return preview_state;
+}
+int active_preset()
+{
+    return preview_state == State::Downloading ? 0 : -1;
+}
+void progress(std::uint64_t *completed, std::uint64_t *total)
+{
+    *completed = preview_state == State::Downloading ? 42 : 0;
+    *total = preview_state == State::Downloading ? 100 : 0;
+}
+void status(char *output, std::size_t capacity)
+{
+    std::snprintf(output, capacity, "%s",
+                  preview_state == State::Downloading ? "Downloading: 1827 / 4350 MiB (42%)" : "");
+}
+bool cancel()
+{
+    const bool running = preview_state == State::Downloading;
+    preview_state = State::Idle;
+    return running;
+}
+bool cancelling()
+{
+    return false;
+}
+std::size_t candidate_count()
+{
+    return 0;
+}
+bool candidate(std::size_t, Candidate *)
+{
+    return false;
+}
+bool search(const char *)
+{
+    return false;
+}
+bool browse(const char *)
+{
+    return false;
+}
+bool download(std::size_t)
+{
+    return false;
+}
+} // namespace prospero_model_download
+
 namespace prospero_session
 {
 bool create(Record *r, const char *id, const char *name, const char *purpose)
@@ -384,6 +454,17 @@ int main(int argc, char **argv)
     capture("welcome");
     press(hui::Action::page_next);
     capture("models");
+    // A preset is on its way: Triangle asks, the second button cancels.
+    prospero_model_download::preview_state = prospero_model_download::State::Downloading;
+    frames(30);
+    capture("downloading");
+    press(hui::Action::north);
+    capture("cancel-download");
+    press(hui::Action::right, hui::Direction::right);
+    press(hui::Action::confirm);
+    assert(prospero_model_download::preview_state == prospero_model_download::State::Idle);
+    capture("download-cancelled");
+    frames(420); // its notice has gone
     press(hui::Action::right, hui::Direction::right);
     press(hui::Action::right, hui::Direction::right);
     capture("models-image");
@@ -405,8 +486,10 @@ int main(int argc, char **argv)
     press(hui::Action::back);
     for (int i = 0; i < 4; ++i)
         press(hui::Action::down, hui::Direction::down);
+    capture("diagnostics");
+    press(hui::Action::down, hui::Direction::down);
     capture("about");
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
         press(hui::Action::up, hui::Direction::up);
     press(hui::Action::page_prev);
     press(hui::Action::page_prev);

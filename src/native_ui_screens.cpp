@@ -622,7 +622,24 @@ void NativeUI::Impl::draw_settings(ui::Canvas &canvas) const
              const Rect card{1454, 338, 370, 568};
              panel(list, card, 24);
              list.push_clip(card.inset(1));
-             if (category_ == 4)
+             if (category_ == kDiagnostics)
+             {
+                 // What to do with the log, beside its switch.
+                 label(list, "REPORTING A PROBLEM", card.x + 30, card.y + 46, palette_.accent);
+                 float at = card.y + 92;
+                 for (const char *step :
+                      {"Turn Debug log on.", "Repeat what went wrong.",
+                       "Copy debug-trace.txt from the logs folder with an FTP program and "
+                       "send it to us with a line on what you did.",
+                       "Turn Debug log off again."})
+                     at = ui::paragraph(list, fonts_.regular, step, card.x + 30, at, 21,
+                                        card.w - 60, 30, palette_.ink.with_alpha(0.92f), 5) +
+                          18;
+                 ui::paragraph(list, fonts_.mono, logs_folder_text(), card.x + 30,
+                               std::max(at + 6, card.y + 470), 18, card.w - 60, 26, palette_.muted,
+                               3);
+             }
+             else if (category_ == kAbout)
              {
                  // About: the mark, the name and where it runs.
                  draw_sculpture(list, card.cx(), card.y + 150, 92, palette_.accent, clock_, 24);

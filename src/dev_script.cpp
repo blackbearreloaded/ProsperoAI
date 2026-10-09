@@ -1,6 +1,7 @@
 // ProsperoAI - A scripted, self-ending run for tests on a console.
 // Copyright (C) 2026 BlackBearReloaded
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "media_output.hpp"
 #include "dev_script.hpp"
 #include "core/save_file.hpp"
 #include "platform/ps5/system.hpp"
@@ -18,6 +19,20 @@
 #ifndef PROSPERO_VERSION
 #define PROSPERO_VERSION "development"
 #define PROSPERO_BUILD_LABEL ""
+#endif
+
+#ifndef PROSPERO_HOST
+// The console's description of one mapped range (sceKernelVirtualQuery).
+struct VirtualRange
+{
+    void *start, *end;
+    std::int64_t offset;
+    int protection, memory_type;
+    unsigned flags; // 1 flexible, 2 direct, 4 stack, 8 pooled, 16 committed
+    char name[32];
+};
+static_assert(sizeof(VirtualRange) == 72, "the console's layout");
+extern "C" int sceKernelVirtualQuery(const void *, int, VirtualRange *, std::size_t);
 #endif
 
 namespace prospero
@@ -109,8 +124,8 @@ bool DevScript::load(const std::string &request, const std::string &output)
     output_ = output;
     const std::size_t parent = output.find_last_of('/');
     if (parent != std::string::npos && parent > 0)
-        mkdir(output.substr(0, parent).c_str(), 0755);
-    mkdir(output.c_str(), 0755);
+        mkdir(output.substr(0, parent).c_str(), 0777);
+    mkdir(output.c_str(), 0777);
     const std::string handled_path = output + "/handled-token.txt";
     std::string handled;
     if (hui::save::read_file(handled_path, &handled, 256) && handled == token)
@@ -178,6 +193,9 @@ void DevScript::status(App &app)
                static_cast<double>(kSlowFrame * 1000));
     frames_ = slow_ = 0;
     frame_sum_ = frame_worst_ = 0;
+#if defined(PS5_MEDIA_AUDIO) && !defined(PROSPERO_HOST)
+    report("sound: %s", ps5_media_is_playing() ? "playing" : "silent");
+#endif
 }
 
 void DevScript::fail(const char *why)
@@ -355,6 +373,35 @@ void DevScript::update(float seconds, App &app, NativeUI &ui, hui::InputFrame &i
     else if (step.verb == "status")
     {
         status(app);
+        done = true;
+    }
+    else if (step.verb == "memory")
+    {
+        // What is mapped where the model runtimes need room: every range from
+        // 0x2_0000_0000 up to 0x8_0000_0000, and the gap before it when there is one.
+#ifndef PROSPERO_HOST
+        std::uintptr_t at = 0x200000000ULL;
+        for (int lines = 0; lines < 120 && at < 0x800000000ULL; ++lines)
+        {
+            VirtualRange range{};
+            if (sceKernelVirtualQuery(reinterpret_cast<void *>(at), 1, &range, sizeof(range)) != 0)
+                break;
+            const auto start = reinterpret_cast<std::uintptr_t>(range.start);
+            const auto end = reinterpret_cast<std::uintptr_t>(range.end);
+            if (start >= 0x800000000ULL || end <= at)
+                break;
+            if (start > at)
+                report("memory %010llx-%010llx %7.1f MiB free", static_cast<unsigned long long>(at),
+                       static_cast<unsigned long long>(start),
+                       static_cast<double>(start - at) / 1048576.0);
+            range.name[sizeof(range.name) - 1] = '\0';
+            report("memory %010llx-%010llx %7.1f MiB prot=%02x kind=%x %s",
+                   static_cast<unsigned long long>(start), static_cast<unsigned long long>(end),
+                   static_cast<double>(end - start) / 1048576.0,
+                   static_cast<unsigned>(range.protection), range.flags & 31u, range.name);
+            at = end;
+        }
+#endif
         done = true;
     }
     else if (step.verb == "quit")

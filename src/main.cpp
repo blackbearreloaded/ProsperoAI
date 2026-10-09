@@ -1,6 +1,9 @@
 // ProsperoAI native OpenGL frontend.
 // Copyright (C) 2026 BlackBearReloaded
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "debug_log.hpp"
+#include "storage.hpp"
+#include "media_output.hpp"
 #include "native_ui.hpp"
 #include "dev_script.hpp"
 #include "gpt_input.hpp"
@@ -113,6 +116,19 @@ void input_event(const gpt_input_event_t &event, hui::InputFrame &input, prosper
 
 int main()
 {
+#ifdef PROSPERO_UI_VULKAN
+    // Filesystem access first, while this is the only thread: every path the app uses
+    // is settled here (vulkan/storage.cpp).
+    const prospero::Storage &storage = prospero::prepare_storage();
+#endif
+    // The debug log's switch is read here, before anything else can go wrong.
+    prospero::debug::start("/download0/ProsperoAI/logs");
+#ifdef PROSPERO_UI_VULKAN
+    prospero::debug::line("app", "filesystem access=%d route=%s app=%s data=%s models=%s moved=%u",
+                          storage.access, storage.route, storage.app_dir.c_str(),
+                          storage.data_root.c_str(), storage.model_root.c_str(),
+                          storage.moved_models);
+#endif
     // This thread's large allocations stay out of the model runtimes' arena, and the
     // inference scratch takes its address range before the OpenGL runtime maps anything.
 #ifndef PROSPERO_UI_VULKAN
@@ -135,6 +151,7 @@ int main()
     if (!fonts.open(renderer, "/app0/assets/fonts"))
         hui::sys::quit();
     hui::audio::Mixer mixer;
+    prospero_media_attach(&mixer); // generated sounds share the interface's audio port
     hui::audio::SoundBank sounds;
     const auto loaded = sounds.load("/app0/assets/audio/sfx");
     hui::sys::log("[prosperoai] interface sounds: %d loaded, %d rejected", loaded.files,
@@ -223,6 +240,7 @@ int main()
     }
     gpt_ime_shutdown();
     app.shutdown();
+    prospero_media_attach(nullptr);
     gpt_input_shutdown();
     audio.stop();
     ui.release();

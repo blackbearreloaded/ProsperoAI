@@ -3,14 +3,18 @@
 #ifdef PS5_LLAMA_VULKAN
 #include "model_downloader_ps5.hpp"
 #include "gpt_runtime.hpp"
+#include "debug_log.hpp"
 #include "model_paths.hpp"
+#include "net/https_get.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <cctype>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
 #include <mutex>
 #include <string>
 #include <sys/stat.h>
@@ -19,22 +23,6 @@
 #include <nlohmann/json.hpp>
 
 extern "C" {
-int sceNetPoolCreate(const char *, int, int);
-int sceNetPoolDestroy(int);
-int sceSslInit(std::size_t);
-int sceSslTerm(int);
-int sceHttp2Init(int, int, std::size_t, int);
-int sceHttp2Term(int);
-int sceHttp2CreateTemplate(int, const char *, int, int);
-int sceHttp2DeleteTemplate(int);
-int sceHttp2CreateRequestWithURL(int, const char *, const char *, std::uint64_t);
-int sceHttp2DeleteRequest(int);
-int sceHttp2SendRequest(int, const void *, std::size_t);
-int sceHttp2GetStatusCode(int, int *);
-int sceHttp2SetAutoRedirect(int, int);
-int sceHttp2GetAllResponseHeaders(int, char **, std::size_t *);
-int sceHttp2GetResponseContentLength(int, std::uint64_t *);
-int sceHttp2ReadData(int, void *, std::size_t);
 int scePthreadCreate(void **, const void *, void *(*)(void *), void *, const char *);
 int scePthreadJoin(void *, void **);
 }
@@ -42,7 +30,6 @@ int scePthreadJoin(void *, void **);
 namespace prospero_model_download {
 namespace {
 using Json = nlohmann::json;
-constexpr const char *kModelRoot = prospero::kModelRoot;
 constexpr std::uint64_t kMaxCatalogBytes = 8 * 1024 * 1024;
 // Keep enough headroom for Vulkan allocations and KV cache on the console.
 constexpr std::uint64_t kMaxModelBytes = 7ULL * 1024 * 1024 * 1024;
@@ -59,6 +46,7 @@ std::string worker_query;
 std::string worker_repo;
 std::size_t worker_index;
 std::atomic<int> worker_preset{-1};
+std::atomic<bool> cancel_requested{false};
 
 void set_status(const char *text) {
     std::lock_guard<std::mutex> lock(state_mutex);
@@ -68,6 +56,12 @@ void set_error(const char *stage, int code) {
     char text[160];
     std::snprintf(text, sizeof(text), "%s failed (0x%08X). Check network access and HTTPS permissions.",
                   stage, static_cast<unsigned>(code));
+    set_status(text);
+    current.store(State::Failed, std::memory_order_release);
+}
+void set_failure(const char *stage, const char *detail) {
+    char text[160];
+    std::snprintf(text, sizeof(text), "%s failed: %s", stage, detail && *detail ? detail : "no answer");
     set_status(text);
     current.store(State::Failed, std::memory_order_release);
 }
@@ -101,80 +95,52 @@ std::string encode_path(const std::string &path) {
     return output;
 }
 
+// HTTPS on libcurl (vulkan/net/https_get.h): the console's own client refuses every
+// public site once the app has filesystem access. Redirects are followed there.
 struct HttpSession {
-    int pool = -1, ssl = -1, http = -1, tmpl = -1, request = -1;
+    prospero_https *session = nullptr;
     bool open() {
         // Networking is initialized by the app's HTTP server during startup.
-        pool = sceNetPoolCreate("prosperoai-model-download", 256 * 1024, 0);
-        if (pool < 0) { set_error("Network pool", pool); return false; }
-        ssl = sceSslInit(512 * 1024);
-        if (ssl < 0) { set_error("HTTPS/TLS", ssl); return false; }
-        http = sceHttp2Init(pool, ssl, 1024 * 1024, 1);
-        if (http < 0) { set_error("HTTPS client", http); return false; }
-        tmpl = sceHttp2CreateTemplate(http, "ProsperoAI/1.0", 3, 1);
-        if (tmpl < 0) { set_error("HTTPS template", tmpl); return false; }
+        if (!session) session = prospero_https_open();
+        if (!session) { set_failure("HTTPS client", "libcurl could not start"); return false; }
+        // A cancelled download does not wait for the network: the request ends at once.
+        prospero_https_set_stop(session, [](void *) -> int {
+            return cancel_requested.load(std::memory_order_acquire) ? 1 : 0;
+        }, nullptr);
         return true;
     }
-    void close_request() { if (request >= 0) { sceHttp2DeleteRequest(request); request = -1; } }
-    void close() {
-        close_request();
-        if (tmpl >= 0) sceHttp2DeleteTemplate(tmpl);
-        if (http >= 0) sceHttp2Term(http);
-        if (ssl >= 0) sceSslTerm(ssl);
-        if (pool >= 0) sceNetPoolDestroy(pool);
-    }
+    void close() { prospero_https_close(session); session = nullptr; }
     ~HttpSession() { close(); }
     bool get(const std::string &url) {
-        std::string address = url;
-        // Follow redirects explicitly. The firmware's automatic redirect path can
-        // report HTTP 200 while returning an empty body for Hugging Face CDN files.
-        for (int hop = 0; hop < 8; ++hop) {
-            close_request();
-            request = sceHttp2CreateRequestWithURL(tmpl, "GET", address.c_str(), 0);
-            if (request < 0) { set_error("HTTPS request", request); return false; }
-            int result = sceHttp2SetAutoRedirect(request, 0);
-            if (result < 0) { set_error("HTTPS redirect setup", result); return false; }
-            result = sceHttp2SendRequest(request, nullptr, 0);
-            if (result < 0) { set_error("HTTPS send", result); close_request(); return false; }
-            int status = 0;
-            result = sceHttp2GetStatusCode(request, &status);
-            if (result < 0) { set_error("HTTPS response", result); return false; }
-            if (status == 200) return true;
-            if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308) {
-                set_error("Hugging Face response", status); return false;
-            }
-            char *headers = nullptr;
-            std::size_t length = 0;
-            result = sceHttp2GetAllResponseHeaders(request, &headers, &length);
-            if (result < 0 || !headers || length > 65536) { set_error("HTTPS redirect headers", result); return false; }
-            std::string redirect;
-            const std::string text(headers, length);
-            for (std::size_t start = 0; start < text.size();) {
-                const auto end = text.find('\n', start);
-                std::string line = text.substr(start, end == std::string::npos ? end : end - start);
-                std::string key = line.substr(0, 9);
-                std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return std::tolower(c); });
-                if (key == "location:") {
-                    redirect = line.substr(9);
-                    const auto first = redirect.find_first_not_of(" \t");
-                    if (first != std::string::npos) redirect.erase(0, first);
-                    const auto last = redirect.find_last_not_of(std::string("\r\n \t\0", 5));
-                    if (last != std::string::npos) redirect.resize(last + 1);
-                    break;
-                }
-                if (end == std::string::npos) break;
-                start = end + 1;
-            }
-            if (!redirect.empty() && redirect.front() == '/') {
-                const auto host_end = address.find('/', 8);
-                redirect = address.substr(0, host_end) + redirect;
-            }
-            if (redirect.compare(0, 8, "https://") != 0) {
-                set_status("Model host returned an invalid HTTPS redirect."); current.store(State::Failed); return false;
-            }
-            address = std::move(redirect);
+        long status = 0;
+        if (!open()) return false;
+        if (prospero_https_get(session, url.c_str(), &status) != 0) {
+            set_failure("Connection", prospero_https_error(session)); return false;
         }
-        set_status("Model host returned too many redirects."); current.store(State::Failed); return false;
+        if (status != 200) {
+            char text[160];
+            std::snprintf(text, sizeof(text), "Hugging Face answered HTTP %ld.%s", status,
+                          status == 401 || status == 403 ? " The repository may need an account."
+                          : status == 404 ? " The file or repository was not found." : "");
+            set_status(text);
+            current.store(State::Failed, std::memory_order_release);
+            return false;
+        }
+        return true;
+    }
+    int read(void *buffer, std::size_t size) { return prospero_https_read(session, buffer, size); }
+    const char *error() const { return prospero_https_error(session); }
+};
+
+// How fast a file came, for the debug log: the figure a slow download is reported with.
+struct Pace {
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    void report(const char *name, std::uint64_t bytes) const {
+        const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+        const double size = static_cast<double>(bytes) / (1024.0 * 1024.0);
+        prospero::debug::line("download", "%s: %.1f MiB in %.1f s (%.2f MiB/s), socket receive buffer %d KB",
+                              name, size, seconds, seconds > 0.0 ? size / seconds : 0.0,
+                              prospero_https_receive_buffer() / 1024);
     }
 };
 
@@ -185,8 +151,8 @@ bool read_catalog(const std::string &repo, std::vector<Item> *output) {
     std::string body;
     std::array<char, 32768> chunk{};
     for (;;) {
-        int n = sceHttp2ReadData(http.request, chunk.data(), chunk.size());
-        if (n < 0) { set_error("Catalog download", n); return false; }
+        int n = http.read(chunk.data(), chunk.size());
+        if (n < 0) { set_failure("Catalog download", http.error()); return false; }
         if (n == 0) break;
         if (body.size() + static_cast<std::size_t>(n) > kMaxCatalogBytes) {
             set_status("Repository catalog is too large (8 MiB limit)."); current.store(State::Failed); return false;
@@ -244,10 +210,9 @@ bool ensure_model_root() {
     // The shared leaf may be mounted even though sandboxed parent directories
     // reject mkdir/access. Check the mounted directory itself first.
     struct stat directory{};
-    if (stat(kModelRoot, &directory) == 0 && S_ISDIR(directory.st_mode)) return true;
-    if (mkdir("/data/homebrew/prosperoai", 0777) != 0 && errno != EEXIST) return false;
-    return mkdir(kModelRoot, 0777) == 0 ||
-           (stat(kModelRoot, &directory) == 0 && S_ISDIR(directory.st_mode));
+    if (stat(prospero::model_root(), &directory) == 0 && S_ISDIR(directory.st_mode)) return true;
+    return mkdir(prospero::model_root(), 0777) == 0 ||
+           (stat(prospero::model_root(), &directory) == 0 && S_ISDIR(directory.st_mode));
 }
 void storage_error(const char *operation) {
     const int error = errno;
@@ -255,7 +220,7 @@ void storage_error(const char *operation) {
     std::snprintf(message, sizeof(message), "%s: %s (%d).%s", operation,
                   std::strerror(error), error,
                   error == EACCES || error == ENOENT
-                      ? " Shared model storage must be connected after console restart."
+                      ? " The model folder cannot be reached: storage access is missing."
                       : " Check available storage.");
     set_status(message);
     current.store(State::Failed);
@@ -292,7 +257,7 @@ public:
 };
 
 bool make_directories(const std::string &path) {
-    for (std::size_t i = std::strlen(kModelRoot) + 1; i <= path.size(); ++i) {
+    for (std::size_t i = std::strlen(prospero::model_root()) + 1; i <= path.size(); ++i) {
         if (i != path.size() && path[i] != '/') continue;
         const auto directory = path.substr(0, i);
         if (mkdir(directory.c_str(), 0777) != 0 && errno != EEXIST) {
@@ -301,6 +266,31 @@ bool make_directories(const std::string &path) {
     }
     return true;
 }
+bool cancel_pending() { return cancel_requested.load(std::memory_order_acquire); }
+// Removes a bundle's staging folder with what was downloaded into it.
+void remove_tree(const std::string &path, int depth = 0) {
+    if (depth > 8) return;
+    if (DIR *directory = opendir(path.c_str())) {
+        while (const dirent *entry = readdir(directory)) {
+            const std::string name = entry->d_name;
+            if (name == "." || name == "..") continue;
+            const std::string child = path + "/" + name;
+            struct stat info{};
+            if (lstat(child.c_str(), &info) == 0 && S_ISDIR(info.st_mode)) remove_tree(child, depth + 1);
+            else unlink(child.c_str());
+        }
+        closedir(directory);
+    }
+    rmdir(path.c_str());
+}
+// The end of a cancelled download: nothing of it is kept, and the page says so.
+void finish_cancelled(State next) {
+    completed_bytes.store(0, std::memory_order_release);
+    total_bytes.store(0, std::memory_order_release);
+    set_status("Download cancelled. Nothing of it was kept.");
+    prospero::debug::line("download", "cancelled, partial files removed");
+    current.store(next, std::memory_order_release);
+}
 bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile &item,
                        const std::string &target, std::uint64_t &completed) {
     const auto separator = target.find_last_of('/');
@@ -308,15 +298,16 @@ bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile
     const std::string part = target + ".part";
     FILE *file = std::fopen(part.c_str(), "wb");
     if (!file) { storage_error("Cannot create preset file"); return false; }
-    http.close_request();
+    const Pace pace;
     bool ok = http.get(std::string("https://huggingface.co/") + preset.repository +
                        "/resolve/" + preset.revision + "/" + encode_path(item.source));
     Sha256 hash;
     std::array<std::uint8_t, 256 * 1024> buffer{};
     std::uint64_t done = 0;
     while (ok) {
-        int count = sceHttp2ReadData(http.request, buffer.data(), buffer.size());
-        if (count < 0) { set_error("Preset download", count); ok=false; break; }
+        int count = http.read(buffer.data(), buffer.size());
+        if (cancel_pending()) { ok=false; break; }
+        if (count < 0) { set_failure("Preset download", http.error()); ok=false; break; }
         if (!count) break;
         if (done + static_cast<std::uint64_t>(count) > item.size) {
             set_status("Preset file is larger than its pinned manifest."); current.store(State::Failed); ok=false; break;
@@ -342,7 +333,7 @@ bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile
         storage_error("Cannot finalize preset file"); ok=false;
     }
     if (!ok) std::remove(part.c_str());
-    if (ok) completed += done;
+    if (ok) { completed += done; pace.report(item.path, done); }
     return ok;
 }
 void install_preset() {
@@ -350,15 +341,20 @@ void install_preset() {
     if (!ensure_model_root()) { storage_error("Cannot open model storage"); return; }
     HttpSession http;
     if (!http.open()) return;
-    const std::string final = std::string(kModelRoot) + "/" + preset.id;
+    const std::string final = std::string(prospero::model_root()) + "/" + preset.id;
     // Hidden staging directory prevents partially downloaded bundles being discovered.
-    const std::string staging = std::string(kModelRoot) + "/." + preset.id + ".download";
+    const std::string staging = std::string(prospero::model_root()) + "/." + preset.id + ".download";
     std::uint64_t completed = 0;
     for (std::size_t i = 0; i < preset.count; ++i) {
         const auto &file = preset.files[i];
         const std::string target = preset.kind == 0 ? final : staging + "/" + file.path;
-        if (!fetch_preset_file(http, preset, file, target, completed)) return;
+        if (!fetch_preset_file(http, preset, file, target, completed)) {
+            if (cancel_pending() && preset.kind != 0) remove_tree(staging);
+            return;
+        }
     }
+    // A single file is in place by now; a bundle is still in its staging folder.
+    if (preset.kind != 0 && cancel_pending()) { remove_tree(staging); return; }
     if (preset.kind != 0 && rename(staging.c_str(), final.c_str()) != 0) {
         storage_error("Cannot install completed bundle"); return;
     }
@@ -370,7 +366,9 @@ void install_preset() {
 void *worker_impl(void *) {
     const State action = current.load(std::memory_order_acquire);
     if (action == State::Downloading && worker_preset >= 0) {
-        install_preset(); worker_done.store(true, std::memory_order_release); return nullptr;
+        install_preset();
+        if (cancel_pending() && current.load() != State::Complete) finish_cancelled(State::Idle);
+        worker_done.store(true, std::memory_order_release); return nullptr;
     }
     if (action == State::Searching) {
         HttpSession http;
@@ -383,8 +381,8 @@ void *worker_impl(void *) {
         std::string body;
         std::array<char, 32768> chunk{};
         for (;;) {
-            int n = sceHttp2ReadData(http.request, chunk.data(), chunk.size());
-            if (n < 0) { set_error("Model search", n); worker_done.store(true); return nullptr; }
+            int n = http.read(chunk.data(), chunk.size());
+            if (n < 0) { set_failure("Model search", http.error()); worker_done.store(true); return nullptr; }
             if (n == 0) break;
             if (body.size() + static_cast<std::size_t>(n) > kMaxCatalogBytes) {
                 set_status("Model search response is too large."); current.store(State::Failed);
@@ -452,17 +450,18 @@ void *worker_impl(void *) {
             item=items[worker_index]; repo=worker_repo;
         }
         if (!ensure_model_root()) { storage_error("Cannot open model storage"); worker_done.store(true); return nullptr; }
-        const std::string final_path=std::string(kModelRoot)+"/"+installed_name(repo,item.name);
+        const std::string final_path=std::string(prospero::model_root())+"/"+installed_name(repo,item.name);
         const std::string part_path=final_path+".part";
         FILE *file=std::fopen(part_path.c_str(),"wb");
         if (!file) { storage_error("Cannot create model file"); worker_done.store(true); return nullptr; }
         const std::string url="https://huggingface.co/"+repo+"/resolve/main/"+encode_path(item.name);
+        const Pace pace;
         bool ok=http.get(url);
         std::uint64_t expected=item.size;
         Sha256 hash;
         std::array<std::uint8_t, 1024*1024> buffer{};
         std::uint64_t done=0;
-        while(ok){int n=sceHttp2ReadData(http.request,buffer.data(),buffer.size());if(n<0){set_error("Model download",n);ok=false;break;}if(n==0)break;
+        while(ok){int n=http.read(buffer.data(),buffer.size());if(cancel_pending()){ok=false;break;}if(n<0){set_failure("Model download",http.error());ok=false;break;}if(n==0)break;
             if(done+static_cast<std::uint64_t>(n)>expected){set_error("Model size check",-1);ok=false;break;}
             if(std::fwrite(buffer.data(),1,n,file)!=static_cast<std::size_t>(n)){storage_error("Disk write");ok=false;break;}
             hash.update(buffer.data(),n);done+=n;completed_bytes.store(done,std::memory_order_release);
@@ -472,6 +471,9 @@ void *worker_impl(void *) {
         if(ok&&(done!=expected||hash.finish()!=item.sha256)){set_status("Download size or SHA-256 check failed; partial file removed.");current.store(State::Failed);ok=false;}
         if(ok&&rename(part_path.c_str(),final_path.c_str())!=0){set_status("Could not finalize downloaded model file.");current.store(State::Failed);ok=false;}
         if(!ok) std::remove(part_path.c_str());
+        if(ok) pace.report(item.name.c_str(), done);
+        // The repository's file list is still there: another file can be chosen.
+        if(!ok&&cancel_pending()) finish_cancelled(State::Ready);
         if(ok){char text[160];std::snprintf(text,sizeof(text),"Verified %s (%llu MiB). Restart not needed; refreshing models.",installed_name(repo,item.name).c_str(),static_cast<unsigned long long>(done/(1024*1024)));set_status(text);current.store(State::Complete,std::memory_order_release);}
     }
     worker_done.store(true, std::memory_order_release);
@@ -488,6 +490,7 @@ void *worker(void *argument) {
     }
 }
 bool start() {
+    cancel_requested.store(false,std::memory_order_release);
     worker_done.store(false,std::memory_order_release); worker_thread=nullptr;
     pthread_attr_t attributes; int rc=pthread_attr_init(&attributes);
     const bool attributes_ready = rc == 0;
@@ -502,7 +505,7 @@ bool preset_installed(std::size_t index) {
     if (index >= preset_count) return false;
     const auto &preset = presets[index];
     for (std::size_t i = 0; i < preset.count; ++i) {
-        const std::string path = std::string(kModelRoot) + "/" + preset.id +
+        const std::string path = std::string(prospero::model_root()) + "/" + preset.id +
                                 (preset.kind == 0 ? "" : std::string("/") + preset.files[i].path);
         struct stat file{};
         if (stat(path.c_str(), &file) != 0 || !S_ISREG(file.st_mode) ||
@@ -527,12 +530,21 @@ void poll() {
     }
 }
 State state(){return current.load(std::memory_order_acquire);}
+bool cancel() {
+    poll();
+    std::lock_guard<std::mutex> job_lock(job_mutex);
+    if (state() != State::Downloading || !worker_thread ||
+        worker_done.load(std::memory_order_acquire)) return false;
+    cancel_requested.store(true, std::memory_order_release);
+    return true;
+}
+bool cancelling() { return state() == State::Downloading && cancel_pending(); }
 int active_preset() { return state() == State::Downloading ? worker_preset.load() : -1; }
 void progress(std::uint64_t *completed, std::uint64_t *total) {
     if (completed) *completed = completed_bytes.load(std::memory_order_acquire);
     if (total) *total = total_bytes.load(std::memory_order_acquire);
 }
-void status(char *out,std::size_t cap){if(!cap)return;std::lock_guard<std::mutex> lock(state_mutex);std::snprintf(out,cap,"%s",current_status);if(state()==State::Downloading){auto total=total_bytes.load();auto done=completed_bytes.load();if(total){char text[160];std::snprintf(text,sizeof(text),"Downloading: %llu / %llu MiB (%u%%)",static_cast<unsigned long long>(done/(1024*1024)),static_cast<unsigned long long>(total/(1024*1024)),static_cast<unsigned>((done*100)/total));std::snprintf(out,cap,"%s",text);}}}
+void status(char *out,std::size_t cap){if(!cap)return;std::lock_guard<std::mutex> lock(state_mutex);std::snprintf(out,cap,"%s",current_status);if(state()==State::Downloading&&cancel_pending()){std::snprintf(out,cap,"Cancelling the download...");}else if(state()==State::Downloading){auto total=total_bytes.load();auto done=completed_bytes.load();if(total){char text[160];std::snprintf(text,sizeof(text),"Downloading: %llu / %llu MiB (%u%%)",static_cast<unsigned long long>(done/(1024*1024)),static_cast<unsigned long long>(total/(1024*1024)),static_cast<unsigned>((done*100)/total));std::snprintf(out,cap,"%s",text);}}}
 std::size_t candidate_count(){std::lock_guard<std::mutex> lock(state_mutex);return items.size();}
 bool candidate(std::size_t i,Candidate*out){if(!out)return false;std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;std::snprintf(out->name,sizeof(out->name),"%s",items[i].name.c_str());out->size=items[i].size;return true;}
 bool search(const char *query){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(!query||state()==State::Searching||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(query);if(value.size()<2||value.size()>96){set_status("Enter at least two characters for model search.");current.store(State::Failed);return false;}for(unsigned char c:value)if(!(std::isalnum(c)||std::isspace(c)||c=='-'||c=='_'||c=='.'||c=='+')){set_status("Use letters, numbers, spaces, dots, dashes or underscores.");current.store(State::Failed);return false;}worker_query=value;{std::lock_guard<std::mutex> lock(state_mutex);items.clear();}current.store(State::Searching);set_status("Searching public GGUF repositories...");return start();}

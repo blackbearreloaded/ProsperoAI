@@ -57,4 +57,12 @@ bool download(std::size_t)
 {
     return false;
 }
+bool cancel()
+{
+    return false;
+}
+bool cancelling()
+{
+    return false;
+}
 } // namespace prospero_model_download
