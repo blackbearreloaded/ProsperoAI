@@ -1,9 +1,8 @@
 #pragma once
 
 /*
- * Independently authored interoperability declarations adapted from
- * blackbearreloaded/ps5-native-gamepad-input-research (GPL-3.0-or-later).
- * No vendor SDK header or source code is included.
+ * Keyboard declarations used by ProsperoAI.
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 #include <array>
