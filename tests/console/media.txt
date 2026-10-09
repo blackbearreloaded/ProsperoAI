@@ -1,0 +1,84 @@
+# ProsperoAI - An image, a voice clip played back, and a sound, on a console.
+#
+# Played by the app itself, as tests/console/first-run.txt is. It expects the image,
+# voice and sound models (found by "sd-turbo", "kokoro" and "stable-audio") and needs no
+# text model. After the voice clip Triangle plays it: the status that follows must say
+# "Playing audio" and "sound: playing".
+limit 1500
+
+until started 90
+wait 4
+status
+shot 01-start
+
+# Image.
+press r1
+wait 1
+type sd-turbo
+wait 1
+press cross
+wait 1
+press right
+press cross
+until ready 420
+expect model sd-turbo
+backspace 8
+press l1
+wait 1
+type A lighthouse at sunset, oil painting
+submit
+until idle 600
+expect image
+wait 3
+status
+shot 02-image
+
+# Voice, and its playback.
+press r1
+wait 1
+type kokoro
+wait 1
+press cross
+wait 1
+press right
+press cross
+until ready 420
+expect model kokoro
+backspace 6
+press l1
+wait 1
+type Hello from ProsperoAI.
+submit
+until idle 600
+expect audio
+wait 2
+status
+press triangle
+wait 1
+status
+shot 03-voice
+wait 4
+
+# Sound.
+press r1
+wait 1
+type stable-audio
+wait 1
+press cross
+wait 1
+press right
+press cross
+until ready 420
+expect model stable-audio
+backspace 12
+press l1
+wait 1
+type Soft rain on a window
+submit
+until idle 900
+expect audio
+wait 2
+status
+shot 04-sound
+
+quit 45

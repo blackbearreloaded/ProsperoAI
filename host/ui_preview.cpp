@@ -1,6 +1,7 @@
 // Deterministic host fixtures for rendering the production frontend with Mesa.
 // No model weights, console connection, or deployment is involved.
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "model_downloader_ps5.hpp"
 #include "native_ui.hpp"
 #include "dev_script.hpp"
 #include "gfx/renderer.hpp"
@@ -137,6 +138,63 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
     stats->elapsed_microseconds = 4890000;
     return 0;
 }
+void gpt_runtime_refresh_models()
+{
+}
+
+// Nothing is offered and nothing is fetched on a PC.
+namespace prospero_model_download
+{
+bool preset_installed(std::size_t)
+{
+    return false;
+}
+bool download_preset(std::size_t)
+{
+    return false;
+}
+void poll()
+{
+}
+State state()
+{
+    return State::Idle;
+}
+int active_preset()
+{
+    return -1;
+}
+void progress(std::uint64_t *completed, std::uint64_t *total)
+{
+    *completed = *total = 0;
+}
+void status(char *output, std::size_t capacity)
+{
+    if (capacity)
+        output[0] = '\0';
+}
+std::size_t candidate_count()
+{
+    return 0;
+}
+bool candidate(std::size_t, Candidate *)
+{
+    return false;
+}
+bool search(const char *)
+{
+    return false;
+}
+bool browse(const char *)
+{
+    return false;
+}
+bool download(std::size_t)
+{
+    return false;
+}
+} // namespace prospero_model_download
+
 namespace prospero_session
 {
 bool create(Record *r, const char *id, const char *name, const char *purpose)

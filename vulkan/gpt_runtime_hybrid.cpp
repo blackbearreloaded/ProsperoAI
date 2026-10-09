@@ -253,14 +253,4 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
     }
     return result;
 }
-// RADV's platform allocator already supplies direct-memory allocations. SD's
-// original allocator arena is not used in this build.
-extern "C" bool ps5SdIsDirectArenaRange(const void *, std::size_t)
-{
-    return false;
-}
-extern "C" bool ps5SdReleaseDirectArenaIfEmpty()
-{
-    return true;
-}
 #endif

@@ -27,7 +27,7 @@ sources=(src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
  src/ps5_agc_backend.cpp src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
- vulkan/gpt_runtime_hybrid.cpp
+ vulkan/gpt_runtime_hybrid.cpp vulkan/sd_arena.cpp
  vulkan/gpt_runtime_vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
 while IFS= read -r relative; do

@@ -1,6 +1,7 @@
 // ProsperoAI native OpenGL frontend.
 // Copyright (C) 2026 BlackBearReloaded
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "media_output.hpp"
 #include "native_ui.hpp"
 #include "dev_script.hpp"
 #include "gpt_input.hpp"
@@ -135,6 +136,7 @@ int main()
     if (!fonts.open(renderer, "/app0/assets/fonts"))
         hui::sys::quit();
     hui::audio::Mixer mixer;
+    prospero_media_attach(&mixer); // generated sounds share the interface's audio port
     hui::audio::SoundBank sounds;
     const auto loaded = sounds.load("/app0/assets/audio/sfx");
     hui::sys::log("[prosperoai] interface sounds: %d loaded, %d rejected", loaded.files,
@@ -223,6 +225,7 @@ int main()
     }
     gpt_ime_shutdown();
     app.shutdown();
+    prospero_media_attach(nullptr);
     gpt_input_shutdown();
     audio.stop();
     ui.release();

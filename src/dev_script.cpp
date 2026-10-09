@@ -1,6 +1,7 @@
 // ProsperoAI - A scripted, self-ending run for tests on a console.
 // Copyright (C) 2026 BlackBearReloaded
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "media_output.hpp"
 #include "dev_script.hpp"
 #include "core/save_file.hpp"
 #include "platform/ps5/system.hpp"
@@ -178,6 +179,9 @@ void DevScript::status(App &app)
                static_cast<double>(kSlowFrame * 1000));
     frames_ = slow_ = 0;
     frame_sum_ = frame_worst_ = 0;
+#if defined(PS5_MEDIA_AUDIO) && !defined(PROSPERO_HOST)
+    report("sound: %s", ps5_media_is_playing() ? "playing" : "silent");
+#endif
 }
 
 void DevScript::fail(const char *why)
