@@ -218,6 +218,32 @@ release is listed, build with `UPDATE_DEV_OFFER=1` and put an `update-offer.txt`
 folder: such a build takes the offer from that file and skips the catalog's signature, so it
 is never shipped. `tests/console/update.txt` is a scripted run of the question and its notes.
 
+### Launch metadata
+
+`sce_sys/param.json` carries two values that decide whether the console changes the
+television's video mode when the app opens and closes. A change blanks the picture for a
+second or two before the launch picture appears.
+
+- `attribute` is `0x62000000` (`1644167168`), the value the other Prospero apps use: the
+  console lists the title as HDR-capable (`HDR:o`) and leaves an HDR output as it is. With
+  `0` a console set to use HDR only when supported switched the output to SDR at launch.
+- `attribute3` is `0x100000` (`1048576`), "VRR off". With `0` a console set to apply VRR to
+  unsupported games switched the output into VRR at launch (`VRR:Boost`). System software
+  6.02 does not know the bit, says so in its log (`unknown vrr parameter`) and leaves VRR
+  off, which is the wanted result.
+
+The console's log shows what it decided, and how long the change took:
+
+```text
+[AvControl] -- app[0](appid=... attr=...)(GAME RUNNING)(HDR:o HFR:x VR:x VRR:x)
+[AvControl] App Event[POST_BEGIN]: elapse 0[ms]
+```
+
+Measured on a PS5 with system software 6.02 on a VRR and HDR television: about 1,790 ms
+with `0` and `0`, 0 ms with these values. The console reads the values from the installed
+folder's `param.json` at every launch, so an update is enough. `make lint` refuses other
+values.
+
 The GitHub workflow uses Ubuntu 24.04 LLVM 19 host libraries with the pinned Mesa
 and SDK sources via `tools/setup-vulkan-ci.sh`, then builds the application with
 Clang 18. The existing developer `make radv` path remains available on Debian.

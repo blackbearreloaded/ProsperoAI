@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The app opens without a second or two of black before its launch picture: it now declares
+  HDR output and no VRR, so the console no longer changes the television's video mode when
+  the app opens and closes.
+
 ## 01.003.000
 
 - ProsperoAI says when a newer version is listed on homebrew.page, shows its release notes
