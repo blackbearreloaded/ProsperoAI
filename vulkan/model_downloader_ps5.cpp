@@ -109,15 +109,16 @@ struct HttpSession {
         }, nullptr);
         return true;
     }
+    long status = 0; // of the last answer: 206 when a request from an offset was honoured
     void close() { prospero_https_close(session); session = nullptr; }
     ~HttpSession() { close(); }
-    bool get(const std::string &url) {
-        long status = 0;
+    bool get(const std::string &url, std::uint64_t offset = 0) {
+        status = 0;
         if (!open()) return false;
-        if (prospero_https_get(session, url.c_str(), &status) != 0) {
+        if (prospero_https_get_from(session, url.c_str(), offset, &status) != 0) {
             set_failure("Connection", prospero_https_error(session)); return false;
         }
-        if (status != 200) {
+        if (status != 200 && !(offset && status == 206)) {
             char text[160];
             std::snprintf(text, sizeof(text), "Hugging Face answered HTTP %ld.%s", status,
                           status == 401 || status == 403 ? " The repository may need an account."
@@ -291,50 +292,113 @@ void finish_cancelled(State next) {
     prospero::debug::line("download", "cancelled, partial files removed");
     current.store(next, std::memory_order_release);
 }
+// What a .part file left by an interrupted download already holds, hashed again so the
+// finished file can still be verified in one digest. 0 (and a fresh hash) when there is
+// nothing to keep: no file, more bytes than the file should have, or a read error.
+std::uint64_t resume_point(const std::string &part, std::uint64_t expected, Sha256 &hash) {
+    std::FILE *file = std::fopen(part.c_str(), "rb");
+    if (!file) return 0;
+    std::vector<std::uint8_t> buffer(4 * 1024 * 1024);
+    std::uint64_t done = 0;
+    bool keep = true;
+    for (;;) {
+        const std::size_t n = std::fread(buffer.data(), 1, buffer.size(), file);
+        if (n) { hash.update(buffer.data(), n); done += n; }
+        if (done > expected || cancel_pending()) { keep = false; break; }
+        if (n < buffer.size()) { keep = std::feof(file) != 0; break; }
+    }
+    std::fclose(file);
+    if (!keep || !done) { hash = Sha256{}; return 0; }
+    return done;
+}
+
+// Downloads `url` into `part` and checks it against its size and SHA-256. A download the
+// network interrupted leaves its .part file, and the next attempt asks only for the rest
+// (an HTTP Range request); a cancelled or wrong file is removed. `base` is what earlier
+// files of the same job already counted towards the progress bar.
+bool fetch_verified(HttpSession &http, const std::string &url, const std::string &part,
+                    std::uint64_t expected, const std::string &sha256, std::uint64_t base,
+                    const char *name) {
+    Sha256 hash;
+    std::uint64_t done = resume_point(part, expected, hash);
+    const std::uint64_t resumed = done;
+    if (cancel_pending()) { std::remove(part.c_str()); return false; }
+    completed_bytes.store(base + done, std::memory_order_release);
+    if (done) prospero::debug::line("download", "%s: continuing at %llu of %llu bytes", name,
+                                    static_cast<unsigned long long>(done),
+                                    static_cast<unsigned long long>(expected));
+    const Pace pace;
+    bool ok = true, network_failed = false;
+    if (done < expected) {
+        ok = http.get(url, done);
+        network_failed = !ok && http.status == 0; // no answer at all, not a refusal
+        if (ok && done && http.status == 200) {
+            // The server sent the whole file instead of the rest: start the file again.
+            done = 0; hash = Sha256{};
+            completed_bytes.store(base, std::memory_order_release);
+        }
+        std::FILE *file = ok ? std::fopen(part.c_str(), done ? "ab" : "wb") : nullptr;
+        if (ok && !file) { storage_error("Cannot create download file"); ok = false; }
+        std::vector<std::uint8_t> buffer(1024 * 1024);
+        while (ok) {
+            const int n = http.read(buffer.data(), buffer.size());
+            if (cancel_pending()) { ok = false; break; }
+            if (n < 0) { set_failure("Download", http.error()); ok = false; network_failed = true; break; }
+            if (n == 0) break;
+            if (done + static_cast<std::uint64_t>(n) > expected) {
+                set_status("The file is larger than Hugging Face listed it."); current.store(State::Failed);
+                ok = false; break;
+            }
+            if (std::fwrite(buffer.data(), 1, n, file) != static_cast<std::size_t>(n)) {
+                storage_error("Disk write"); ok = false; break;
+            }
+            hash.update(buffer.data(), n); done += n;
+            completed_bytes.store(base + done, std::memory_order_release);
+        }
+        if (file && std::fclose(file) != 0 && ok) { storage_error("Final disk write"); ok = false; }
+        // A connection that broke after some bytes landed keeps them for the next attempt.
+        if (network_failed && done && !cancel_pending()) {
+            char text[160];
+            std::snprintf(text, sizeof(text),
+                          "Download stopped at %llu of %llu MiB (%s). Download it again to continue.",
+                          static_cast<unsigned long long>(done >> 20),
+                          static_cast<unsigned long long>(expected >> 20), http.error());
+            set_status(text);
+            prospero::debug::line("download", "%s: kept %llu bytes for the next attempt", name,
+                                  static_cast<unsigned long long>(done));
+            return false;
+        }
+    }
+    if (ok) {
+        const auto digest = hash.finish();
+        if (done != expected || digest != sha256) {
+            char error[160];
+            std::snprintf(error, sizeof(error), "Verification failed: %s (%llu/%llu bytes).", name,
+                          static_cast<unsigned long long>(done), static_cast<unsigned long long>(expected));
+            std::fprintf(stderr, "[download] %s sha256=%s expected=%s\n", error, digest.c_str(), sha256.c_str());
+            set_status(error); current.store(State::Failed); ok = false;
+        }
+    }
+    if (!ok) { std::remove(part.c_str()); return false; }
+    pace.report(name, done - resumed);
+    return true;
+}
 bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile &item,
                        const std::string &target, std::uint64_t &completed) {
     const auto separator = target.find_last_of('/');
     if (!make_directories(target.substr(0, separator))) return false;
     const std::string part = target + ".part";
-    FILE *file = std::fopen(part.c_str(), "wb");
-    if (!file) { storage_error("Cannot create preset file"); return false; }
-    const Pace pace;
-    bool ok = http.get(std::string("https://huggingface.co/") + preset.repository +
-                       "/resolve/" + preset.revision + "/" + encode_path(item.source));
-    Sha256 hash;
-    std::array<std::uint8_t, 256 * 1024> buffer{};
-    std::uint64_t done = 0;
-    while (ok) {
-        int count = http.read(buffer.data(), buffer.size());
-        if (cancel_pending()) { ok=false; break; }
-        if (count < 0) { set_failure("Preset download", http.error()); ok=false; break; }
-        if (!count) break;
-        if (done + static_cast<std::uint64_t>(count) > item.size) {
-            set_status("Preset file is larger than its pinned manifest."); current.store(State::Failed); ok=false; break;
-        }
-        if (std::fwrite(buffer.data(), 1, count, file) != static_cast<std::size_t>(count)) {
-            storage_error("Preset disk write"); ok=false; break;
-        }
-        hash.update(buffer.data(), count); done += count;
-        completed_bytes.store(completed + done, std::memory_order_release);
+    // A file an interrupted bundle download already finished is checked again, not fetched again.
+    if (access(target.c_str(), F_OK) == 0) rename(target.c_str(), part.c_str());
+    if (!fetch_verified(http, std::string("https://huggingface.co/") + preset.repository +
+                        "/resolve/" + preset.revision + "/" + encode_path(item.source),
+                        part, item.size, item.sha256, completed, item.path))
+        return false;
+    if (rename(part.c_str(), target.c_str()) != 0) {
+        storage_error("Cannot finalize preset file"); std::remove(part.c_str()); return false;
     }
-    if (std::fclose(file) != 0 && ok) { storage_error("Preset final disk write"); ok=false; }
-    if (ok) {
-        const auto digest = hash.finish();
-        if (done != item.size || digest != item.sha256) {
-            char error[160];
-            std::snprintf(error, sizeof(error), "Verification failed: %s (%llu/%llu bytes).",
-                item.path, static_cast<unsigned long long>(done), static_cast<unsigned long long>(item.size));
-            std::fprintf(stderr, "[preset] %s sha256=%s expected=%s\n", error, digest.c_str(), item.sha256);
-            set_status(error); current.store(State::Failed); ok=false;
-        }
-    }
-    if (ok && rename(part.c_str(), target.c_str()) != 0) {
-        storage_error("Cannot finalize preset file"); ok=false;
-    }
-    if (!ok) std::remove(part.c_str());
-    if (ok) { completed += done; pace.report(item.path, done); }
-    return ok;
+    completed += item.size;
+    return true;
 }
 void install_preset() {
     const auto &preset = presets[worker_preset.load()];
@@ -452,29 +516,13 @@ void *worker_impl(void *) {
         if (!ensure_model_root()) { storage_error("Cannot open model storage"); worker_done.store(true); return nullptr; }
         const std::string final_path=std::string(prospero::model_root())+"/"+installed_name(repo,item.name);
         const std::string part_path=final_path+".part";
-        FILE *file=std::fopen(part_path.c_str(),"wb");
-        if (!file) { storage_error("Cannot create model file"); worker_done.store(true); return nullptr; }
         const std::string url="https://huggingface.co/"+repo+"/resolve/main/"+encode_path(item.name);
-        const Pace pace;
-        bool ok=http.get(url);
-        std::uint64_t expected=item.size;
-        Sha256 hash;
-        std::array<std::uint8_t, 1024*1024> buffer{};
-        std::uint64_t done=0;
-        while(ok){int n=http.read(buffer.data(),buffer.size());if(cancel_pending()){ok=false;break;}if(n<0){set_failure("Model download",http.error());ok=false;break;}if(n==0)break;
-            if(done+static_cast<std::uint64_t>(n)>expected){set_error("Model size check",-1);ok=false;break;}
-            if(std::fwrite(buffer.data(),1,n,file)!=static_cast<std::size_t>(n)){storage_error("Disk write");ok=false;break;}
-            hash.update(buffer.data(),n);done+=n;completed_bytes.store(done,std::memory_order_release);
-        }
-        if (std::fclose(file) != 0 && ok) { storage_error("Final disk write"); ok=false; }
-        total_bytes.store(expected,std::memory_order_release);
-        if(ok&&(done!=expected||hash.finish()!=item.sha256)){set_status("Download size or SHA-256 check failed; partial file removed.");current.store(State::Failed);ok=false;}
-        if(ok&&rename(part_path.c_str(),final_path.c_str())!=0){set_status("Could not finalize downloaded model file.");current.store(State::Failed);ok=false;}
-        if(!ok) std::remove(part_path.c_str());
-        if(ok) pace.report(item.name.c_str(), done);
+        total_bytes.store(item.size,std::memory_order_release);
+        bool ok=fetch_verified(http,url,part_path,item.size,item.sha256,0,item.name.c_str());
+        if(ok&&rename(part_path.c_str(),final_path.c_str())!=0){set_status("Could not finalize downloaded model file.");current.store(State::Failed);std::remove(part_path.c_str());ok=false;}
         // The repository's file list is still there: another file can be chosen.
         if(!ok&&cancel_pending()) finish_cancelled(State::Ready);
-        if(ok){char text[160];std::snprintf(text,sizeof(text),"Verified %s (%llu MiB). Restart not needed; refreshing models.",installed_name(repo,item.name).c_str(),static_cast<unsigned long long>(done/(1024*1024)));set_status(text);current.store(State::Complete,std::memory_order_release);}
+        if(ok){char text[160];std::snprintf(text,sizeof(text),"Verified %s (%llu MiB). Restart not needed; refreshing models.",installed_name(repo,item.name).c_str(),static_cast<unsigned long long>(item.size/(1024*1024)));set_status(text);current.store(State::Complete,std::memory_order_release);}
     }
     worker_done.store(true, std::memory_order_release);
     return nullptr;

@@ -5,6 +5,9 @@
 - The app opens without a second or two of black before its launch picture: it now declares
   HDR output and no VRR, so the console no longer changes the television's video mode when
   the app opens and closes.
+- A model download that the network interrupted continues where it stopped when it is
+  started again, instead of starting over: what arrived stays, and only the rest is asked
+  for. A cancelled download is still removed.
 
 ## 01.003.000
 
