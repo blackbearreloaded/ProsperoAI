@@ -286,6 +286,59 @@ Each conversation is an independent session. Text and metadata are saved under
 the matching session directory. Deleting a session removes its associated
 content. ProsperoAI does not send these files to a network service.
 
+## Roadmap
+
+Ideas we would like to work on. They are not promises and carry no dates or order;
+[open an issue](https://github.com/blackbearreloaded/ProsperoAI/issues) to argue for one or
+to suggest another.
+
+**Models and generation**
+
+- Faster sound generation: a Stable Audio clip takes several minutes in the combined build.
+- Vision models: let a text model look at a picture.
+- Image-to-image, and variations of a generated picture.
+- More image models beside SD-Turbo, with size and step settings.
+- Speech to text: dictate a prompt through the DualSense microphone.
+- Spoken answers: read a text answer aloud, with a choice of voices.
+- Personas and system prompts, saved per conversation.
+- Generation settings remembered per model.
+
+**Model library**
+
+- Resume an interrupted download instead of starting again, and clean up what a closed app
+  left behind.
+- Delete a model from the app, with the space it frees.
+- A download queue.
+- A Hugging Face token for repositories that need an account.
+- GGUF files above 7 GiB, and split files.
+- Before downloading a model, a hint of the memory it needs and the speed to expect.
+
+**Conversations**
+
+- Longer conversations and answers: 64 messages of 4 KB each are kept today.
+- Export a conversation or a picture to USB, or fetch it from the browser page.
+- Search, rename and pin conversations.
+- Documents as context: ask about a text or PDF file from USB.
+
+**Console experience**
+
+- Menus in the console's language.
+- A phone as keyboard and remote.
+- Work in the background, with a notice when a picture or a download is done.
+- Remember the last model whatever the length of its name.
+
+**Server and integrations**
+
+- Pictures, speech and sound over the OpenAI-compatible API, beside chat.
+- An embeddings endpoint.
+- A server page in Settings: address, key, connected clients, and a switch to turn it off.
+
+**Under the hood**
+
+- A faster update download.
+- A cleaner debug log.
+- An in-app benchmark: tokens per second and time per picture for each model.
+
 ## Build
 
 Build from Linux, WSL, or an Ubuntu-compatible CI runner:
