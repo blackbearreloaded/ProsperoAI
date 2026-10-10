@@ -7,7 +7,9 @@
 
 namespace prospero_model_download {
 enum class State { Idle, Searching, SearchReady, Loading, Ready, Downloading, Complete, Failed };
-struct Candidate { char name[160]; std::uint64_t size; };
+enum class Fit { Fits, Tight, DoesNotFit };
+Fit estimate_fit(std::uint64_t file_bytes);
+struct Candidate { char name[160]; std::uint64_t size; Fit fit; };
 bool preset_installed(std::size_t index);
 bool download_preset(std::size_t index);
 void poll();

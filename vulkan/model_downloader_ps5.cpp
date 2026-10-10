@@ -28,12 +28,21 @@ int scePthreadJoin(void *, void **);
 }
 
 namespace prospero_model_download {
+Fit estimate_fit(std::uint64_t file_bytes) {
+    // The RADV heap is fixed (11,712 MiB reported, docs/VK_LOG.md); about 1 GiB goes to the
+    // interface and a margin, leaving roughly 10.7 GiB. Below 8 GiB a model's KV/compute
+    // overhead reliably fits in what is left (docs/PLAN_CONTEXT_MODELS_VULKAN.md's budget
+    // table); above the 10.7 GiB ceiling nothing is left for KV or compute at all.
+    constexpr std::uint64_t kComfortableBytes = 8ULL * 1024 * 1024 * 1024;
+    constexpr std::uint64_t kCeilingBytes = 10ULL * 1024 * 1024 * 1024 + 717ULL * 1024 * 1024;
+    if (file_bytes < kComfortableBytes) return Fit::Fits;
+    if (file_bytes <= kCeilingBytes) return Fit::Tight;
+    return Fit::DoesNotFit;
+}
 namespace {
 using Json = nlohmann::json;
 constexpr std::uint64_t kMaxCatalogBytes = 8 * 1024 * 1024;
-// Keep enough headroom for Vulkan allocations and KV cache on the console.
-constexpr std::uint64_t kMaxModelBytes = 7ULL * 1024 * 1024 * 1024;
-struct Item { std::string name, sha256; std::uint64_t size = 0; };
+struct Item { std::string name, sha256; std::uint64_t size = 0; Fit fit = Fit::Fits; };
 std::mutex state_mutex;
 std::mutex job_mutex;
 std::vector<Item> items;
@@ -181,7 +190,8 @@ bool read_catalog(const std::string &repo, std::vector<Item> *output) {
             if (lfs.contains("oid") && lfs["oid"].is_string()) item.sha256 = lfs["oid"].get<std::string>();
         }
         if (item.sha256.compare(0, 7, "sha256:") == 0) item.sha256.erase(0, 7);
-        if (item.size == 0 || item.size > kMaxModelBytes || item.sha256.size() != 64) continue;
+        item.fit = estimate_fit(item.size);
+        if (item.size == 0 || item.fit == Fit::DoesNotFit || item.sha256.size() != 64) continue;
         output->push_back(std::move(item));
     }
     std::sort(output->begin(), output->end(), [](const Item &a, const Item &b) {
@@ -594,7 +604,7 @@ void progress(std::uint64_t *completed, std::uint64_t *total) {
 }
 void status(char *out,std::size_t cap){if(!cap)return;std::lock_guard<std::mutex> lock(state_mutex);std::snprintf(out,cap,"%s",current_status);if(state()==State::Downloading&&cancel_pending()){std::snprintf(out,cap,"Cancelling the download...");}else if(state()==State::Downloading){auto total=total_bytes.load();auto done=completed_bytes.load();if(total){char text[160];std::snprintf(text,sizeof(text),"Downloading: %llu / %llu MiB (%u%%)",static_cast<unsigned long long>(done/(1024*1024)),static_cast<unsigned long long>(total/(1024*1024)),static_cast<unsigned>((done*100)/total));std::snprintf(out,cap,"%s",text);}}}
 std::size_t candidate_count(){std::lock_guard<std::mutex> lock(state_mutex);return items.size();}
-bool candidate(std::size_t i,Candidate*out){if(!out)return false;std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;std::snprintf(out->name,sizeof(out->name),"%s",items[i].name.c_str());out->size=items[i].size;return true;}
+bool candidate(std::size_t i,Candidate*out){if(!out)return false;std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;std::snprintf(out->name,sizeof(out->name),"%s",items[i].name.c_str());out->size=items[i].size;out->fit=items[i].fit;return true;}
 bool search(const char *query){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(!query||state()==State::Searching||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(query);if(value.size()<2||value.size()>96){set_status("Enter at least two characters for model search.");current.store(State::Failed);return false;}for(unsigned char c:value)if(!(std::isalnum(c)||std::isspace(c)||c=='-'||c=='_'||c=='.'||c=='+')){set_status("Use letters, numbers, spaces, dots, dashes or underscores.");current.store(State::Failed);return false;}worker_query=value;{std::lock_guard<std::mutex> lock(state_mutex);items.clear();}current.store(State::Searching);set_status("Searching public GGUF repositories...");return start();}
 bool browse(const char *repo){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(!repo||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(repo);if(!safe_repo(value)){set_status("Enter a repository as owner/name.");current.store(State::Failed);return false;}worker_repo=value;{std::lock_guard<std::mutex> lock(state_mutex);items.clear();}current.store(State::Loading);set_status("Connecting to Hugging Face over HTTPS...");return start();}
 bool download(std::size_t i){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(state()!=State::Ready||worker_thread)return false;worker_preset=-1;{std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;worker_index=i;}completed_bytes.store(0);total_bytes.store(items[i].size);current.store(State::Downloading);set_status("Starting model download...");return start();}
