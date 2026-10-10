@@ -181,6 +181,12 @@ void prospero_https_close(prospero_https *session)
 
 int prospero_https_get(prospero_https *session, const char *url, long *status)
 {
+    return prospero_https_get_from(session, url, 0, status);
+}
+
+int prospero_https_get_from(prospero_https *session, const char *url, unsigned long long offset,
+                            long *status)
+{
     drop_request(session);
     session->have = session->taken = 0;
     session->done = session->paused = 0;
@@ -210,6 +216,14 @@ int prospero_https_get(prospero_https *session, const char *url, long *status)
     curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, on_data);
     curl_easy_setopt(easy, CURLOPT_WRITEDATA, session);
     curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, session->error);
+    /* CURLOPT_RANGE rather than RESUME_FROM: a server that ignores the range then answers
+     * 200 with the whole body, which the caller can still use, instead of an error. */
+    char range[32];
+    if (offset)
+    {
+        snprintf(range, sizeof(range), "%llu-", offset);
+        curl_easy_setopt(easy, CURLOPT_RANGE, range);
+    }
     if (curl_multi_add_handle(session->multi, easy) != CURLM_OK)
     {
         snprintf(session->error, sizeof(session->error), "libcurl could not start the request");

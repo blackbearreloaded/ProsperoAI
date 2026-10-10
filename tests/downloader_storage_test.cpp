@@ -24,6 +24,12 @@ static int forbidden_parent_mkdir(const char *, mode_t)
 #undef mkdir
 static std::vector<std::string> requested;
 static long answer_status = 200;
+// A stand-in file server: `served` from the requested offset (when ranges are honoured),
+// breaking the connection once `break_at` bytes of the file have been sent.
+static std::string served;
+static std::size_t sending = 0, break_at = std::string::npos;
+static bool honour_range = true;
+static std::vector<unsigned long long> offsets;
 struct prospero_https
 {
     int unused;
@@ -38,15 +44,28 @@ extern "C"
     void prospero_https_close(prospero_https *)
     {
     }
-    int prospero_https_get(prospero_https *, const char *url, long *status)
+    int prospero_https_get_from(prospero_https *, const char *url, unsigned long long offset,
+                                long *status)
     {
         requested.emplace_back(url);
-        *status = answer_status;
+        offsets.push_back(offset);
+        const bool ranged = offset && honour_range && answer_status == 200;
+        *status = ranged ? 206 : answer_status;
+        sending = ranged ? offset : 0;
         return 0;
     }
-    int prospero_https_read(prospero_https *, void *, std::size_t)
+    int prospero_https_read(prospero_https *, void *buffer, std::size_t size)
     {
-        return 0;
+        if (sending >= served.size())
+            return 0;
+        if (sending >= break_at)
+            return -1;
+        std::size_t count = std::min({size, served.size() - sending, std::size_t{7}});
+        if (break_at != std::string::npos)
+            count = std::min(count, break_at - sending);
+        std::memcpy(buffer, served.data() + sending, count);
+        sending += count;
+        return static_cast<int>(count);
     }
     const char *prospero_https_error(const prospero_https *)
     {
@@ -135,4 +154,68 @@ int main()
     }
     for (bool present : kinds)
         assert(present);
+
+    // An interrupted download keeps what arrived and asks only for the rest.
+    served = "The quick brown fox jumps over the lazy dog, again and again.";
+    Sha256 whole;
+    whole.update(served.data(), served.size());
+    const std::string digest = whole.finish();
+    char folder[] = "/tmp/prospero-resume-XXXXXX";
+    assert(mkdtemp(folder));
+    const std::string part = std::string(folder) + "/model.gguf.part";
+    const auto contents = [&]
+    {
+        std::string bytes;
+        if (std::FILE *file = std::fopen(part.c_str(), "rb"))
+        {
+            char chunk[64];
+            while (std::size_t n = std::fread(chunk, 1, sizeof(chunk), file))
+                bytes.append(chunk, n);
+            std::fclose(file);
+        }
+        return bytes;
+    };
+    answer_status = 200;
+    break_at = 20;
+    offsets.clear();
+    current.store(State::Downloading);
+    assert(
+        !fetch_verified(session, "https://huggingface.co/a", part, served.size(), digest, 0, "a"));
+    assert(contents() == served.substr(0, 20));
+    assert(std::strstr(current_status, "Download it again to continue") != nullptr);
+    break_at = std::string::npos;
+    assert(
+        fetch_verified(session, "https://huggingface.co/a", part, served.size(), digest, 0, "a"));
+    assert(offsets.size() == 2 && offsets[0] == 0 && offsets[1] == 20);
+    assert(contents() == served);
+    assert(completed_bytes.load() == served.size());
+    // A finished .part file is only checked again.
+    offsets.clear();
+    assert(
+        fetch_verified(session, "https://huggingface.co/a", part, served.size(), digest, 0, "a"));
+    assert(offsets.empty());
+    // A server that ignores the range sends the whole file, which starts it again.
+    std::FILE *cut = std::fopen(part.c_str(), "wb");
+    assert(cut && std::fwrite(served.data(), 1, 10, cut) == 10 && std::fclose(cut) == 0);
+    honour_range = false;
+    assert(
+        fetch_verified(session, "https://huggingface.co/a", part, served.size(), digest, 0, "a"));
+    assert(contents() == served);
+    honour_range = true;
+    // A wrong file is removed rather than kept.
+    std::remove(part.c_str());
+    assert(!fetch_verified(session, "https://huggingface.co/a", part, served.size(),
+                           std::string(64, '0'), 0, "a"));
+    assert(access(part.c_str(), F_OK) != 0);
+    // A cancel removes what arrived.
+    break_at = 20;
+    assert(
+        !fetch_verified(session, "https://huggingface.co/a", part, served.size(), digest, 0, "a"));
+    break_at = std::string::npos;
+    cancel_requested.store(true);
+    assert(
+        !fetch_verified(session, "https://huggingface.co/a", part, served.size(), digest, 0, "a"));
+    assert(access(part.c_str(), F_OK) != 0);
+    cancel_requested.store(false);
+    rmdir(folder);
 }

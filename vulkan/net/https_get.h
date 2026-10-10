@@ -28,6 +28,11 @@ extern "C"
      * HTTP status of the last answer on success; nonzero when the request failed. */
     int prospero_https_get(prospero_https *session, const char *url, long *status);
 
+    /* The same, asking only for the bytes from `offset` on (an HTTP Range request): a
+     * server that honours it answers 206, one that does not sends the whole body with 200. */
+    int prospero_https_get_from(prospero_https *session, const char *url,
+                                unsigned long long offset, long *status);
+
     /* The next bytes of the body: their count, 0 at its end, -1 on failure. */
     int prospero_https_read(prospero_https *session, void *buffer, size_t size);
 
