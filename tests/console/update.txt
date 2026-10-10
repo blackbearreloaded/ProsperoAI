@@ -1,0 +1,27 @@
+# ProsperoAI - A newer version is listed: the question, What's new, then Skip.
+#
+# Played by the app itself, as tests/console/first-run.txt is. It needs an offer: a
+# release newer than the installed one in the homebrew.page catalog, or a build made with
+# UPDATE_DEV_OFFER=1 and an update-offer.txt in the app's folder (docs/BUILDING.md).
+# The statuses must say "update: offer", "update: notes" and "update: none".
+updates on
+limit 300
+until started 90
+wait 3
+until update 60
+status
+shot 01-offer
+press left
+press cross
+wait 1
+status
+shot 02-notes
+press circle
+wait 1
+press left
+press cross
+wait 2
+status
+shot 03-skipped
+wait 5
+quit 30

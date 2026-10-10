@@ -111,6 +111,8 @@ bool DevScript::load(const std::string &request, const std::string &output)
             token = step.argument;
         else if (step.verb == "limit")
             limit_ = std::max(step.number, 10.0f);
+        else if (step.verb == "updates")
+            updates_ = step.argument == "on";
         else
             steps_.push_back(std::move(step));
     }
@@ -246,9 +248,12 @@ void DevScript::update(float seconds, App &app, NativeUI &ui, hui::InputFrame &i
     {
         const bool started = state.initialized;
         const bool idle = started && !app.busy();
-        const bool wanted = step.argument.rfind("started", 0) == 0 ? started
-                            : step.argument.rfind("ready", 0) == 0 ? idle && state.ready
-                                                                   : idle;
+        // "update": the question about a newer version is on screen.
+        const bool wanted = step.argument.rfind("update", 0) == 0
+                                ? std::strcmp(ui.update_state(), "offer") == 0
+                            : step.argument.rfind("started", 0) == 0 ? started
+                            : step.argument.rfind("ready", 0) == 0   ? idle && state.ready
+                                                                     : idle;
         const float patience = step.number > 0 ? step.number : 120.0f;
         if (wanted)
         {
@@ -373,6 +378,8 @@ void DevScript::update(float seconds, App &app, NativeUI &ui, hui::InputFrame &i
     else if (step.verb == "status")
     {
         status(app);
+        if (updates_)
+            report("update: %s", ui.update_state());
         done = true;
     }
     else if (step.verb == "memory")

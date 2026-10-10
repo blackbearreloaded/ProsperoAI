@@ -29,6 +29,7 @@ sources=(src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens
  src/ps5_agc_backend.cpp src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
  vulkan/gpt_runtime_hybrid.cpp vulkan/sd_arena.cpp vulkan/gpt_runtime_agc_text.cpp
  vulkan/storage.cpp vulkan/storage_paths.cpp vulkan/elevation/elevation.cpp vulkan/debug_tee.cpp src/debug_log.cpp
+ src/native_ui_update.cpp vulkan/update_ps5.cpp
  src/backends/mistral/backend.c src/backends/qwen35/backend.c src/tokenizer.c
  vulkan/gpt_runtime_vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
@@ -38,6 +39,10 @@ while IFS= read -r relative; do
  sources+=("${kit_stage#"$root/"}/src/$relative")
 done < "$root/ui-kit/sources.txt"
 python3 "$root/tools/prepare-hybrid-media.py"
+# UPDATE_DEV_OFFER=1: the update offer comes from update-offer.txt in the app's folder instead
+# of the catalog (third_party/update-check/README.md). Never for a release.
+update_definitions=()
+[[ ${UPDATE_DEV_OFFER:-0} != 1 ]] || update_definitions+=(-DPROSPERO_UPDATE_DEV_OFFER=1)
 for relative in "${sources[@]}"; do
  media_includes=()
  case "$relative" in
@@ -62,7 +67,7 @@ for relative in "${sources[@]}"; do
   "${media_includes[@]}" -I "$root/include" -I "$root/vulkan" -I "$root/vulkan/ui" -I "$kit_stage/src" -I "$work/generated" \
   -I "$root/vendor/ps5/sdl/include" -I "$root/vendor/ps5/sdl/include/SDL2" \
   -I "$root/.deps/llama.cpp/vendor" -I "$root/.deps/llama.cpp/include" -I "$root/.deps/llama.cpp/ggml/include" \
-  -I "$root/vendor/include" -I "$root/src" -I "$root/.deps/Vulkan-Headers/include" -I "$root/.deps/ps5-opengl/current/include" \
+  -I "$root/vendor/include" -I "$root/src" -I "$root/third_party/update-check" "${update_definitions[@]}" -I "$root/.deps/Vulkan-Headers/include" -I "$root/.deps/ps5-opengl/current/include" \
   -MD -MF "$object.d" -c "$root/$relative" -o "$object"
  objects+=("$object")
 done
@@ -86,6 +91,15 @@ net_objects=()
 for name in console_curl https_get; do
  cc -std=c11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -DCURL_STATICLIB=1 \
   -I "$pacbrew/include" -I "$root/vulkan/net" -c "$root/vulkan/net/$name.c" -o "$work/obj/net_$name.o"
+ net_objects+=("$work/obj/net_$name.o")
+done
+# The update kit (third_party/update-check) uses the same libcurl and OpenSSL, for the
+# catalog's signature and the release's download. Its paths are the app's own.
+for name in update_check self_update self_update_ps5 self_update_sha256; do
+ cc -std=c11 -O2 -Wall -Wextra -ffunction-sections -fdata-sections -DCURL_STATICLIB=1 \
+  -include "$root/third_party/update-check/self_update_paths.h" \
+  -I "$pacbrew/include" -I "$root/vulkan/net" -I "$root/third_party/update-check" \
+  -c "$root/third_party/update-check/$name.c" -o "$work/obj/net_$name.o"
  net_objects+=("$work/obj/net_$name.o")
 done
 net_rename=(--redefine-sym fcntl=__wrap_fcntl --redefine-sym __real_fcntl=fcntl)
@@ -182,4 +196,12 @@ rm -rf "$app/assets/platform"
 mkdir -p "$app/licenses"
 cp "$work/lapy/$title/lapy.elf" "$work/lapy/$title/lapy-manifest.json" "$app/"
 cp "$work/lapy/$title/Lapy-MIT.txt" "$app/licenses/Lapy-MIT.txt"
+# The self-update helper (third_party/self-update-helper), a payload for the console's loader
+# like Lapy's and built with the same PS5 Payload SDK. The app sends it when the user accepts
+# an update; it replaces the app's files once the app has closed.
+make --no-print-directory -s -C "$root/third_party/self-update-helper" \
+ PS5_PAYLOAD_SDK="$root/.deps/lapy/ps5-payload-sdk-v0.42" OUTPUT="$work/self-update/self-updater.elf"
+python3 "$root/tools/validate-loader-elf.py" "$work/self-update/self-updater.elf"
+cp "$work/self-update/self-updater.elf" "$app/self-updater.elf"
+cp "$root/third_party/miniz/LICENSE" "$app/licenses/miniz-MIT.txt"
 echo "Native Vulkan app folder: $app"

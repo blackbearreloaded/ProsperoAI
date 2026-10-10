@@ -184,6 +184,27 @@ default. Switch it on, repeat what went wrong, close the app and send us
 [GitHub issue](https://github.com/blackbearreloaded/ProsperoAI/issues). The log holds
 your prompts and the answers of that run; read it before you share it.
 
+## Updates
+
+Once per launch ProsperoAI asks the [homebrew.page](https://homebrew.page) catalog whether a
+newer version is listed, and verifies the catalog's signature before it believes the answer.
+When there is one, it says so:
+
+- **Update now** downloads the release from GitHub, checks it against the SHA-256 the
+  catalog lists and closes the app. A small helper then puts the new version in place, and
+  the console says when it is done: open ProsperoAI again.
+- **What's new** shows the release notes first.
+- **Skip** leaves everything as it is; the question comes back at the next launch.
+
+Nothing is changed before the download has been checked, and a cancelled or failed update
+leaves the app as it was. Models, settings and conversations are not touched: they live in
+`/data/prosperoai`. Like storage access, the update needs the console's local ELF loader
+(TCP port 9021).
+
+This check and the downloads you start are the only requests the app makes on its own: one
+to homebrew.page (and to the catalog's mirror on GitHub Pages when that does not answer),
+naming the app and its version.
+
 ## HTTP server and browser interface
 
 The HTTP server starts automatically when ProsperoAI launches. Keep the app running

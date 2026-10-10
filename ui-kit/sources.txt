@@ -36,5 +36,6 @@ ui/components/search_field.cpp
 ui/components/stepper.cpp
 ui/components/tabs.cpp
 ui/components/text_field.cpp
+ui/components/text_view.cpp
 ui/components/toast.cpp
 ui/components/transition.cpp

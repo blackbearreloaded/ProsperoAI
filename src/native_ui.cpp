@@ -150,6 +150,7 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     dialog_.style.scrim = 0.62f;
     dialog_.style.frost = 0.78f;
     dialog_.style.centered = false;
+    setup_update();
 
     composer_.set_bounds({536, 850, 1288, 72});
     composer_.style.field_height = 72;
@@ -193,9 +194,10 @@ void NativeUI::Impl::apply_theme()
     palette_ = make_palette(p);
     theme_ = make_theme(palette_, p);
     const std::initializer_list<ui::ComponentStyle *> styles{
-        &tabs_.style,   &filters_.style,  &sessions_.style, &categories_.style,
-        &models_.style, &search_.style,   &keyboard_.style, &form_.style,
-        &dialog_.style, &composer_.style, &chat_.style,     &toasts_.style};
+        &tabs_.style,          &filters_.style,     &sessions_.style,    &categories_.style,
+        &models_.style,        &search_.style,      &keyboard_.style,    &form_.style,
+        &dialog_.style,        &composer_.style,    &chat_.style,        &toasts_.style,
+        &update_dialog_.style, &update_ring_.style, &update_notes_.style};
     for (ui::ComponentStyle *style : styles)
     {
         style->theme = theme_;
@@ -352,10 +354,17 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     for (ui::SpringColor *colour : {&cloud_a_, &cloud_b_, &page_top_, &page_bottom_})
         colour->update(dt, colour_speed);
 
+    // A newer version waits for a quiet moment: nothing running, no other question open.
+    if (update_ui_ == UpdateUi::hidden && boot_ < 0.01f && !keyboard_pending_ && !search_open_ &&
+        !dialog_.is_open() && !app_.busy())
+        take_update_offer(feedback);
+
     if (boot_ > 0.6f || keyboard_pending_)
     {
         // Nothing is in reach yet.
     }
+    else if (update_ui_ != UpdateUi::hidden)
+        update_modal(input, dt, feedback);
     else if (search_open_)
     {
         const auto event = keyboard_.handle(input, feedback);
@@ -437,6 +446,7 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     keyboard_.update(dt);
     form_.update(dt);
     dialog_.update(dt);
+    update_tick(dt);
     composer_.update(dt);
     chat_.update(dt);
     toasts_.update(dt, feedback);
@@ -760,7 +770,7 @@ void NativeUI::Impl::refresh_models()
 
 void NativeUI::Impl::type(char character, ui::Feedback &feedback)
 {
-    if (dialog_.is_open() || keyboard_pending_ || boot_ > 0.6f)
+    if (dialog_.is_open() || update_ui_ != UpdateUi::hidden || keyboard_pending_ || boot_ > 0.6f)
         return;
     if (tabs_.active() == 1)
     {
@@ -779,7 +789,7 @@ void NativeUI::Impl::type(char character, ui::Feedback &feedback)
 
 void NativeUI::Impl::backspace(ui::Feedback &feedback)
 {
-    if (dialog_.is_open() || keyboard_pending_ || boot_ > 0.6f)
+    if (dialog_.is_open() || update_ui_ != UpdateUi::hidden || keyboard_pending_ || boot_ > 0.6f)
         return;
     if (tabs_.active() == 1)
     {
@@ -799,7 +809,8 @@ void NativeUI::Impl::submit(ui::Feedback &feedback)
         feedback.play(audio::Cue::modal_close);
         return;
     }
-    if (tabs_.active() != 0 || dialog_.is_open() || keyboard_pending_ || boot_ > 0.6f)
+    if (tabs_.active() != 0 || dialog_.is_open() || update_ui_ != UpdateUi::hidden ||
+        keyboard_pending_ || boot_ > 0.6f)
         return;
     if (app_.busy())
     {
@@ -1168,6 +1179,14 @@ void NativeUI::Impl::draw(UiFrame &frame) const
         ui::Canvas frosted{frame.overlay, fonts_, frame.glass_texture, clock_};
         dialog_.draw(frosted);
     }
+    draw_update_notes(overlay);
+    draw_update(overlay);
+    if (update_dialog_.visible())
+    {
+        frame.glass = true;
+        ui::Canvas frosted{frame.overlay, fonts_, frame.glass_texture, clock_};
+        update_dialog_.draw(frosted);
+    }
     toasts_.draw(overlay);
 }
 
@@ -1208,10 +1227,14 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
     const auto &state = app_.state();
     ui::Hint hints[6];
     int count = 0;
-    if (dialog_.is_open())
+    if (dialog_.is_open() || update_ui_ == UpdateUi::offer || update_ui_ == UpdateUi::failed)
     {
         hints[count++] = {ui::Button::cross, "Choose"};
         hints[count++] = {ui::Button::circle, "Back"};
+    }
+    else if (update_ui_ != UpdateUi::hidden)
+    {
+        // The update's own panels name their buttons.
     }
     else if (search_open_)
     {
@@ -1293,7 +1316,7 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
         hints[count++] = {ui::Button::square, "New"};
         hints[count++] = {ui::Button::right_stick, "Scroll"};
     }
-    if (!dialog_.is_open() && !search_open_)
+    if (!dialog_.is_open() && !search_open_ && update_ui_ == UpdateUi::hidden)
         hints[count++] = {ui::Button::options, "Close"};
     auto glyphs = palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
     glyphs.label = palette_.ink;
@@ -1466,5 +1489,9 @@ void NativeUI::keyboard_result(const char *text)
 bool NativeUI::quit_requested() const
 {
     return impl_->quit_;
+}
+const char *NativeUI::update_state() const
+{
+    return impl_->update_state();
 }
 } // namespace prospero
