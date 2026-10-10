@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- ProsperoAI says when a newer version is listed on homebrew.page, shows its release notes
+  and can install it in place: it downloads and checks the release, closes, and a helper
+  replaces the app's files. Models, settings and conversations are not touched.
+
 ## 01.002.000
 
 - Image generation works in the combined build: the image runtime has a memory region of

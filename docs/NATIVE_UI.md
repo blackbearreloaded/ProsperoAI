@@ -189,14 +189,15 @@ The same script plays against the PC stand-ins with
 | --- | --- |
 | `token <word>` | Names the request (the runner adds it); a token already played is ignored |
 | `limit <seconds>` | The whole run's time limit (300 unless set) |
+| `updates on` | This run asks the catalog for a newer version, as a launch without a script does; without it no update question interrupts a test |
 | `wait <seconds>` | Lets time pass |
-| `until started\|idle\|ready [seconds]` | Waits for the catalogue, for the worker to be idle, or for an idle worker with a prepared model |
+| `until started\|idle\|ready\|update [seconds]` | Waits for the catalogue, for the worker to be idle, for an idle worker with a prepared model, or for the update question to be on screen |
 | `press cross\|circle\|square\|triangle\|options\|l1\|r1\|up\|down\|left\|right` | One press |
 | `type <text>` | USB-keyboard typing, a character a frame |
 | `backspace [count]`, `submit`, `scroll <pixels>` | Backspace, Enter, and the right stick |
 | `expect model <part of its id>\|answer\|image\|audio` | Notes whether that model is active and ready, or the last answer is of that kind (a text answer with `<unk>` in it is not one); an unmet one fails the run, which goes on |
 | `shot <name>` | Saves the frame as `<name>.bmp` |
-| `status` | Writes the state, the last answer's figures and the frame times since the last status |
+| `status` | Writes the state, the last answer's figures and the frame times since the last status; with `updates on` also what the update shows (`none`, `offer`, `notes`, `working`, `closing`, `failed`) |
 | `memory` | Writes what the app has mapped between `0x2_0000_0000` and `0x8_0000_0000`, where the model runtimes need room |
 | `quit [seconds]` | Writes the result, stays up that long, then closes the app |
 

@@ -61,6 +61,15 @@ The model downloader links [curl](https://curl.se/) (curl license),
 (`tools/setup-pacbrew-dependencies.sh`), and the [zlib](https://zlib.net/) (zlib license)
 that the Vulkan driver's archive carries.
 
+The update check and the in-place update (`third_party/update-check`,
+`third_party/self-update-helper`) come from the PS5 Native App Boilerplate, GPL-3.0-or-later,
+as ProsperoLight, ProsperoEden and ProsperoTV use them; what differs is listed in
+`third_party/update-check/README.md`. The helper reads release archives with
+[miniz](https://github.com/richgel999/miniz) 3.0.2 (`third_party/miniz`, MIT; its licence
+ships with the app as `licenses/miniz-MIT.txt`). The check asks the
+[homebrew.page](https://homebrew.page) catalog and verifies its Ed25519 signature with
+OpenSSL.
+
 The model execution paths incorporate code or static build
 artifacts derived from llama.cpp, stable-diffusion.cpp, ggml, espeak-ng,
 Kokoro, and the Stable Audio compatibility work in a8nova/adreno-llms. Those

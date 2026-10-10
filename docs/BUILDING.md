@@ -210,6 +210,14 @@ loader must be available in the configured homebrew environment, manual payload 
 is not needed. Without access the app keeps its data in its sandbox. A production release build is never
 automatically deployed to the console.
 
+The package also carries `self-updater.elf`, the helper of the in-place update
+(`third_party/self-update-helper`, built with the PS5 Payload SDK the Lapy helper uses), and
+`licenses/miniz-MIT.txt`. The app asks the homebrew.page catalog once per launch
+(`vulkan/update_ps5.cpp`, `third_party/update-check/README.md`). To try the update before a
+release is listed, build with `UPDATE_DEV_OFFER=1` and put an `update-offer.txt` in the app's
+folder: such a build takes the offer from that file and skips the catalog's signature, so it
+is never shipped. `tests/console/update.txt` is a scripted run of the question and its notes.
+
 The GitHub workflow uses Ubuntu 24.04 LLVM 19 host libraries with the pinned Mesa
 and SDK sources via `tools/setup-vulkan-ci.sh`, then builds the application with
 Clang 18. The existing developer `make radv` path remains available on Debian.
