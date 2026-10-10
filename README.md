@@ -30,11 +30,11 @@ how it is built, and what a run on a console showed.
 > on the PS5 GPU. It is not production software.
 
 > [!NOTE]
-> Text inference and the native interface use Vulkan on RADV; media generation uses
-> the existing AGC backend in the same application. Voice generation and switching
-> back to text have been verified on PS5 FW 12.70. Image/Audio generation in the
-> combined build remains unverified. See [current status](docs/VK_ACTIVE.md) and
-> [build instructions](docs/BUILDING.md).
+> Text inference and the native interface use Vulkan on RADV; prepared `.ps5lm` text
+> bundles and media generation use the AGC backend in the same application. Text, image,
+> audio and voice generation, and switching between them, have been run on a PS5 with
+> system software 6.02; voice generation and switching back to text also on 12.70. See
+> [current status](docs/VK_ACTIVE.md) and [build instructions](docs/BUILDING.md).
 
 ## Highlights
 
@@ -45,7 +45,7 @@ how it is built, and what a run on a console showed.
 - Offers Midnight and Daylight themes, a living backdrop, interface sounds, notices, reduced motion,
   high contrast, and larger text.
 - Draws answers in Latin, Greek, Cyrillic, Chinese, Japanese and Korean with scalable faces.
-- Stores independent text, image, audio, and speech sessions under `/download0`.
+- Stores independent text, image, audio, and speech sessions under `/data/prosperoai/sessions`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
 - Ships without weights. Models offers verified presets and standalone GGUF downloads.
 - Includes an HTTP server with a browser Workspace, model downloads and progress at
