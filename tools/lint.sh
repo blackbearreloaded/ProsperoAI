@@ -48,6 +48,10 @@ if not re.fullmatch(r"\d{2}\.\d{3}\.\d{3}", param.get("contentVersion", "")):
     raise SystemExit("param.json contentVersion must use NN.NNN.NNN")
 if not re.fullmatch(r"\d{2}\.\d{2}", param.get("masterVersion", "")):
     raise SystemExit("param.json masterVersion must use NN.NN")
+# What the console's video control reads at launch (docs/BUILDING.md, "Launch metadata"):
+# with other values it changes the television's video mode, a second or two of black.
+if param.get("attribute") != 0x62000000 or param.get("attribute3") != 0x100000:
+    raise SystemExit("param.json attribute and attribute3 must stay 0x62000000 and 0x100000")
 size = param.get("downloadDataSize")
 if isinstance(size, bool) or not isinstance(size, int) or size < 0:
     raise SystemExit("param.json downloadDataSize must be a non-negative integer")
