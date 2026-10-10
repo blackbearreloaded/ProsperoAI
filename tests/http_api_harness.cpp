@@ -57,11 +57,16 @@ void status(char *output, std::size_t capacity)
 }
 std::size_t candidate_count()
 {
-    return 0;
+    return 1;
 }
-bool candidate(std::size_t, Candidate *)
+bool candidate(std::size_t index, Candidate *output)
 {
-    return false;
+    if (index != 0 || !output)
+        return false;
+    std::snprintf(output->name, sizeof(output->name), "fake-model.gguf");
+    output->size = 9ULL * 1024 * 1024 * 1024;
+    output->fit = Fit::Tight;
+    return true;
 }
 bool search(const char *)
 {

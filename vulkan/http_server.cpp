@@ -655,12 +655,15 @@ void handle_model_download_status(const NetApi &api, int sock)
         std::snprintf(item, sizeof(item), "%s{\"name\":\"", i ? "," : "");
         std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
         json_append_escaped(body, sizeof(body), candidate.name);
+        const char *fit_text = candidate.fit == prospero_model_download::Fit::Fits ? "fits"
+                               : candidate.fit == prospero_model_download::Fit::Tight ? "tight"
+                                                                                       : "does_not_fit";
         std::snprintf(item, sizeof(item),
                       prospero_model_download::state() ==
                               prospero_model_download::State::SearchReady
-                          ? "\",\"downloads\":%llu}"
-                          : "\",\"size\":%llu}",
-                      static_cast<unsigned long long>(candidate.size));
+                          ? "\",\"downloads\":%llu,\"fit\":\"%s\"}"
+                          : "\",\"size\":%llu,\"fit\":\"%s\"}",
+                      static_cast<unsigned long long>(candidate.size), fit_text);
         std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
     }
     std::strncat(body, "]}", sizeof(body) - std::strlen(body) - 1);

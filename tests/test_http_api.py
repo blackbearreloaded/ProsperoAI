@@ -78,6 +78,11 @@ class HttpApiTests(unittest.TestCase):
         progress = json.loads(body)
         self.assertEqual((progress["completed"], progress["total"]), (50, 100))
 
+    def test_browse_candidate_reports_fit(self):
+        _, body = self.request("/api/models/download")
+        items = json.loads(body)["items"]
+        self.assertEqual(items[0]["fit"], "tight")
+
     def test_cancel_download(self):
         head, body = self.request("/api/models/download", method="DELETE")
         self.assertIn("409 Conflict", head)
