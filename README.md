@@ -369,7 +369,7 @@ tools/               Build, dependency, validation, packaging, and deploy script
 | --- | --- |
 | Shell title | `ProsperoAI` |
 | Title ID | `PPSA99004` |
-| Current app version | `01.002.000` |
+| Current app version | `01.003.000` |
 | Writable data | `/data/prosperoai` (the app's sandbox without storage access) |
 | Compute backend | Native PS5 AGC GPU |
 

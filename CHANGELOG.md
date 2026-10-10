@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 01.003.000
 
 - ProsperoAI says when a newer version is listed on homebrew.page, shows its release notes
   and can install it in place: it downloads and checks the release, closes, and a helper
