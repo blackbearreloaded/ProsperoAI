@@ -39,9 +39,12 @@ Updated: 2026-10-09. Plan: [VK_PLAN.md](VK_PLAN.md); dated evidence: [VK_LOG.md]
 - Default `make app` and native hybrid folder build/sign succeeded. Hybrid NEEDED list
   has no additional PRX dependency versus the prior working Vulkan build; entry 0x120,
   14 program headers. Native hybrid deployed only to PPSA99023; PPSA99004 untouched.
-- `HOST_CXX=clang++-18 make test`: 27 tests passed. Browser interaction checks passed
+- `HOST_CXX=clang++-18 make test`: 28 tests passed. Browser interaction checks passed
   for presets, category selection, download progress, history delete/cancel/back and Speak.
-- Shared model mount payload must be loaded after each console boot; see [BUILDING.md](BUILDING.md).
+- The app now automatically starts its bundled title-scoped model-storage helper through
+  the console-local ELF loader. Verified on PS5: app launch created a new resident helper,
+  mounted shared storage and discovered Mistral/Kokoro without manually sending the helper.
+  A working local ELF loader is part of the homebrew environment. See [BUILDING.md](BUILDING.md).
 - Further Image/Audio console testing is outside the user's latest verification request.
 
 ## Earlier measurements

@@ -186,6 +186,13 @@ static void process_keyboard_press(const ps5::keyboard::Data &sample, uint16_t u
     }
     else if (usage == 0x29)
         queue_push(GPT_INPUT_CIRCLE, true);
+    else if (usage == 0x2b)
+    {
+        // Tab is R1, the next page; with Shift it is L1, the page before.
+        const bool shifted = (sample.modifiers & (ps5::keyboard::kModifierLeftShift |
+                                                  ps5::keyboard::kModifierRightShift)) != 0;
+        queue_push(shifted ? GPT_INPUT_L1 : GPT_INPUT_R1, true);
+    }
     else if (const char text = keyboard_character(usage, sample.modifiers, sample.leds))
         queue_push(GPT_INPUT_TEXT, true, text);
 }

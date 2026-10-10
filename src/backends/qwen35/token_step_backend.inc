@@ -290,9 +290,14 @@ int sceKernelClose(int);
 #define LAYER_CACHE_BANK_MAPPING_BYTES \
     (LAYER_CACHE_BANK_BYTES + GPU_MAP_PADDING_BYTES)
 #ifdef PS5_LARGE_MODEL
-#define PRIMARY_MAPPING_BYTES                                      \
-    (GPU_MAP_PADDING_BYTES + TOKEN_WORK_BYTES +                    \
-     MODEL_ALLOCATION_BYTES + LAYER_CACHE_BYTES)
+/* Two mappings. The shaders reach the work area's tables through 32-bit
+   addresses, so it has to begin below 0x3_0000_0000; the model and its layer
+   caches are named by full addresses and may lie anywhere. As one block they
+   needed 5 to 7 GiB of free addresses in that low range, which a build with
+   other mappings there (the Vulkan one) does not have. */
+#define PRIMARY_WORK_BYTES (GPU_MAP_PADDING_BYTES + TOKEN_WORK_BYTES)
+#define PRIMARY_MODEL_BYTES                                        \
+    (GPU_MAP_PADDING_BYTES + MODEL_ALLOCATION_BYTES + LAYER_CACHE_BYTES)
 #endif
 #if defined(PS5_MODEL_7000) || defined(PS5_MODEL_QWEN35)
 #define TOKEN_MAX_COUNT 4096u
@@ -584,6 +589,8 @@ static uint8_t *resident_work;
 #ifdef PS5_LARGE_MODEL
 static uint8_t *resident_primary_mapping;
 static int64_t resident_primary_start = -1;
+static uint8_t *resident_model_mapping;
+static int64_t resident_model_start = -1;
 #endif
 static uint32_t resident_tokens[TOKEN_MAX_COUNT];
 static uint32_t resident_token_count;
@@ -626,12 +633,19 @@ void ps5_compute_shutdown(void)
 {
 #ifdef PS5_LARGE_MODEL
     if (resident_primary_mapping)
-        munmap(resident_primary_mapping, PRIMARY_MAPPING_BYTES);
+        munmap(resident_primary_mapping, PRIMARY_WORK_BYTES);
     if (resident_primary_start >= 0)
         sceKernelReleaseDirectMemory(resident_primary_start,
-                                     PRIMARY_MAPPING_BYTES);
+                                     PRIMARY_WORK_BYTES);
+    if (resident_model_mapping)
+        munmap(resident_model_mapping, PRIMARY_MODEL_BYTES);
+    if (resident_model_start >= 0)
+        sceKernelReleaseDirectMemory(resident_model_start,
+                                     PRIMARY_MODEL_BYTES);
     resident_primary_mapping = NULL;
     resident_primary_start = -1;
+    resident_model_mapping = NULL;
+    resident_model_start = -1;
 #endif
     resident_model = NULL;
     resident_work = NULL;
@@ -1534,18 +1548,14 @@ int run_model_token(void)
     static uint32_t expected[TOKEN_MAX_COUNT];
     ps5_tokenizer_t tokenizer = {0};
     int64_t work_start = -1;
-#ifndef PS5_LARGE_MODEL
     int64_t model_start = -1;
-#endif
     int64_t layer_cache_starts[LAYER_CACHE_BANK_COUNT];
     int64_t direct_size;
     uint8_t *work = resident_work;
     uint8_t *model = resident_model;
     uint8_t *layer_caches[LAYER_CACHE_BANK_COUNT];
     uint8_t *work_mapping = work;
-#ifndef PS5_LARGE_MODEL
     uint8_t *model_mapping = model;
-#endif
     uint8_t *layer_cache_mappings[LAYER_CACHE_BANK_COUNT];
     FILE *file = NULL;
     int aio_fd = -1;
@@ -1804,54 +1814,71 @@ int run_model_token(void)
         goto done;
     if (work_new) {
         int map_flags = 0;
+        int model_rc = -1;
         int allocate_rc = sceKernelAllocateDirectMemory(
-            0, direct_size, PRIMARY_MAPPING_BYTES, 0x4000,
+            0, direct_size, PRIMARY_WORK_BYTES, 0x4000,
             DIRECT_MEMORY_TYPE, &work_start);
 #ifdef PS5_DUAL_BACKEND
         /* Ask for the low-aperture range that the media backend just released.
            Without this, FreeBSD's next-fit cursor remains above 0x3... even
            though the lower virtual range and its direct memory are free.
            The address is where the search starts, never a fixed mapping:
-           this mapping is several times larger than the released range, and
-           the memory after that range may be in use (the interface's
-           graphics pool is), which a fixed mapping would replace silently. */
+           this mapping is larger than the released range, and the memory
+           after that range may be in use (the interface's graphics pool
+           is), which a fixed mapping would replace silently. */
         work_mapping = (uint8_t *)ps5_agc_backend_take_released_scratch_address();
         if (!work_mapping || (uint32_t)((uintptr_t)work_mapping >> 32) != 2u)
             work_mapping = NULL;
 #endif
         int map_rc = allocate_rc == 0
                          ? sceKernelMapDirectMemory(
-                               (void **)&work_mapping, PRIMARY_MAPPING_BYTES,
+                               (void **)&work_mapping, PRIMARY_WORK_BYTES,
                                MAP_PROTECTION, map_flags, work_start, 0x4000)
                          : -1;
 
         work = map_rc == 0 && work_mapping ? GPU_ALIGNED(work_mapping) : NULL;
+        /* The model after the work area, so that it cannot take the low
+           range first; wherever the console has room for it. */
+        model_mapping = NULL;
+        if (work && sceKernelAllocateDirectMemory(
+                        0, direct_size, PRIMARY_MODEL_BYTES, 0x4000,
+                        DIRECT_MEMORY_TYPE, &model_start) == 0) {
+            model_rc = sceKernelMapDirectMemory(
+                (void **)&model_mapping, PRIMARY_MODEL_BYTES, MAP_PROTECTION,
+                0, model_start, 0x4000);
+            if (model_rc != 0 || !model_mapping) {
+                sceKernelReleaseDirectMemory(model_start, PRIMARY_MODEL_BYTES);
+                model_start = -1;
+                model_mapping = NULL;
+                model_rc = -1;
+            }
+        }
 #ifdef PS5_DIRECT_MAP_DIAGNOSTIC
         {
             char map_log[256];
             snprintf(map_log, sizeof(map_log),
                      "[prosperoai] direct_map alloc_rc=%d map_rc=%d "
-                     "direct_size=0x%llx bytes=0x%llx start=0x%llx "
-                     "mapping=0x%llx aligned=0x%llx high=%u\n",
+                     "direct_size=0x%llx work=0x%llx at 0x%llx high=%u "
+                     "model_rc=%d model=0x%llx at 0x%llx\n",
                      allocate_rc, map_rc, (unsigned long long)direct_size,
-                     (unsigned long long)PRIMARY_MAPPING_BYTES,
-                     (unsigned long long)work_start,
+                     (unsigned long long)PRIMARY_WORK_BYTES,
                      (unsigned long long)(uintptr_t)work_mapping,
-                     (unsigned long long)(uintptr_t)work,
-                     work ? (uint32_t)((uintptr_t)work >> 32) : 0u);
+                     work ? (uint32_t)((uintptr_t)work >> 32) : 0u, model_rc,
+                     (unsigned long long)PRIMARY_MODEL_BYTES,
+                     (unsigned long long)(uintptr_t)model_mapping);
             sceKernelDebugOutText(0, map_log);
         }
 #endif
         if (allocate_rc != 0 || map_rc != 0 || !work ||
-            (uint32_t)((uintptr_t)work >> 32) != 2u)
+            (uint32_t)((uintptr_t)work >> 32) != 2u || model_rc != 0)
             goto done;
-        model = work + TOKEN_WORK_BYTES;
+        model = GPU_ALIGNED(model_mapping);
         layer_caches[0] = model + MODEL_ALLOCATION_BYTES;
-        layer_cache_mappings[0] = work_mapping;
+        layer_cache_mappings[0] = model_mapping;
         for (index = 1; index < LAYER_CACHE_BANK_COUNT; ++index) {
             layer_caches[index] =
                 layer_caches[0] + index * LAYER_CACHE_BANK_BYTES;
-            layer_cache_mappings[index] = work_mapping;
+            layer_cache_mappings[index] = model_mapping;
         }
     }
 #else
@@ -2038,6 +2065,8 @@ int run_model_token(void)
         if (work_start >= 0) {
             resident_primary_mapping = work_mapping;
             resident_primary_start = work_start;
+            resident_model_mapping = model_mapping;
+            resident_model_start = model_start;
         }
 #endif
     }
@@ -2912,9 +2941,14 @@ done:
         fclose(file);
 #ifdef PS5_LARGE_MODEL
     if (work && work != resident_work)
-        munmap(work_mapping, PRIMARY_MAPPING_BYTES);
+        munmap(work_mapping, PRIMARY_WORK_BYTES);
     if (work_start >= 0 && (!work || work != resident_work))
-        sceKernelReleaseDirectMemory(work_start, PRIMARY_MAPPING_BYTES);
+        sceKernelReleaseDirectMemory(work_start, PRIMARY_WORK_BYTES);
+    /* A model block that did not become the resident one. */
+    if (model_start >= 0 && model_start != resident_model_start) {
+        munmap(model_mapping, PRIMARY_MODEL_BYTES);
+        sceKernelReleaseDirectMemory(model_start, PRIMARY_MODEL_BYTES);
+    }
 #else
     for (index = 0; index < LAYER_CACHE_BANK_COUNT; ++index) {
         if (layer_caches[index] &&

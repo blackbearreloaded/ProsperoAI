@@ -1,6 +1,8 @@
 // Deterministic host fixtures for rendering the production frontend with Mesa.
 // No model weights, console connection, or deployment is involved.
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "update.hpp"
+#include "model_downloader_ps5.hpp"
 #include "native_ui.hpp"
 #include "dev_script.hpp"
 #include "gfx/renderer.hpp"
@@ -137,6 +139,133 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
     stats->elapsed_microseconds = 4890000;
     return 0;
 }
+void gpt_runtime_refresh_models()
+{
+}
+
+// Nothing is fetched on a PC; one scene pretends that a preset is being downloaded.
+namespace prospero_model_download
+{
+static State preview_state = State::Idle;
+bool preset_installed(std::size_t)
+{
+    return false;
+}
+bool download_preset(std::size_t)
+{
+    return false;
+}
+void poll()
+{
+}
+State state()
+{
+    return preview_state;
+}
+int active_preset()
+{
+    return preview_state == State::Downloading ? 0 : -1;
+}
+void progress(std::uint64_t *completed, std::uint64_t *total)
+{
+    *completed = preview_state == State::Downloading ? 42 : 0;
+    *total = preview_state == State::Downloading ? 100 : 0;
+}
+void status(char *output, std::size_t capacity)
+{
+    std::snprintf(output, capacity, "%s",
+                  preview_state == State::Downloading ? "Downloading: 1827 / 4350 MiB (42%)" : "");
+}
+bool cancel()
+{
+    const bool running = preview_state == State::Downloading;
+    preview_state = State::Idle;
+    return running;
+}
+bool cancelling()
+{
+    return false;
+}
+std::size_t candidate_count()
+{
+    return 0;
+}
+bool candidate(std::size_t, Candidate *)
+{
+    return false;
+}
+bool search(const char *)
+{
+    return false;
+}
+bool browse(const char *)
+{
+    return false;
+}
+bool download(std::size_t)
+{
+    return false;
+}
+} // namespace prospero_model_download
+
+// A newer version is offered when a scene says so; nothing is downloaded on a PC.
+namespace prospero::update
+{
+static int preview_offer = 0; // 1: an offer waits to be taken
+static Phase preview_phase = Phase::idle;
+void check()
+{
+}
+bool take_offer(Offer *offer)
+{
+    if (preview_offer != 1)
+        return false;
+    preview_offer = 2;
+    offer->installable = true;
+    std::snprintf(offer->version, sizeof(offer->version), "01.003.000");
+    offer->size = 86728290;
+    offer->notes = "- Saved conversations open again from the list.\n"
+                   "- A running model download can be cancelled.\n"
+                   "\nDownloads\n"
+                   "- Downloads use a larger socket receive buffer; a distant server no longer "
+                   "holds them to about 1 MB/s.\n"
+                   "- Models, settings, conversations and logs live in /data/prosperoai.\n"
+                   "Note: models from the earlier folder are moved at the first start.";
+    return true;
+}
+bool begin()
+{
+    preview_phase = Phase::downloading;
+    return true;
+}
+void poll(Progress *progress)
+{
+    *progress = Progress{};
+    progress->phase = preview_phase;
+    if (preview_phase == Phase::downloading)
+    {
+        progress->done = 36400000;
+        progress->total = 86728290;
+        std::snprintf(progress->time_left, sizeof(progress->time_left), "about 4 s left");
+    }
+    else if (preview_phase == Phase::failed)
+        std::snprintf(progress->error, sizeof(progress->error),
+                      "The download doesn't match the catalog's listing.");
+}
+void cancel()
+{
+    preview_phase = Phase::cancelled;
+}
+bool apply()
+{
+    return true;
+}
+void finish()
+{
+    preview_phase = Phase::idle;
+}
+} // namespace prospero::update
+
 namespace prospero_session
 {
 bool create(Record *r, const char *id, const char *name, const char *purpose)
@@ -384,6 +513,34 @@ int main(int argc, char **argv)
     capture("welcome");
     press(hui::Action::page_next);
     capture("models");
+    // A preset is on its way: Triangle asks, the second button cancels.
+    prospero_model_download::preview_state = prospero_model_download::State::Downloading;
+    frames(30);
+    capture("downloading");
+    press(hui::Action::north);
+    capture("cancel-download");
+    press(hui::Action::right, hui::Direction::right);
+    press(hui::Action::confirm);
+    assert(prospero_model_download::preview_state == prospero_model_download::State::Idle);
+    capture("download-cancelled");
+    frames(420); // its notice has gone
+    // A newer version is listed: the question, its notes, the update at work, a failure.
+    prospero::update::preview_offer = 1;
+    frames(30);
+    capture("update-offer");
+    press(hui::Action::left, hui::Direction::left);
+    press(hui::Action::confirm);
+    capture("update-notes");
+    press(hui::Action::back);
+    press(hui::Action::right, hui::Direction::right);
+    press(hui::Action::confirm);
+    capture("update-working");
+    prospero::update::preview_phase = prospero::update::Phase::failed;
+    frames(30);
+    capture("update-failed");
+    press(hui::Action::left, hui::Direction::left);
+    press(hui::Action::confirm);
+    frames(30);
     press(hui::Action::right, hui::Direction::right);
     press(hui::Action::right, hui::Direction::right);
     capture("models-image");
@@ -405,8 +562,10 @@ int main(int argc, char **argv)
     press(hui::Action::back);
     for (int i = 0; i < 4; ++i)
         press(hui::Action::down, hui::Direction::down);
+    capture("diagnostics");
+    press(hui::Action::down, hui::Direction::down);
     capture("about");
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
         press(hui::Action::up, hui::Direction::up);
     press(hui::Action::page_prev);
     press(hui::Action::page_prev);

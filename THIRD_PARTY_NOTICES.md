@@ -41,6 +41,35 @@ and ship with the baked font. `tools/font-baker/bake_list.cpp`, `tools/cjk-range
 `tools/fetch-cjk-fonts.sh` come from
 [ProsperoTV](https://github.com/blackbearreloaded/ProsperoTV) (GPL-3.0-or-later, same author).
 
+Storage access comes from
+[PS5-Lapy-JB-Daemon](https://github.com/ArkSama/PS5-Lapy-JB-Daemon), created by ArkSama,
+MIT; the exact-title one-request helper and the cooperative elevation protocol are
+[mpereiraesaa's](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon). The build fetches
+the helper's source from
+[this project's fork](https://github.com/blackbearreloaded/PS5-Lapy-JB-Daemon) at the
+commit pinned in `tools/build-lapy-helper.py`, builds it for the app's title with the PS5
+Payload SDK that upstream requires, checks it against its manifest and packages it as
+`lapy.elf` with `licenses/Lapy-MIT.txt`. The client that talks to it
+(`vulkan/elevation/`) and `vulkan/net/console_curl.c` come from the PS5 Native App
+Boilerplate, GPL-3.0-or-later.
+
+The model downloader links [curl](https://curl.se/) (curl license),
+[OpenSSL](https://www.openssl.org/) (Apache-2.0),
+[libpsl](https://github.com/rockdaboot/libpsl) (MIT) and
+[Zstandard](https://github.com/facebook/zstd) (BSD-3-Clause) from the pinned
+[PacBrew](https://github.com/ps5-payload-dev/pacbrew-repo) prefix
+(`tools/setup-pacbrew-dependencies.sh`), and the [zlib](https://zlib.net/) (zlib license)
+that the Vulkan driver's archive carries.
+
+The update check and the in-place update (`third_party/update-check`,
+`third_party/self-update-helper`) come from the PS5 Native App Boilerplate, GPL-3.0-or-later,
+as ProsperoLight, ProsperoEden and ProsperoTV use them; what differs is listed in
+`third_party/update-check/README.md`. The helper reads release archives with
+[miniz](https://github.com/richgel999/miniz) 3.0.2 (`third_party/miniz`, MIT; its licence
+ships with the app as `licenses/miniz-MIT.txt`). The check asks the
+[homebrew.page](https://homebrew.page) catalog and verifies its Ed25519 signature with
+OpenSSL.
+
 The model execution paths incorporate code or static build
 artifacts derived from llama.cpp, stable-diffusion.cpp, ggml, espeak-ng,
 Kokoro, and the Stable Audio compatibility work in a8nova/adreno-llms. Those

@@ -47,6 +47,8 @@ class NativeUI
     // Native OS keyboard service. The host can supply an equivalent editor.
     std::function<void(const std::string &)> request_keyboard;
     bool quit_requested() const;
+    // What the update shows: none, offer, notes, working, closing or failed.
+    const char *update_state() const;
     void release();
 
   private:

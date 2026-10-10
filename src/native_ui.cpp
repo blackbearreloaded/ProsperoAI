@@ -4,6 +4,11 @@
 
 #include "native_ui_impl.hpp"
 
+#include "debug_log.hpp"
+#if defined(PROSPERO_UI_VULKAN) && !defined(PROSPERO_HOST)
+#include "storage.hpp"
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -20,17 +25,27 @@
 
 namespace prospero
 {
+std::string logs_folder_text()
+{
+#if defined(PROSPERO_UI_VULKAN) && !defined(PROSPERO_HOST)
+    return real_path(debug::folder());
+#else
+    return debug::folder()[0] ? debug::folder() : "/data/prosperoai/logs";
+#endif
+}
+
 namespace
 {
 constexpr float kBootSeconds = 1.6f; // the opening is never shorter than its chime
 constexpr const char *kTabs[] = {"Workspace", "Models", "Settings"};
-constexpr const char *kCategories[] = {"Appearance", "Generation", "Sound", "Accessibility",
-                                       "About"};
+constexpr const char *kCategories[] = {"Appearance",    "Generation",  "Sound",
+                                       "Accessibility", "Diagnostics", "About"};
 enum DialogAction
 {
     kUseModel = 1,
     kDeleteConversation,
-    kCloseApp
+    kCloseApp,
+    kCancelDownload
 };
 } // namespace
 
@@ -135,6 +150,7 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     dialog_.style.scrim = 0.62f;
     dialog_.style.frost = 0.78f;
     dialog_.style.centered = false;
+    setup_update();
 
     composer_.set_bounds({536, 850, 1288, 72});
     composer_.style.field_height = 72;
@@ -178,9 +194,10 @@ void NativeUI::Impl::apply_theme()
     palette_ = make_palette(p);
     theme_ = make_theme(palette_, p);
     const std::initializer_list<ui::ComponentStyle *> styles{
-        &tabs_.style,   &filters_.style,  &sessions_.style, &categories_.style,
-        &models_.style, &search_.style,   &keyboard_.style, &form_.style,
-        &dialog_.style, &composer_.style, &chat_.style,     &toasts_.style};
+        &tabs_.style,          &filters_.style,     &sessions_.style,    &categories_.style,
+        &models_.style,        &search_.style,      &keyboard_.style,    &form_.style,
+        &dialog_.style,        &composer_.style,    &chat_.style,        &toasts_.style,
+        &update_dialog_.style, &update_ring_.style, &update_notes_.style};
     for (ui::ComponentStyle *style : styles)
     {
         style->theme = theme_;
@@ -264,6 +281,13 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
         last_download_state_ != download_state)
         downloaded_models_pending_ = true;
     last_download_state_ = download_state;
+    if (cancel_pending_ && download_state != prospero_model_download::State::Downloading)
+    {
+        cancel_pending_ = false;
+        // It may have finished in the moment before the request reached it.
+        if (download_state != prospero_model_download::State::Complete)
+            toasts_.push(ui::StatusKind::info, "Download cancelled", "Nothing of it was kept.");
+    }
     if (downloaded_models_pending_ && app_.refresh_models())
     {
         downloaded_models_pending_ = false;
@@ -330,10 +354,17 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     for (ui::SpringColor *colour : {&cloud_a_, &cloud_b_, &page_top_, &page_bottom_})
         colour->update(dt, colour_speed);
 
+    // A newer version waits for a quiet moment: nothing running, no other question open.
+    if (update_ui_ == UpdateUi::hidden && boot_ < 0.01f && !keyboard_pending_ && !search_open_ &&
+        !dialog_.is_open() && !app_.busy())
+        take_update_offer(feedback);
+
     if (boot_ > 0.6f || keyboard_pending_)
     {
         // Nothing is in reach yet.
     }
+    else if (update_ui_ != UpdateUi::hidden)
+        update_modal(input, dt, feedback);
     else if (search_open_)
     {
         const auto event = keyboard_.handle(input, feedback);
@@ -359,6 +390,8 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
                 accepted = app_.delete_session(static_cast<unsigned>(dialog_index_));
             else if (dialog_action_ == kCloseApp)
                 accepted = quit_ = !app_.busy() && !app_.state().unsaved;
+            else if (dialog_action_ == kCancelDownload)
+                accepted = cancel_pending_ = prospero_model_download::cancel();
             if (!accepted)
                 feedback.play(audio::Cue::error);
         }
@@ -413,6 +446,7 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     keyboard_.update(dt);
     form_.update(dt);
     dialog_.update(dt);
+    update_tick(dt);
     composer_.update(dt);
     chat_.update(dt);
     toasts_.update(dt, feedback);
@@ -444,6 +478,19 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
         keyboard_.enter();
         feedback.play(audio::Cue::modal_open);
     };
+    // A running download is cancelled from anywhere on the page, after a confirmation.
+    const auto ask_cancel = [&]
+    {
+        if (!prospero_model_download::cancelling())
+            open_dialog(kCancelDownload, -1, "Cancel this download?",
+                        "What has been downloaded so far is removed.", "Cancel download", true,
+                        feedback, "Keep downloading");
+    };
+    if (state == prospero_model_download::State::Downloading && input.is_pressed(Action::north))
+    {
+        ask_cancel();
+        return;
+    }
 
     if (filters_.active() == 0)
     {
@@ -464,6 +511,11 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
                          download_focus_ + 1);
         else if (input.is_pressed(Action::confirm))
         {
+            if (state == prospero_model_download::State::Downloading)
+            {
+                ask_cancel();
+                return;
+            }
             if (!has_download_results && (state == prospero_model_download::State::Ready ||
                                           state == prospero_model_download::State::SearchReady))
             {
@@ -515,7 +567,10 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
         {
             const auto preset_index = static_cast<std::size_t>(-index - 2);
             if (prospero_model_download::active_preset() == static_cast<int>(preset_index))
+            {
+                ask_cancel();
                 return;
+            }
             if (preset_saved_[preset_index])
             {
                 toasts_.push(ui::StatusKind::info, "Model bundle saved",
@@ -657,14 +712,15 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
 }
 
 void NativeUI::Impl::open_dialog(int action, int index, std::string title, std::string body,
-                                 const char *button, bool destructive, ui::Feedback &feedback)
+                                 const char *button, bool destructive, ui::Feedback &feedback,
+                                 const char *other)
 {
     dialog_action_ = action;
     dialog_index_ = index;
     ui::DialogContent content;
     content.title = std::move(title);
     content.body = std::move(body);
-    content.buttons = {{"Not now", ui::ButtonKind::secondary, false},
+    content.buttons = {{other, ui::ButtonKind::secondary, false},
                        {button, ui::ButtonKind::primary, destructive}};
     dialog_.open(std::move(content), feedback);
 }
@@ -714,7 +770,7 @@ void NativeUI::Impl::refresh_models()
 
 void NativeUI::Impl::type(char character, ui::Feedback &feedback)
 {
-    if (dialog_.is_open() || keyboard_pending_ || boot_ > 0.6f)
+    if (dialog_.is_open() || update_ui_ != UpdateUi::hidden || keyboard_pending_ || boot_ > 0.6f)
         return;
     if (tabs_.active() == 1)
     {
@@ -733,7 +789,7 @@ void NativeUI::Impl::type(char character, ui::Feedback &feedback)
 
 void NativeUI::Impl::backspace(ui::Feedback &feedback)
 {
-    if (dialog_.is_open() || keyboard_pending_ || boot_ > 0.6f)
+    if (dialog_.is_open() || update_ui_ != UpdateUi::hidden || keyboard_pending_ || boot_ > 0.6f)
         return;
     if (tabs_.active() == 1)
     {
@@ -753,7 +809,8 @@ void NativeUI::Impl::submit(ui::Feedback &feedback)
         feedback.play(audio::Cue::modal_close);
         return;
     }
-    if (tabs_.active() != 0 || dialog_.is_open() || keyboard_pending_ || boot_ > 0.6f)
+    if (tabs_.active() != 0 || dialog_.is_open() || update_ui_ != UpdateUi::hidden ||
+        keyboard_pending_ || boot_ > 0.6f)
         return;
     if (app_.busy())
     {
@@ -837,6 +894,13 @@ void NativeUI::Impl::build_form()
         form_.add_toggle(5, "High contrast", p.high_contrast);
         form_.add_choice(8, "Reading size", {"Standard", "Large"}, static_cast<int>(p.text_size));
     }
+    else if (category_ == kDiagnostics)
+    {
+        // Technical wording, as the trace itself is.
+        form_.add_toggle(15, "Debug log", debug::enabled()).description =
+            "Timed trace of everything the app does, for reporting a problem. Off by default.";
+        form_.add_value(16, "Logs folder", logs_folder_text());
+    }
     else
     {
         const std::string label = PROSPERO_BUILD_LABEL;
@@ -871,6 +935,25 @@ void NativeUI::Impl::apply_form()
         p.high_contrast = form_.toggle_value(5);
         p.text_size = static_cast<unsigned>(form_.choice_index(8));
     }
+    else if (category_ == kDiagnostics)
+    {
+        // Not a preference: the switch is a file, so that it holds from the next start's
+        // first moment.
+        const bool wanted = form_.toggle_value(15);
+        if (wanted != debug::enabled())
+        {
+            if (!debug::set_enabled(wanted))
+                toasts_.push(ui::StatusKind::danger, "Could not switch the debug log",
+                             "Try again.");
+            else if (wanted)
+                toasts_.push(ui::StatusKind::info, "Debug log is on",
+                             "Repeat the problem, then send debug-trace.txt from the logs folder.",
+                             6);
+            form_.set_toggle(15, debug::enabled());
+        }
+        return;
+    }
+    debug::line("setting", "category %d changed", category_);
     app_.set_preferences(std::move(p));
     apply_theme();
 }
@@ -1096,6 +1179,14 @@ void NativeUI::Impl::draw(UiFrame &frame) const
         ui::Canvas frosted{frame.overlay, fonts_, frame.glass_texture, clock_};
         dialog_.draw(frosted);
     }
+    draw_update_notes(overlay);
+    draw_update(overlay);
+    if (update_dialog_.visible())
+    {
+        frame.glass = true;
+        ui::Canvas frosted{frame.overlay, fonts_, frame.glass_texture, clock_};
+        update_dialog_.draw(frosted);
+    }
     toasts_.draw(overlay);
 }
 
@@ -1136,10 +1227,14 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
     const auto &state = app_.state();
     ui::Hint hints[6];
     int count = 0;
-    if (dialog_.is_open())
+    if (dialog_.is_open() || update_ui_ == UpdateUi::offer || update_ui_ == UpdateUi::failed)
     {
         hints[count++] = {ui::Button::cross, "Choose"};
         hints[count++] = {ui::Button::circle, "Back"};
+    }
+    else if (update_ui_ != UpdateUi::hidden)
+    {
+        // The update's own panels name their buttons.
     }
     else if (search_open_)
     {
@@ -1150,12 +1245,18 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
     }
     else if (tabs_.active() == 1)
     {
+        const bool downloading =
+            prospero_model_download::state() == prospero_model_download::State::Downloading;
+        bool cross_cancels = false;
         if (filters_.active() == 0)
         {
             const auto download_state = prospero_model_download::state();
             const bool has_results = prospero_model_download::candidate_count() > 0;
+            cross_cancels = downloading;
             const char *action =
-                has_results && download_state == prospero_model_download::State::Ready ? "Download"
+                downloading ? "Cancel download"
+                : has_results && download_state == prospero_model_download::State::Ready
+                    ? "Download"
                 : has_results && download_state == prospero_model_download::State::SearchReady
                     ? "Browse files"
                 : download_state == prospero_model_download::State::Ready ||
@@ -1169,13 +1270,15 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
         else if (!visible_models_.empty())
         {
             const int focused = visible_models_[static_cast<std::size_t>(models_.focus())];
-            hints[count++] = {ui::Button::cross,
-                              focused >= 0 ? "Use model"
-                              : prospero_model_download::active_preset() == -focused - 2
-                                  ? "Downloading..."
-                              : preset_saved_[-focused - 2] ? "Details"
-                                                            : "Download"};
+            cross_cancels =
+                focused < -1 && prospero_model_download::active_preset() == -focused - 2;
+            hints[count++] = {ui::Button::cross, focused >= 0                  ? "Use model"
+                                                 : cross_cancels               ? "Cancel download"
+                                                 : preset_saved_[-focused - 2] ? "Details"
+                                                                               : "Download"};
         }
+        if (downloading && !cross_cancels)
+            hints[count++] = {ui::Button::triangle, "Cancel download"};
         if (filters_.active() != 0)
         {
             hints[count++] = {ui::Button::square, "Search"};
@@ -1213,7 +1316,7 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
         hints[count++] = {ui::Button::square, "New"};
         hints[count++] = {ui::Button::right_stick, "Scroll"};
     }
-    if (!dialog_.is_open() && !search_open_)
+    if (!dialog_.is_open() && !search_open_ && update_ui_ == UpdateUi::hidden)
         hints[count++] = {ui::Button::options, "Close"};
     auto glyphs = palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
     glyphs.label = palette_.ink;
@@ -1386,5 +1489,9 @@ void NativeUI::keyboard_result(const char *text)
 bool NativeUI::quit_requested() const
 {
     return impl_->quit_;
+}
+const char *NativeUI::update_state() const
+{
+    return impl_->update_state();
 }
 } // namespace prospero

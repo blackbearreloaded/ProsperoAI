@@ -194,3 +194,7 @@ help:
 	  'Build speed:         BUILD_JOBS defaults to all CPUs; USE_CCACHE=0 disables ccache' \
 	  'make clean           Remove build/, dist/, and generated libc.prx' \
 	  'make distclean       Also remove the ignored .deps/ cache'
+
+.PHONY: app-release
+app-release: app llama-ps5 ## Package the hybrid Vulkan/AGC release folder and ZIP
+	@bash tools/build-hybrid-release.sh

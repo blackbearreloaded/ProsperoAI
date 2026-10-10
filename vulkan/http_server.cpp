@@ -11,6 +11,7 @@
 // does. No runtime module lookup or sceKernelDlsym() is involved.
 
 #include "http_server.hpp"
+#include "model_paths.hpp"
 
 #include "gpt_runtime.hpp"
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
@@ -33,6 +34,9 @@
 #include <cmath>
 #include <mutex>
 #include <pthread.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <unistd.h>
 
 extern "C"
 {
@@ -43,6 +47,7 @@ extern "C"
     int sceNetPoolCreate(const char *name, int size, int flags);
     int sceNetSocket(const char *name, int domain, int type, int protocol);
     int sceNetSocketClose(int sock);
+    int sceNetConnect(int sock, const void *address, unsigned int address_length);
     int sceNetBind(int sock, const void *address, unsigned int address_length);
     int sceNetListen(int sock, int backlog);
     int sceNetAccept(int sock, void *address, unsigned int *address_length);
@@ -106,6 +111,7 @@ struct NetApi
     int (*pool_create)(const char *, int, int);
     int (*socket)(const char *, int, int, int);
     int (*socket_close)(int);
+    int (*connect)(int, const void *, unsigned int);
     int (*bind)(int, const void *, unsigned int);
     int (*listen)(int, int);
     int (*accept)(int, void *, unsigned int *);
@@ -120,6 +126,7 @@ bool bring_up_net_api(NetApi *api)
     api->pool_create = sceNetPoolCreate;
     api->socket = sceNetSocket;
     api->socket_close = sceNetSocketClose;
+    api->connect = sceNetConnect;
     api->bind = sceNetBind;
     api->listen = sceNetListen;
     api->accept = sceNetAccept;
@@ -127,13 +134,20 @@ bool bring_up_net_api(NetApi *api)
     api->recv = sceNetRecv;
     api->setsockopt = sceNetSetsockopt;
 
-    const int init = api->init();
-    log_result("sceNetInit", init);
-    if (init < 0)
-        return false;
-    const int pool = api->pool_create("prosperoai-http", kNetPoolSize, 0);
-    log_result("sceNetPoolCreate", pool);
-    return pool >= 0;
+    static std::once_flag once;
+    static bool ready = false;
+    std::call_once(once,
+                   [&]
+                   {
+                       const int init = api->init();
+                       log_result("sceNetInit", init);
+                       if (init < 0)
+                           return;
+                       const int pool = api->pool_create("prosperoai-http", kNetPoolSize, 0);
+                       log_result("sceNetPoolCreate", pool);
+                       ready = pool >= 0;
+                   });
+    return ready;
 }
 
 pthread_mutex_t generation_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -296,8 +310,8 @@ void iso8601_now(char *output, std::size_t capacity)
 // --- generation ---------------------------------------------------------
 
 bool run_generation(const gpt_runtime_message_t *messages, unsigned message_count,
-                    char *response_text, std::size_t response_capacity,
-                    unsigned max_tokens = 512, gpt_runtime_stats_t *reported_stats = nullptr)
+                    char *response_text, std::size_t response_capacity, unsigned max_tokens = 512,
+                    gpt_runtime_stats_t *reported_stats = nullptr)
 {
     pthread_mutex_lock(&generation_mutex);
     const gpt_runtime_settings_t settings{0, max_tokens};
@@ -325,7 +339,8 @@ void send_all(const NetApi &api, int sock, const char *data, std::size_t length)
     std::size_t sent = 0;
     while (sent < length)
     {
-        const int result = api.send(sock, data + sent, static_cast<unsigned long>(length - sent), 0);
+        const int result =
+            api.send(sock, data + sent, static_cast<unsigned long>(length - sent), 0);
         if (result <= 0)
             return;
         sent += static_cast<std::size_t>(result);
@@ -338,9 +353,9 @@ void send_status(const NetApi &api, int sock, const char *status, const char *co
     char header[256];
     const std::size_t body_length = std::strlen(body);
     std::snprintf(header, sizeof(header),
-                 "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\n"
-                 "Connection: close\r\n\r\n",
-                 status, content_type, body_length);
+                  "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %zu\r\n"
+                  "Connection: close\r\n\r\n",
+                  status, content_type, body_length);
     send_all(api, sock, header, std::strlen(header));
     send_all(api, sock, body, body_length);
 }
@@ -357,7 +372,12 @@ void send_json(const NetApi &api, int sock, const char *json)
 // Public presentation assets only; model and generation routes retain bearer authentication.
 bool serve_ui_asset(const NetApi &api, int sock, const char *path)
 {
-    struct Asset { const char *route; const char *file; const char *type; };
+    struct Asset
+    {
+        const char *route;
+        const char *file;
+        const char *type;
+    };
     static const Asset assets[] = {
         {"/", "index.html", "text/html; charset=utf-8"},
         {"/app.css", "app.css", "text/css; charset=utf-8"},
@@ -368,20 +388,33 @@ bool serve_ui_asset(const NetApi &api, int sock, const char *path)
     };
     for (const auto &asset : assets)
     {
-        if (std::strcmp(path, asset.route) != 0) continue;
+        if (std::strcmp(path, asset.route) != 0)
+            continue;
         const std::string filename = std::string(PROSPERO_WEB_ASSET_ROOT) + asset.file;
         FILE *file = std::fopen(filename.c_str(), "rb");
-        if (!file) { send_status(api, sock, "404 Not Found", "text/plain", "UI asset unavailable"); return true; }
+        if (!file)
+        {
+            send_status(api, sock, "404 Not Found", "text/plain", "UI asset unavailable");
+            return true;
+        }
         std::fseek(file, 0, SEEK_END);
         const long size = std::ftell(file);
         std::rewind(file);
-        if (size < 0 || size > 8 * 1024 * 1024) { std::fclose(file); send_status(api, sock, "500 Internal Server Error", "text/plain", "UI asset unavailable"); return true; }
+        if (size < 0 || size > 8 * 1024 * 1024)
+        {
+            std::fclose(file);
+            send_status(api, sock, "500 Internal Server Error", "text/plain",
+                        "UI asset unavailable");
+            return true;
+        }
         char header[512];
         std::snprintf(header, sizeof(header),
-            "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n"
-            "X-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\n"
-            "Content-Security-Policy: default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; frame-ancestors 'none'\r\nConnection: close\r\n\r\n",
-            asset.type, size);
+                      "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n"
+                      "X-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\n"
+                      "Content-Security-Policy: default-src 'self'; style-src 'self'; script-src "
+                      "'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; "
+                      "frame-ancestors 'none'\r\nConnection: close\r\n\r\n",
+                      asset.type, size);
         send_all(api, sock, header, std::strlen(header));
         char buffer[16384];
         for (std::size_t count; (count = std::fread(buffer, 1, sizeof(buffer), file)) != 0;)
@@ -462,9 +495,9 @@ void handle_get_tags(const NetApi &api, int sock)
     {
         char entry[256];
         std::snprintf(entry, sizeof(entry),
-                     "%s{\"name\":\"%s\",\"model\":\"%s\",\"details\":{\"family\":\"%s\"}}",
-                     i == 0 ? "" : ",", gpt_runtime_model_id(i), gpt_runtime_model_id(i),
-                     gpt_runtime_model_purpose(i));
+                      "%s{\"name\":\"%s\",\"model\":\"%s\",\"details\":{\"family\":\"%s\"}}",
+                      i == 0 ? "" : ",", gpt_runtime_model_id(i), gpt_runtime_model_id(i),
+                      gpt_runtime_model_purpose(i));
         std::strncat(body, entry, sizeof(body) - std::strlen(body) - 1);
     }
     std::strncat(body, "]}", sizeof(body) - std::strlen(body) - 1);
@@ -478,7 +511,8 @@ void handle_generate(const NetApi &api, int sock, const char *request_body)
     json_find_string(request_body, "model", model, sizeof(model));
     if (!json_find_string(request_body, "prompt", prompt, sizeof(prompt)))
     {
-        send_status(api, sock, "400 Bad Request", "application/json", "{\"error\":\"missing prompt\"}");
+        send_status(api, sock, "400 Bad Request", "application/json",
+                    "{\"error\":\"missing prompt\"}");
         return;
     }
     const gpt_runtime_message_t messages[1] = {{"user", prompt}};
@@ -494,25 +528,26 @@ void handle_generate(const NetApi &api, int sock, const char *request_body)
             max_tokens = static_cast<unsigned>(value);
     }
     gpt_runtime_stats_t stats{};
-    const bool ok = run_generation(messages, 1, response_text, sizeof(response_text),
-                                   max_tokens, &stats);
+    const bool ok =
+        run_generation(messages, 1, response_text, sizeof(response_text), max_tokens, &stats);
 
     char created_at[32];
     iso8601_now(created_at, sizeof(created_at));
     char body[kResponseCapacity];
     std::snprintf(body, sizeof(body), "{\"model\":\"%s\",\"created_at\":\"%s\",\"response\":\"",
-                 model, created_at);
+                  model, created_at);
     json_append_escaped(body, sizeof(body), ok ? response_text : "");
     char timing[512];
     const auto decode_us = stats.elapsed_microseconds >= stats.prefill_microseconds
-        ? stats.elapsed_microseconds - stats.prefill_microseconds : 0;
+                               ? stats.elapsed_microseconds - stats.prefill_microseconds
+                               : 0;
     std::snprintf(timing, sizeof(timing),
-        "\",\"done\":true,\"eval_count\":%u,\"prompt_eval_count\":%u,"
-        "\"eval_duration\":%llu,\"prompt_eval_duration\":%llu%s}",
-        stats.generated_tokens, stats.prompt_tokens,
-        static_cast<unsigned long long>(decode_us) * 1000,
-        static_cast<unsigned long long>(stats.prefill_microseconds) * 1000,
-        ok ? "" : ",\"error\":\"generation failed\"");
+                  "\",\"done\":true,\"eval_count\":%u,\"prompt_eval_count\":%u,"
+                  "\"eval_duration\":%llu,\"prompt_eval_duration\":%llu%s}",
+                  stats.generated_tokens, stats.prompt_tokens,
+                  static_cast<unsigned long long>(decode_us) * 1000,
+                  static_cast<unsigned long long>(stats.prefill_microseconds) * 1000,
+                  ok ? "" : ",\"error\":\"generation failed\"");
     std::strncat(body, timing, sizeof(body) - std::strlen(body) - 1);
     send_json(api, sock, body);
 }
@@ -529,7 +564,7 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
     if (messages_array != nullptr)
     {
         while (message_count < 16 &&
-              json_find_message(messages_array, message_count, roles[message_count],
+               json_find_message(messages_array, message_count, roles[message_count],
                                  sizeof(roles[message_count]), contents[message_count],
                                  sizeof(contents[message_count])))
         {
@@ -540,7 +575,8 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
     }
     if (message_count == 0)
     {
-        send_status(api, sock, "400 Bad Request", "application/json", "{\"error\":\"missing messages\"}");
+        send_status(api, sock, "400 Bad Request", "application/json",
+                    "{\"error\":\"missing messages\"}");
         return;
     }
 
@@ -551,12 +587,13 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
     iso8601_now(created_at, sizeof(created_at));
     char body[kResponseCapacity];
     std::snprintf(body, sizeof(body),
-                 "{\"model\":\"%s\",\"created_at\":\"%s\",\"message\":{\"role\":\"assistant\","
-                 "\"content\":\"",
-                 model, created_at);
+                  "{\"model\":\"%s\",\"created_at\":\"%s\",\"message\":{\"role\":\"assistant\","
+                  "\"content\":\"",
+                  model, created_at);
     json_append_escaped(body, sizeof(body), ok ? response_text : "");
-    std::strncat(body, ok ? "\"},\"done\":true}" : "\"},\"done\":true,\"error\":\"generation failed\"}",
-                sizeof(body) - std::strlen(body) - 1);
+    std::strncat(body,
+                 ok ? "\"},\"done\":true}" : "\"},\"done\":true,\"error\":\"generation failed\"}",
+                 sizeof(body) - std::strlen(body) - 1);
     send_json(api, sock, body);
 }
 
@@ -570,35 +607,59 @@ void handle_model_download_status(const NetApi &api, int sock)
     prospero_model_download::status(status, sizeof(status));
     char body[4096] = "{\"state\":\"";
     const char *state = "idle";
-    switch (prospero_model_download::state()) {
-    case prospero_model_download::State::Searching: state = "searching"; break;
-    case prospero_model_download::State::SearchReady: state = "search_ready"; break;
-    case prospero_model_download::State::Loading: state = "loading"; break;
-    case prospero_model_download::State::Ready: state = "ready"; break;
-    case prospero_model_download::State::Downloading: state = "downloading"; break;
-    case prospero_model_download::State::Complete: state = "complete"; break;
-    case prospero_model_download::State::Failed: state = "failed"; break;
-    default: break;
+    switch (prospero_model_download::state())
+    {
+    case prospero_model_download::State::Searching:
+        state = "searching";
+        break;
+    case prospero_model_download::State::SearchReady:
+        state = "search_ready";
+        break;
+    case prospero_model_download::State::Loading:
+        state = "loading";
+        break;
+    case prospero_model_download::State::Ready:
+        state = "ready";
+        break;
+    case prospero_model_download::State::Downloading:
+        state = "downloading";
+        break;
+    case prospero_model_download::State::Complete:
+        state = "complete";
+        break;
+    case prospero_model_download::State::Failed:
+        state = "failed";
+        break;
+    default:
+        break;
     }
     std::strncat(body, state, sizeof(body) - std::strlen(body) - 1);
     std::strncat(body, "\",\"status\":\"", sizeof(body) - std::strlen(body) - 1);
     json_append_escaped(body, sizeof(body), status);
-    std::uint64_t completed=0, total=0;
+    std::uint64_t completed = 0, total = 0;
     prospero_model_download::progress(&completed, &total);
     char progress[200];
-    std::snprintf(progress,sizeof(progress), "\",\"completed\":%llu,\"total\":%llu,\"active_preset\":%d,\"items\":[",
-        static_cast<unsigned long long>(completed),static_cast<unsigned long long>(total),prospero_model_download::active_preset());
-    std::strncat(body,progress,sizeof(body)-std::strlen(body)-1);
-    for (std::size_t i = 0; i < prospero_model_download::candidate_count(); ++i) {
+    std::snprintf(progress, sizeof(progress),
+                  "\",\"completed\":%llu,\"total\":%llu,\"active_preset\":%d,"
+                  "\"cancelling\":%s,\"items\":[",
+                  static_cast<unsigned long long>(completed),
+                  static_cast<unsigned long long>(total), prospero_model_download::active_preset(),
+                  prospero_model_download::cancelling() ? "true" : "false");
+    std::strncat(body, progress, sizeof(body) - std::strlen(body) - 1);
+    for (std::size_t i = 0; i < prospero_model_download::candidate_count(); ++i)
+    {
         prospero_model_download::Candidate candidate{};
-        if (!prospero_model_download::candidate(i, &candidate)) continue;
+        if (!prospero_model_download::candidate(i, &candidate))
+            continue;
         char item[512];
         std::snprintf(item, sizeof(item), "%s{\"name\":\"", i ? "," : "");
         std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
         json_append_escaped(body, sizeof(body), candidate.name);
-        std::snprintf(item, sizeof(item), prospero_model_download::state() ==
-                      prospero_model_download::State::SearchReady ? "\",\"downloads\":%llu}" :
-                      "\",\"size\":%llu}",
+        std::snprintf(item, sizeof(item),
+                      prospero_model_download::state() ==
+                              prospero_model_download::State::SearchReady
+                          ? "\",\"downloads\":%llu}"
+                          : "\",\"size\":%llu}",
                       static_cast<unsigned long long>(candidate.size));
         std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
     }
@@ -606,39 +667,66 @@ void handle_model_download_status(const NetApi &api, int sock)
     send_json(api, sock, body);
 }
 
+// DELETE /api/models/download: the running download ends and its partial files are removed.
+void handle_model_download_cancel(const NetApi &api, int sock)
+{
+    if (!prospero_model_download::cancel())
+    {
+        send_status(api, sock, "409 Conflict", "application/json",
+                    "{\"error\":\"no download is running\"}");
+        return;
+    }
+    handle_model_download_status(api, sock);
+}
+
 void handle_model_presets(const NetApi &api, int sock, const char *body = nullptr)
 {
-    if (body) {
+    if (body)
+    {
         const char *value = json_value_start(body, "index");
         char *end = nullptr;
         const long index = value ? std::strtol(value, &end, 10) : -1;
-        if (!value || end == value || index < 0 || static_cast<std::size_t>(index) >= prospero_model_download::preset_count) {
-            send_status(api, sock, "400 Bad Request", "application/json", "{\"error\":\"a valid preset index is required\"}"); return;
+        if (!value || end == value || index < 0 ||
+            static_cast<std::size_t>(index) >= prospero_model_download::preset_count)
+        {
+            send_status(api, sock, "400 Bad Request", "application/json",
+                        "{\"error\":\"a valid preset index is required\"}");
+            return;
         }
-        if (!prospero_model_download::download_preset(index)) {
-            send_status(api, sock, "409 Conflict", "application/json", "{\"error\":\"Downloader is busy or this preset is already installed.\"}"); return;
+        if (!prospero_model_download::download_preset(index))
+        {
+            send_status(api, sock, "409 Conflict", "application/json",
+                        "{\"error\":\"Downloader is busy or this preset is already installed.\"}");
+            return;
         }
     }
     nlohmann::json items = nlohmann::json::array();
-    for (std::size_t i=0; i<prospero_model_download::preset_count; ++i) {
-        const auto &preset=prospero_model_download::presets[i];
-        items.push_back({{"index",i},{"id",preset.id},{"name",preset.name},{"kind",preset.kind},
-                         {"source_filename",preset.kind==0 ? preset.files[0].source : ""},
-                         {"size",preset.size},{"installed",prospero_model_download::preset_installed(i)}});
+    for (std::size_t i = 0; i < prospero_model_download::preset_count; ++i)
+    {
+        const auto &preset = prospero_model_download::presets[i];
+        items.push_back({{"index", i},
+                         {"id", preset.id},
+                         {"name", preset.name},
+                         {"kind", preset.kind},
+                         {"source_filename", preset.kind == 0 ? preset.files[0].source : ""},
+                         {"size", preset.size},
+                         {"installed", prospero_model_download::preset_installed(i)}});
     }
-    const auto response=nlohmann::json{{"data",items}}.dump();
-    send_json(api,sock,response.c_str());
+    const auto response = nlohmann::json{{"data", items}}.dump();
+    send_json(api, sock, response.c_str());
 }
 
 void handle_model_search_request(const NetApi &api, int sock, const char *body)
 {
     char query[128]{};
-    if (!json_find_string(body, "query", query, sizeof(query))) {
+    if (!json_find_string(body, "query", query, sizeof(query)))
+    {
         send_status(api, sock, "400 Bad Request", "application/json",
                     "{\"error\":\"a model name is required\"}");
         return;
     }
-    if (!prospero_model_download::search(query)) {
+    if (!prospero_model_download::search(query))
+    {
         send_status(api, sock, "409 Conflict", "application/json",
                     "{\"error\":\"search is busy or the query is invalid\"}");
         return;
@@ -650,26 +738,32 @@ void handle_model_download_action(const NetApi &api, int sock, const char *body,
                                   bool browse_repository)
 {
     bool accepted = false;
-    if (browse_repository) {
+    if (browse_repository)
+    {
         char repository[160]{};
-        if (!json_find_string(body, "repository", repository, sizeof(repository))) {
+        if (!json_find_string(body, "repository", repository, sizeof(repository)))
+        {
             send_status(api, sock, "400 Bad Request", "application/json",
                         "{\"error\":\"repository is required as owner/name\"}");
             return;
         }
         accepted = prospero_model_download::browse(repository);
-    } else {
+    }
+    else
+    {
         const char *value = json_value_start(body, "index");
         char *end = nullptr;
         const long index = value ? std::strtol(value, &end, 10) : -1;
-        if (!value || end == value || index < 0 || index > 7) {
+        if (!value || end == value || index < 0 || index > 7)
+        {
             send_status(api, sock, "400 Bad Request", "application/json",
                         "{\"error\":\"a valid GGUF item index is required\"}");
             return;
         }
         accepted = prospero_model_download::download(static_cast<std::size_t>(index));
     }
-    if (!accepted) {
+    if (!accepted)
+    {
         send_status(api, sock, "409 Conflict", "application/json",
                     "{\"error\":\"downloader is busy or the request is invalid\"}");
         return;
@@ -682,63 +776,89 @@ std::size_t read_request(const NetApi &api, int sock, char *buffer, std::size_t 
 {
     std::size_t total = 0;
     const char *header_end = nullptr;
-    while (total + 1 < capacity) {
+    while (total + 1 < capacity)
+    {
         const int received = api.recv(sock, buffer + total, capacity - 1 - total, 0);
-        if (received <= 0) return 0;
+        if (received <= 0)
+            return 0;
         total += static_cast<std::size_t>(received);
         buffer[total] = '\0';
         header_end = std::strstr(buffer, "\r\n\r\n");
-        if (header_end) break;
-        if (total > 16384) break;
+        if (header_end)
+            break;
+        if (total > 16384)
+            break;
     }
-    if (!header_end) {
-        openai_error(api, sock, "431 Request Header Fields Too Large", "invalid_headers", "Incomplete or oversized headers.");
+    if (!header_end)
+    {
+        openai_error(api, sock, "431 Request Header Fields Too Large", "invalid_headers",
+                     "Incomplete or oversized headers.");
         return 0;
     }
     std::size_t content_length = 0;
     bool has_length = false;
     const char *line = std::strstr(buffer, "\r\n");
-    while (line && line < header_end) {
+    while (line && line < header_end)
+    {
         line += 2;
         const char *end = std::strstr(line, "\r\n");
-        if (!end) return 0;
+        if (!end)
+            return 0;
         std::string header(line, end);
         auto colon = header.find(':');
-        if (colon != std::string::npos) {
-            std::string key = header.substr(0, colon), value = header.substr(colon+1);
-            for (char &c : key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            if (key == "transfer-encoding") {
-                openai_error(api, sock, "400 Bad Request", "unsupported_transfer_encoding", "Use Content-Length; chunked requests are not supported.");
+        if (colon != std::string::npos)
+        {
+            std::string key = header.substr(0, colon), value = header.substr(colon + 1);
+            for (char &c : key)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            if (key == "transfer-encoding")
+            {
+                openai_error(api, sock, "400 Bad Request", "unsupported_transfer_encoding",
+                             "Use Content-Length; chunked requests are not supported.");
                 return 0;
             }
-            if (key == "content-length") {
+            if (key == "content-length")
+            {
                 auto start = value.find_first_not_of(" \t");
                 auto finish = value.find_last_not_of(" \t");
-                if (start == std::string::npos || has_length) return 0;
-                value = value.substr(start, finish-start+1);
+                if (start == std::string::npos || has_length)
+                    return 0;
+                value = value.substr(start, finish - start + 1);
                 content_length = 0;
-                for (char c : value) {
-                    if (c < '0' || c > '9') {
-                        openai_error(api, sock, "400 Bad Request", "invalid_content_length", "Invalid Content-Length."); return 0;
+                for (char c : value)
+                {
+                    if (c < '0' || c > '9')
+                    {
+                        openai_error(api, sock, "400 Bad Request", "invalid_content_length",
+                                     "Invalid Content-Length.");
+                        return 0;
                     }
-                    if (content_length > capacity / 10) {
-                        openai_error(api, sock, "413 Payload Too Large", "request_too_large", "Request limit is 256 KiB including headers."); return 0;
+                    if (content_length > capacity / 10)
+                    {
+                        openai_error(api, sock, "413 Payload Too Large", "request_too_large",
+                                     "Request limit is 256 KiB including headers.");
+                        return 0;
                     }
-                    content_length = content_length*10 + (c-'0');
+                    content_length = content_length * 10 + (c - '0');
                 }
                 has_length = true;
             }
         }
         line = end;
     }
-    const std::size_t body_start = header_end-buffer+4;
-    if (content_length >= capacity-body_start) {
-        openai_error(api, sock, "413 Payload Too Large", "request_too_large", "Request limit is 256 KiB including headers."); return 0;
+    const std::size_t body_start = header_end - buffer + 4;
+    if (content_length >= capacity - body_start)
+    {
+        openai_error(api, sock, "413 Payload Too Large", "request_too_large",
+                     "Request limit is 256 KiB including headers.");
+        return 0;
     }
-    const std::size_t wanted = body_start+content_length;
-    while (total < wanted) {
-        const int received = api.recv(sock, buffer+total, wanted-total, 0);
-        if (received <= 0) return 0;
+    const std::size_t wanted = body_start + content_length;
+    while (total < wanted)
+    {
+        const int received = api.recv(sock, buffer + total, wanted - total, 0);
+        if (received <= 0)
+            return 0;
         total += received;
     }
     buffer[wanted] = '\0';
@@ -770,7 +890,8 @@ void handle_connection(const NetApi &api, int sock)
     }
 #endif
     if (!api_authorized(request))
-        openai_error(api, sock, "401 Unauthorized", "invalid_api_key", "A valid bearer API key is required.");
+        openai_error(api, sock, "401 Unauthorized", "invalid_api_key",
+                     "A valid bearer API key is required.");
 #ifdef PS5_LLAMA_VULKAN
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/v1/models") == 0)
         handle_openai_models(api, sock);
@@ -784,6 +905,8 @@ void handle_connection(const NetApi &api, int sock)
         handle_model_presets(api, sock, body);
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/download") == 0)
         handle_model_download_status(api, sock);
+    else if (std::strcmp(method, "DELETE") == 0 && std::strcmp(path, "/api/models/download") == 0)
+        handle_model_download_cancel(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/search") == 0)
         handle_model_search_request(api, sock, body);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/browse") == 0)
@@ -854,15 +977,21 @@ void *server_worker(void *)
         if (client_sock < 0)
             continue;
 
-        for (auto it = connections.begin(); it != connections.end();) {
-            if ((*it)->done.load(std::memory_order_acquire)) {
+        for (auto it = connections.begin(); it != connections.end();)
+        {
+            if ((*it)->done.load(std::memory_order_acquire))
+            {
                 scePthreadJoin((*it)->thread, nullptr);
                 delete *it;
                 it = connections.erase(it);
-            } else ++it;
+            }
+            else
+                ++it;
         }
-        if (connections.size() >= 4) {
-            openai_error(api, client_sock, "503 Service Unavailable", "server_busy", "Too many active connections.");
+        if (connections.size() >= 4)
+        {
+            openai_error(api, client_sock, "503 Service Unavailable", "server_busy",
+                         "Too many active connections.");
             api.socket_close(client_sock);
             continue;
         }

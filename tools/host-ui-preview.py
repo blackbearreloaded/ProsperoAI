@@ -32,8 +32,9 @@ kit_sources = [KIT / line for line in (ROOT / "ui-kit/sources.txt").read_text().
                if line.endswith(".cpp") and not line.startswith("platform/")]
 sources = [ROOT / "src/native_app.cpp", ROOT / "src/native_ui.cpp",
            ROOT / "src/native_ui_screens.cpp", ROOT / "src/native_ui_style.cpp",
+           ROOT / "src/native_ui_update.cpp",
            ROOT / "src/font_set.cpp", ROOT / "src/media_preview.cpp",
-           ROOT / "src/dev_script.cpp",
+           ROOT / "src/dev_script.cpp", ROOT / "src/debug_log.cpp",
            ROOT / "host/ui_preview.cpp", ROOT / "host/platform_host.cpp", *kit_sources]
 if VULKAN:
     subprocess.run([sys.executable, str(ROOT / "tools/prepare-vulkan-ui-shaders.py"),

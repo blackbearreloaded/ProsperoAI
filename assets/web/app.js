@@ -87,6 +87,11 @@ async function downloadPreset(index){
 async function browseRepository(repository){$('download-status').textContent='Loading GGUF files…';try{await api('/api/models/browse',{method:'POST',body:JSON.stringify({repository})});await pollDownloads();}catch(error){$('download-status').textContent=error.message;}}
 $('download-repo').onsubmit=async event=>{event.preventDefault();const query=$('model-query').value.trim();$('download-status').textContent='Searching public repositories…';$('browse-models').disabled=true;$('download-list').replaceChildren();try{await api('/api/models/search',{method:'POST',body:JSON.stringify({query})});await pollDownloads();}catch(error){$('download-status').textContent=error.message;}finally{$('browse-models').disabled=false;}};
 function renderDownloadItems(data){const list=$('download-list');list.replaceChildren();for(let index=0;index<(data.items||[]).length;index++){const item=data.items[index],row=document.createElement('div');row.className='download-item';const detail=document.createElement('div'),name=document.createElement('strong'),size=document.createElement('small'),button=document.createElement('button');name.textContent=item.name;if(data.state==='search_ready'){size.textContent=`${Number(item.downloads||0).toLocaleString()} downloads`;button.textContent='Browse files';button.disabled=false;button.onclick=()=>browseRepository(item.name);}else{size.textContent=`${(item.size/1073741824).toFixed(2)} GiB`;button.textContent='Download';button.disabled=data.state!=='ready';button.onclick=()=>startModelDownload(index);}button.className='primary';detail.append(name,size);row.append(detail,button);list.append(row);}}
+$('download-cancel').onclick=async()=>{
+    if(!confirm('Cancel this download? What has been downloaded so far is removed.'))return;
+    try{await api('/api/models/download',{method:'DELETE'});await pollDownloads();}
+    catch(error){$('download-status').textContent=error.message;}
+};
 let downloadPoll;
 async function pollDownloads(){
     clearTimeout(downloadPoll);
@@ -95,7 +100,8 @@ async function pollDownloads(){
         $('download-status').textContent=downloadState.status||'Ready';
         const bar=$('download-progress');bar.hidden=downloadState.state!=='downloading';
         bar.value=downloadState.total?Math.min(100,downloadState.completed*100/downloadState.total):0;
-        if(!bar.hidden)$('download-status').textContent=`Downloading… ${Math.floor(bar.value)}% · ${(downloadState.completed/1048576).toFixed(1)} / ${(downloadState.total/1048576).toFixed(1)} MiB`;
+        const cancel=$('download-cancel');cancel.hidden=bar.hidden;cancel.disabled=!!downloadState.cancelling;cancel.textContent=downloadState.cancelling?'Cancelling…':'Cancel download';
+        if(!bar.hidden&&!downloadState.cancelling)$('download-status').textContent=`Downloading… ${Math.floor(bar.value)}% · ${(downloadState.completed/1048576).toFixed(1)} / ${(downloadState.total/1048576).toFixed(1)} MiB`;
         renderDownloadItems(downloadState);renderModels();
         if(['searching','loading','downloading'].includes(downloadState.state)){downloadPoll=setTimeout(pollDownloads,1500);return;}
         if(downloadState.state==='complete')await refreshModels();

@@ -62,6 +62,7 @@ class NativeController(unittest.TestCase):
                             "-I" + str(kit),
                             str(ROOT / "tests/native_controller_test.cpp"),
                             str(ROOT / "src/native_app.cpp"),
+                            str(ROOT / "src/debug_log.cpp"),
                             str(ROOT / "src/media_preview.cpp"),
                             str(kit / "gfx/font.cpp"),
                             "-o", str(binary)], check=True)

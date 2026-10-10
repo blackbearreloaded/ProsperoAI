@@ -10,7 +10,19 @@ static std::size_t position;
 static unsigned current_model;
 namespace prospero_model_download
 {
-static State current = State::Idle;
+// A test that needs a download in progress says so in the environment: every request
+// is a process of its own.
+static State current = std::getenv("PROSPERO_TEST_DOWNLOADING") ? State::Downloading : State::Idle;
+static bool cancel_asked = false;
+bool cancel()
+{
+    cancel_asked = current == State::Downloading;
+    return cancel_asked;
+}
+bool cancelling()
+{
+    return cancel_asked;
+}
 bool preset_installed(std::size_t)
 {
     return false;

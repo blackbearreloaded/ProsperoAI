@@ -258,3 +258,20 @@ PPSA99004 changes. Migration stages are documented in VK_UI_MIGRATION.md.
   Kokoro, Back preserves history, current-conversation deletion returns to Workspace,
   and empty Image opens the SD-Turbo preset. Screenshot `build/prospero-web-live-test.png`.
   Final native rebuild reproduced the same binary SHA-256. Test title remains running.
+
+
+## 2026-10-09 — Release preparation and automatic model storage
+
+- PR #5 merged to main at c00dec63885b64caabaff4e1816dcba226949985. README uses
+  the current PS5 golden doorway icon. Release preparation is PR #8, 01.001.000.
+- Native build embeds a title-scoped helper at assets/platform/model-mount.elf. Startup
+  checks the private storage marker, sends the helper only to the console-local ELF loader
+  on 9021 if needed, handles partial writes and waits for the mount. Networking startup
+  is shared with HTTP; discovery rescans after setup.
+- PPSA99023 launched the helper itself: new resident PID92, successful mount, raw Mistral
+  and Kokoro visible in HTTP/native catalogs. No new helper was sent manually. Evidence:
+  build/prospero-auto-mount-log.txt and build/prospero-auto-mount.jpg.
+- Host suite: 28 passed, including partial-send, loopback-only destination, invalid-ELF,
+  connection/send failure cleanup and storage-readiness tests. Lint/native build succeeded.
+- Release-preparation CI at 9782055 succeeded in 14m17s, building RADV from pinned
+  sources and the hybrid app. Production PPSA99004 has not been deployed on the console.

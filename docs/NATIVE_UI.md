@@ -24,7 +24,7 @@ the page, and a dialog shows its own.
 | Page | What it does |
 | --- | --- |
 | **Workspace** | Opens on a welcome page that says what is installed. Cross starts a conversation: with an empty prompt it opens the system keyboard (whose Done sends), with a typed one it sends. Square starts a new conversation. Left moves to the conversation list, where Cross opens one and Triangle deletes it after a confirmation. Triangle retries a failed answer or plays the latest saved audio. The right stick or Up and Down scroll. |
-| **Models** | The model under the focus leads the page; the grid below scrolls over any number of models. Square searches (a USB keyboard types straight into the search), Triangle steps through the kinds, Cross chooses a model after a confirmation. |
+| **Models** | The model under the focus leads the page; the grid below scrolls over any number of models. Square searches (a USB keyboard types straight into the search), L2 and R2 step through the kinds, Cross chooses a model after a confirmation. While a model is being downloaded, Triangle (or Cross on its card) cancels it after a confirmation; what was downloaded so far is removed. |
 | **Settings** | Appearance (Midnight or Daylight, three accents), Generation, Sound, Accessibility (reduced motion, high contrast, reading size) and About (version and credits). Circle returns to the categories. Changes apply at once and are saved in the background. |
 
 ## What the player sees and hears
@@ -126,7 +126,12 @@ upload for visible images, at most one per frame, and are released when the conv
 changes. Saved audio uses the existing player; interface cues use the kit's mixer.
 
 A diagnostic log is off by default. A file named `dev/log.txt` in the install folder turns
-it on; it is written to `/download0/ProsperoAI/logs/app.log`.
+it on; it is written to `logs/app.log` in the app's data folder (`/data/prosperoai`).
+
+The debug log is the one a user sends us: Settings > Diagnostics > Debug log, off by
+default, written to `logs/debug-trace.txt` in the same folder (`include/debug_log.hpp`
+lists its tags). What the app and the model runtimes print for the console's own log goes
+into it as well.
 
 ## Build and verification
 
@@ -184,14 +189,16 @@ The same script plays against the PC stand-ins with
 | --- | --- |
 | `token <word>` | Names the request (the runner adds it); a token already played is ignored |
 | `limit <seconds>` | The whole run's time limit (300 unless set) |
+| `updates on` | This run asks the catalog for a newer version, as a launch without a script does; without it no update question interrupts a test |
 | `wait <seconds>` | Lets time pass |
-| `until started\|idle\|ready [seconds]` | Waits for the catalogue, for the worker to be idle, or for an idle worker with a prepared model |
+| `until started\|idle\|ready\|update [seconds]` | Waits for the catalogue, for the worker to be idle, for an idle worker with a prepared model, or for the update question to be on screen |
 | `press cross\|circle\|square\|triangle\|options\|l1\|r1\|up\|down\|left\|right` | One press |
 | `type <text>` | USB-keyboard typing, a character a frame |
 | `backspace [count]`, `submit`, `scroll <pixels>` | Backspace, Enter, and the right stick |
 | `expect model <part of its id>\|answer\|image\|audio` | Notes whether that model is active and ready, or the last answer is of that kind (a text answer with `<unk>` in it is not one); an unmet one fails the run, which goes on |
 | `shot <name>` | Saves the frame as `<name>.bmp` |
-| `status` | Writes the state, the last answer's figures and the frame times since the last status |
+| `status` | Writes the state, the last answer's figures and the frame times since the last status; with `updates on` also what the update shows (`none`, `offer`, `notes`, `working`, `closing`, `failed`) |
+| `memory` | Writes what the app has mapped between `0x2_0000_0000` and `0x8_0000_0000`, where the model runtimes need room |
 | `quit [seconds]` | Writes the result, stays up that long, then closes the app |
 
 A wait that runs out, or a model that is not prepared, ends the run at once; an `expect`

@@ -1,7 +1,13 @@
 // ProsperoAI native application controller.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_app.hpp"
+
+#include "debug_log.hpp"
+#ifdef PS5_LLAMA_VULKAN
+#include "http_server.hpp"
+#endif
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -153,6 +159,30 @@ int find_model(const State &state, const char *id)
         if (state.models[i].id == id)
             return static_cast<int>(i);
     return -1;
+}
+
+// The installed model a saved conversation belongs to, or -1. A conversation saved while
+// IDs were cut at 47 characters belongs to the one model whose ID begins with what is
+// left; its record then gets the whole ID and name back.
+int model_of(const State &state, prospero_session::Record *record)
+{
+    constexpr std::size_t kOldLength = 47;
+    int index = find_model(state, record->model_id);
+    if (index >= 0 || std::strlen(record->model_id) != kOldLength)
+        return index;
+    int matches = 0;
+    for (std::size_t i = 0; i < state.models.size(); ++i)
+        if (state.models[i].id.compare(0, kOldLength, record->model_id) == 0)
+        {
+            index = static_cast<int>(i);
+            ++matches;
+        }
+    if (matches != 1)
+        return -1;
+    const Model &model = state.models[static_cast<std::size_t>(index)];
+    std::snprintf(record->model_id, sizeof(record->model_id), "%s", model.id.c_str());
+    std::snprintf(record->model_name, sizeof(record->model_name), "%s", model.name.c_str());
+    return index;
 }
 
 std::string media_path(const char *text, const char *suffix)
@@ -482,9 +512,15 @@ void App::refresh_images()
 
 void App::work()
 {
+    const auto began = std::chrono::steady_clock::now();
+    const Job job = job_;
     switch (job_)
     {
     case Job::Discover:
+    {
+#ifdef PS5_LLAMA_VULKAN
+        gpt_runtime_refresh_models();
+#endif
         result_.models.clear();
         result_.model_counts = {};
         for (unsigned i = 0, count = gpt_runtime_model_count(); i < count; ++i)
@@ -506,6 +542,7 @@ void App::work()
         result_.status =
             result_.models.empty() ? "No models are installed yet" : "Your library is ready";
         break;
+    }
     case Job::RefreshModels:
     {
         gpt_runtime_refresh_models();
@@ -565,12 +602,12 @@ void App::work()
             break;
         }
         messages.resize(record.message_count);
+        const int index = model_of(result_, &record);
         result_.session = record;
         result_.messages = std::move(messages);
         refresh_images();
         result_.retry_available = false;
         result_.stats_valid = false;
-        const int index = find_model(result_, record.model_id);
         result_.ready = index >= 0 && gpt_runtime_select_model(static_cast<unsigned>(index)) &&
                         gpt_runtime_prepare() == 0;
         if (index >= 0)
@@ -638,6 +675,32 @@ void App::work()
         }
 #endif
         break;
+    }
+    if (debug::enabled())
+    {
+        static constexpr const char *names[] = {
+            "find models",         "refresh models", "choose model", "open conversation",
+            "delete conversation", "answer",         "save",         "save settings",
+            "play sound"};
+        const double seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
+        const char *model =
+            result_.selected_model >= 0
+                ? result_.models[static_cast<std::size_t>(result_.selected_model)].id.c_str()
+                : "-";
+        debug::line(job == Job::Generate ? "answer" : "model",
+                    "%s: %.2f s, model=%s ready=%d models=%zu notice=%d \"%s\"",
+                    names[static_cast<int>(job)], seconds, model, result_.ready ? 1 : 0,
+                    result_.models.size(), static_cast<int>(result_.notice),
+                    result_.status.c_str());
+        if (job == Job::Generate && result_.stats_valid)
+            debug::line("answer", "tokens=%u prompt=%u prefill=%llu ms total=%llu ms",
+                        result_.stats.generated_tokens, result_.stats.prompt_tokens,
+                        static_cast<unsigned long long>(result_.stats.prefill_microseconds / 1000),
+                        static_cast<unsigned long long>(result_.stats.elapsed_microseconds / 1000));
+        if (job == Job::Discover || job == Job::RefreshModels)
+            for (const Model &found : result_.models)
+                debug::line("model", "found %s (%s)", found.id.c_str(), found.purpose.c_str());
     }
 }
 

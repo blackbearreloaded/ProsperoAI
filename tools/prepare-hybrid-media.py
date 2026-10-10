@@ -16,6 +16,10 @@ for name in archives:
         _,kind,symbol=fields
         if 'ggml' in symbol or 'gguf' in symbol or (kind in 'TDBR' and not symbol.startswith('_')):
             symbols.add(symbol)
+# The image libraries' C allocations go to vulkan/sd_arena.cpp, which places the large
+# ones in memory the GPU can read; the app's two objects renamed with them free what
+# those libraries allocated.
+symbols.update(('malloc','calloc','realloc','free','posix_memalign'))
 rename=out/'symbols.map'
 content=''.join(f'{symbol} sd_private_{symbol}\n' for symbol in sorted(symbols))
 if not rename.exists() or rename.read_text()!=content:

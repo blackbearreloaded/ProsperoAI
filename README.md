@@ -12,7 +12,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-PlayStation%205-003791?logo=playstation&amp;logoColor=white" alt="PlayStation 5">
-  <img src="https://img.shields.io/badge/compute-native%20AGC%20GPU-5BBEFF" alt="Native AGC GPU">
+  <img src="https://img.shields.io/badge/compute-Vulkan%20%2B%20AGC%20GPU-5BBEFF" alt="Vulkan and native AGC GPU">
   <img src="https://img.shields.io/badge/models-text%20%7C%20image%20%7C%20audio%20%7C%20speech-5DDFA4" alt="Text, image, audio, and speech">
   <img src="https://img.shields.io/badge/status-alpha-EF8354" alt="Alpha">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
@@ -30,23 +30,28 @@ how it is built, and what a run on a console showed.
 > on the PS5 GPU. It is not production software.
 
 > [!NOTE]
-> **Work in progress on this branch.** The GPU backend is being migrated from the
-> AGC kernels to llama.cpp's Vulkan backend on RADV, and the network layer is being
-> moved onto the Payload SDK's sockets. The Vulkan folder build has been verified on PS5 FW 12.70;
-> see [benchmark results](docs/VK_BENCHMARK_2026-10-08.md). Build steps are in [docs/BUILDING.md](docs/BUILDING.md).
+> Text inference and the native interface use Vulkan on RADV; prepared `.ps5lm` text
+> bundles and media generation use the AGC backend in the same application. Text, image,
+> audio and voice generation, and switching between them, have been run on a PS5 with
+> system software 6.02; voice generation and switching back to text also on 12.70. See
+> [current status](docs/VK_ACTIVE.md) and [build instructions](docs/BUILDING.md).
 
 ## Highlights
 
 - Runs supported models locally without an account, cloud API, or conversation upload.
-- Uses native PS5 AGC GPU compute for the model paths; this is not a ROCm port.
+- Uses Vulkan for text and native PS5 AGC for media compute.
 - Searches and filters installed text, image, audio, and speech models in a scrolling library.
 - Uses stable model IDs for selection and saved conversations, with no eight-model catalog limit.
 - Offers Midnight and Daylight themes, a living backdrop, interface sounds, notices, reduced motion,
   high contrast, and larger text.
 - Draws answers in Latin, Greek, Cyrillic, Chinese, Japanese and Korean with scalable faces.
-- Stores independent text, image, audio, and speech sessions under `/download0`.
+- Stores independent text, image, audio, and speech sessions under `/data/prosperoai/sessions`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
-- Ships without model weights. Users choose and install curated model folders separately.
+- Ships without weights. Models offers verified presets and standalone GGUF downloads.
+- Includes an HTTP server with a browser Workspace, model downloads and progress at
+  `http://<PS5-IP>:11434/`.
+- Connects OpenCode and other OpenAI-compatible clients to local PS5 text inference,
+  with streaming responses and function-call support.
 
 > [!IMPORTANT]
 > ProsperoAI does not run on an unmodified retail console. It is intended for
@@ -60,11 +65,6 @@ how it is built, and what a run on a console showed.
 > **Built on the [PS5 Native App Boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate).**
 > ProsperoAI preserves its reproducible native build, packaging, deployment,
 > and release foundation.
-
-> [!IMPORTANT]
-> **GPU compute work is documented in [PS5 GPU Research](https://github.com/blackbearreloaded/ps5-gpu-research).**
-> The companion repository records the native AGC GPU research that made
-> ProsperoAI's local model runtimes possible.
 
 ## Supported curated models
 
@@ -80,7 +80,10 @@ The linked repositories contain the exact directory layout, integrity hashes,
 upstream provenance, licenses, and preparation recipe for each model. Do not
 rename or mix their internal files.
 
-### Prepare text models yourself
+### Legacy AGC text model preparation
+
+The hybrid release reads text GGUF files directly; these conversion tools apply to
+the legacy AGC-only text build.
 
 The open-source [model preparation tools](model-tools/) convert a supported
 single-file GGUF into ProsperoAI's deterministic `model.ps5lm`,
@@ -124,30 +127,34 @@ generation. Both are functional demonstrations rather than real-time paths.
    [GitHub release](https://github.com/blackbearreloaded/ProsperoAI/releases).
 2. Extract it. The archive contains a complete `PPSA99004/` app folder and an
    intentionally empty `PPSA99004/models/` directory.
-3. Open one of the curated Hugging Face repositories above, download the whole
-   repository, and copy its named model folder into `PPSA99004/models/`.
-4. Repeat step 3 for any other models you want available in Models.
-5. Upload the complete `PPSA99004` directory to `/data/homebrew/`, producing
-   `/data/homebrew/PPSA99004/eboot.bin`.
-6. Refresh or restart your homebrew loader, then launch ProsperoAI.
+3. Upload the complete `PPSA99004` directory to `/data/homebrew/`.
+4. Keep the console's local ELF loader (TCP port 9021) available. At launch ProsperoAI
+   asks [PS5-Lapy-JB-Daemon](https://github.com/mpereiraesaa/PS5-Lapy-JB-Daemon) for
+   access to the console's storage: a Lapy service that is already running is asked
+   first, otherwise the app starts the one-request helper it ships with (`lapy.elf`).
+   No separate payload upload is required.
+5. Register or refresh the app folder in your homebrew loader, then launch ProsperoAI.
+6. Open **Models** and download a Text, Image, Audio or Voice preset. Alternatively,
+   copy standalone text GGUF files or complete curated model folders to
+   `/data/prosperoai/models/`.
 
-For example:
+The browser interface is at `http://<PS5-IP>:11434/`. Both interfaces show verified
+preset downloads and progress. Text inference uses Vulkan (GGUF) or AGC (prepared
+`.ps5lm` bundles); image, audio and voice use AGC.
+
+Everything the app keeps is under `/data/prosperoai/`:
 
 ```text
-PPSA99004/
-├── eboot.bin
-├── models/
-│   ├── README.txt
-│   ├── mistral-7b-instruct-v0.3-q4-0/
-│   │   ├── model.ps5lm
-│   │   ├── tokenizer.ps5tok
-│   │   └── model.json
-│   └── sd-turbo-fp16/
-│       ├── model.json
-│       ├── text_encoder/
-│       ├── unet/
-│       └── vae/
-└── sce_sys/
+/data/
+├── homebrew/PPSA99004/        the app folder
+└── prosperoai/
+    ├── models/
+    │   ├── Mistral-7B-Instruct-v0.3.Q4_0.gguf
+    │   ├── kokoro-82m-fp16/
+    │   └── sd-turbo-fp16/
+    ├── sessions/              conversations, generated images and audio
+    ├── logs/                  the debug log, when it is switched on
+    └── prosperoai.cfg         settings
 ```
 
 Keep each downloaded model folder intact. ProsperoAI discovers all valid model
@@ -155,8 +162,106 @@ folders at launch and shows their friendly names and purposes in Models. If
 no compatible model is installed, the app opens normally and explains where to
 add one.
 
-Only the folder ZIP is distributed because models must be inserted before the
-title is mounted.
+Coming from 01.001.000: models in `/data/homebrew/prosperoai/models/` are moved to
+`/data/prosperoai/models/` the first time this version starts, and settings and
+conversations are copied over once. The storage helper of that version is no longer
+used; if it is still running it is told to stop.
+
+Without storage access (no ELF loader and no Lapy service) the app still opens and
+keeps its data in its own sandboxed folder; models copied to `/data/prosperoai/models/`
+are not visible to it then.
+
+Only the app-folder ZIP is distributed; it contains no model weights.
+
+### Reporting a problem
+
+**Settings > Diagnostics > Debug log** makes the app write a timed trace of what it does:
+the models it found, each request with its result and figures, every message it showed,
+downloads with their speed, and what the model runtimes themselves report. It is off by
+default. Switch it on, repeat what went wrong, close the app and send us
+`/data/prosperoai/logs/debug-trace.txt` (the run before it is kept beside it as
+`debug-trace.prev.txt`) in a
+[GitHub issue](https://github.com/blackbearreloaded/ProsperoAI/issues). The log holds
+your prompts and the answers of that run; read it before you share it.
+
+## Updates
+
+Once per launch ProsperoAI asks the [homebrew.page](https://homebrew.page) catalog whether a
+newer version is listed, and verifies the catalog's signature before it believes the answer.
+When there is one, it says so:
+
+- **Update now** downloads the release from GitHub, checks it against the SHA-256 the
+  catalog lists and closes the app. A small helper then puts the new version in place, and
+  the console says when it is done: open ProsperoAI again.
+- **What's new** shows the release notes first.
+- **Skip** leaves everything as it is; the question comes back at the next launch.
+
+Nothing is changed before the download has been checked, and a cancelled or failed update
+leaves the app as it was. Models, settings and conversations are not touched: they live in
+`/data/prosperoai`. Like storage access, the update needs the console's local ELF loader
+(TCP port 9021).
+
+This check and the downloads you start are the only requests the app makes on its own: one
+to homebrew.page (and to the catalog's mirror on GitHub Pages when that does not answer),
+naming the app and its version.
+
+## HTTP server and browser interface
+
+The HTTP server starts automatically when ProsperoAI launches. Keep the app running
+on the PS5 and connect your computer or phone to the same network. Replace
+`<PS5-IP>` below with your console's local IP address.
+
+1. Open `http://<PS5-IP>:11434/` in your browser.
+2. Use **Models** to download a preset or select an installed model. Download progress
+   is shown while the files are fetched and verified.
+3. Open **Workspace** and choose **Converse**, **Imagine**, **Compose** or **Speak**.
+   A card selects an installed model for that purpose, or opens its Models category.
+4. Use **Back to Workspace** to return; conversations can be deleted from their list.
+
+Closing the PS5 app also stops its HTTP server. The API uses plain HTTP and requires
+no key by default; use it on a trusted local network. Optional bearer authentication
+and its effect on the browser interface are explained in [the API guide](docs/OPENCODE.md).
+
+### Connect OpenCode to the PS5
+
+ProsperoAI exposes an OpenAI-compatible API at `http://<PS5-IP>:11434/v1`, including
+streaming text and function calls. OpenCode runs on your computer and uses the PS5
+for model inference. First install a text model and check its exact ID:
+
+```bash
+curl 'http://<PS5-IP>:11434/v1/models'
+```
+
+Add this provider to your project's `opencode.json`. Replace `<PS5-IP>` and, if
+needed, the model ID with the value returned above:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "prosperoai": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "PS5 ProsperoAI",
+      "options": { "baseURL": "http://<PS5-IP>:11434/v1" },
+      "models": {
+        "Mistral-7B-Instruct-v0.3.Q4_0.gguf": {
+          "name": "Mistral PS5",
+          "limit": { "context": 4096, "output": 512 },
+          "tool_call": true
+        }
+      }
+    }
+  },
+  "model": "prosperoai/Mistral-7B-Instruct-v0.3.Q4_0.gguf"
+}
+```
+
+Run `opencode` in that project, or select the model with `/models`. This follows
+OpenCode's [custom provider configuration](https://opencode.ai/docs/providers/#custom-provider).
+Streaming and a tool-call roundtrip have been verified on PS5. Automatic tool
+selection depends on the model; the tested Mistral model is not yet reliable for
+autonomous coding tasks. See [OpenCode setup and API limits](docs/OPENCODE.md) for
+larger contexts, authentication and detailed compatibility notes.
 
 ## Using ProsperoAI
 
@@ -167,17 +272,72 @@ title is mounted.
 | Circle | Close a dialog, leave the conversation list, or return to the settings categories |
 | L1 / R1 | Switch between Workspace, Models, and Settings |
 | Square | Start a new conversation in Workspace; search in Models |
-| Triangle | Step through the model kinds, retry a failed answer, delete the focused conversation, or play saved audio |
+| L2 / R2 in Models | Previous / next model category |
+| Triangle | Insert Space while typing; otherwise retry, delete a focused conversation, or play saved audio; in Models, cancel the running download |
+| R2 while typing | Done; send from Workspace |
 | Options | Ask to close the app, once nothing is running and the conversation is saved |
 | Right stick | Scroll through the current conversation |
-| Physical USB keyboard | Type in the prompt field or the model search; Enter sends |
+| Physical USB keyboard | Type in the prompt field or the model search; Enter sends; Tab is R1 and Shift+Tab is L1 |
 
 The row at the bottom right of every page names what the buttons do there.
 
 Each conversation is an independent session. Text and metadata are saved under
-`/download0/ProsperoAI/sessions/`; generated image and audio files live inside
+`/data/prosperoai/sessions/`; generated image and audio files live inside
 the matching session directory. Deleting a session removes its associated
 content. ProsperoAI does not send these files to a network service.
+
+## Roadmap
+
+Ideas we would like to work on. They are not promises and carry no dates or order;
+[open an issue](https://github.com/blackbearreloaded/ProsperoAI/issues) to argue for one or
+to suggest another.
+
+**Models and generation**
+
+- Faster sound generation: a Stable Audio clip takes several minutes in the combined build.
+- Vision models: let a text model look at a picture.
+- Image-to-image, and variations of a generated picture.
+- More image models beside SD-Turbo, with size and step settings.
+- Speech to text: dictate a prompt through the DualSense microphone.
+- Spoken answers: read a text answer aloud, with a choice of voices.
+- Personas and system prompts, saved per conversation.
+- Generation settings remembered per model.
+
+**Model library**
+
+- Resume an interrupted download instead of starting again, and clean up what a closed app
+  left behind.
+- Delete a model from the app, with the space it frees.
+- A download queue.
+- A Hugging Face token for repositories that need an account.
+- GGUF files above 7 GiB, and split files.
+- Before downloading a model, a hint of the memory it needs and the speed to expect.
+
+**Conversations**
+
+- Longer conversations and answers: 64 messages of 4 KB each are kept today.
+- Export a conversation or a picture to USB, or fetch it from the browser page.
+- Search, rename and pin conversations.
+- Documents as context: ask about a text or PDF file from USB.
+
+**Console experience**
+
+- Menus in the console's language.
+- A phone as keyboard and remote.
+- Work in the background, with a notice when a picture or a download is done.
+- Remember the last model whatever the length of its name.
+
+**Server and integrations**
+
+- Pictures, speech and sound over the OpenAI-compatible API, beside chat.
+- An embeddings endpoint.
+- A server page in Settings: address, key, connected clients, and a switch to turn it off.
+
+**Under the hood**
+
+- A faster update download.
+- A cleaner debug log.
+- An in-app benchmark: tokens per second and time per picture for each model.
 
 ## Build
 
@@ -188,8 +348,9 @@ sudo apt update
 sudo apt install ccache clang-18 clang-format-18 clang-tidy-18 lld-18 make \
   ninja-build pkg-config python3 python3-venv tar unzip wget
 
-make check
-make app
+make lint test
+# Set up Vulkan dependencies as documented in docs/BUILDING.md.
+make app-release
 ```
 
 Outputs:
@@ -217,7 +378,8 @@ nothing; a build on `main` is started by hand (**Run workflow**). It:
 1. restores dependency and ccache data;
 2. validates source, metadata, presentation assets, and the executable writer;
 3. reproduces and verifies the clean-room runtime shim;
-4. builds the complete model-free folder and `PPSA99004.zip` with Ninja;
+4. builds pinned RADV and llama.cpp inputs, then the hybrid model-free folder and
+   `PPSA99004.zip` with Ninja;
 5. rejects an artifact containing model data;
 6. writes `SHA256SUMS` and uploads both release files; and
 7. publishes those verified files when triggered by a version tag.
@@ -260,8 +422,8 @@ tools/               Build, dependency, validation, packaging, and deploy script
 | --- | --- |
 | Shell title | `ProsperoAI` |
 | Title ID | `PPSA99004` |
-| Current app version | `01.000.000` |
-| Writable data | `/download0` |
+| Current app version | `01.003.000` |
+| Writable data | `/data/prosperoai` (the app's sandbox without storage access) |
 | Compute backend | Native PS5 AGC GPU |
 
 <!-- bbr-footer:start -->

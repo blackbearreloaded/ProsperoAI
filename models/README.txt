@@ -1,11 +1,11 @@
 ProsperoAI models
 
 This release intentionally contains no model weights. Download a curated
-ProsperoAI model bundle, then copy its entire folder to /data/homebrew/prosperoai/models. Text models use:
+ProsperoAI model bundle, then copy its entire folder to /data/prosperoai/models. Text models use:
 
-  /data/homebrew/prosperoai/models/<model-id>/model.ps5lm
-  /data/homebrew/prosperoai/models/<model-id>/tokenizer.ps5tok
-  /data/homebrew/prosperoai/models/<model-id>/model.json
+  /data/prosperoai/models/<model-id>/model.ps5lm
+  /data/prosperoai/models/<model-id>/tokenizer.ps5tok
+  /data/prosperoai/models/<model-id>/model.json
 
 Directory-based image and audio bundles keep their prepared weights below the
 same model folder and include model.json at its root. The JSON "purpose" and

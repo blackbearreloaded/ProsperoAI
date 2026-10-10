@@ -50,7 +50,7 @@ class BuildLabelTests(unittest.TestCase):
 
     def test_automation_builds_the_zip_only(self):
         workflow = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
-        self.assertIn("run: make app", workflow)
+        self.assertIn("run: make app-release", workflow)
         self.assertIn('sha256sum "$TITLE_ID.zip" > SHA256SUMS', workflow)
         self.assertIn("assets=(release/PPSA99004.zip release/SHA256SUMS)", workflow)
         # The image formats are gone: nothing that builds may name them or their tools again.
