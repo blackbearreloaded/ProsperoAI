@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "debug_log.hpp"
 #include "storage.hpp"
+#include "update.hpp"
 #include "media_output.hpp"
 #include "native_ui.hpp"
 #include "dev_script.hpp"
@@ -235,6 +236,10 @@ int main()
             // network/API server comes up.
             prospero_http_server_start(11434);
 #endif
+            // Once per launch: is a newer version listed (include/update.hpp). A scripted
+            // run asks only when its request says "updates on".
+            if (!script.active() || script.updates())
+                prospero::update::check();
             first_frame = false;
         }
     }

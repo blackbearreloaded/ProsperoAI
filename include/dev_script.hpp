@@ -35,6 +35,12 @@ class DevScript
         return capture_;
     }
     void capture_done(bool saved);
+    // "updates on" in the request: this run asks the catalog for a newer version, as a
+    // launch without a script does. Off by default, so that no question interrupts a test.
+    bool updates() const
+    {
+        return updates_;
+    }
     // The run is over: leave the main loop and close as the app always does.
     bool quit() const
     {
@@ -54,7 +60,7 @@ class DevScript
     std::string output_, capture_, typing_;
     std::vector<Step> steps_;
     std::size_t at_ = 0;
-    bool loaded_ = false, quit_ = false, failed_ = false, entered_ = false;
+    bool loaded_ = false, quit_ = false, failed_ = false, entered_ = false, updates_ = false;
     float clock_ = 0, step_clock_ = 0, limit_ = 300, stalled_ = 0;
     // Frame times since the last status line.
     unsigned frames_ = 0, slow_ = 0, unmet_ = 0;

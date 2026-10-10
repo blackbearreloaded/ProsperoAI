@@ -4,15 +4,18 @@
 #pragma once
 #include "native_ui.hpp"
 #include "model_downloader_ps5.hpp"
+#include "update.hpp"
 #include "ui/components/dialog.hpp"
 #include "ui/components/form.hpp"
 #include "ui/components/grid.hpp"
 #include "ui/components/keyboard.hpp"
 #include "ui/components/list.hpp"
+#include "ui/components/progress.hpp"
 #include "ui/components/scroll_area.hpp"
 #include "ui/components/search_field.hpp"
 #include "ui/components/tabs.hpp"
 #include "ui/components/text_field.hpp"
+#include "ui/components/text_view.hpp"
 #include "ui/components/toast.hpp"
 #include "ui/glyphs.hpp"
 #include "ui/motion.hpp"
@@ -88,6 +91,18 @@ struct NativeUI::Impl
     void draw_boot(gfx::DrawList &list) const;
     void draw_search(ui::Canvas &canvas) const;
 
+    // ---- native_ui_update.cpp: a newer version, its notes, the update at work ----
+    void setup_update();
+    void take_update_offer(ui::Feedback &feedback);
+    void open_update_offer(ui::Feedback &feedback, bool on_notes);
+    void open_update_failure(const char *reason, ui::Feedback &feedback);
+    void begin_update(ui::Feedback &feedback);
+    void update_modal(const InputFrame &input, float dt, ui::Feedback &feedback);
+    void update_tick(float dt);
+    void draw_update(ui::Canvas &canvas) const;
+    void draw_update_notes(ui::Canvas &canvas) const;
+    const char *update_state() const;
+
     // ---- native_ui_screens.cpp ----
     void draw_welcome(ui::Canvas &canvas) const;
     void draw_conversation(ui::Canvas &canvas) const;
@@ -145,6 +160,23 @@ struct NativeUI::Impl
     ui::TextField composer_;
     ui::ScrollArea chat_;
     ui::ToastStack toasts_;
+    // The update: the question, the notes, then the ring while the helper works.
+    enum class UpdateUi : std::uint8_t
+    {
+        hidden,
+        offer,
+        notes, // What's new: the release notes
+        working,
+        closing, // staged: the app is about to close
+        failed,
+    };
+    UpdateUi update_ui_ = UpdateUi::hidden;
+    update::Offer update_offer_;
+    update::Progress update_progress_;
+    ui::Dialog update_dialog_;
+    ui::ProgressRing update_ring_;
+    ui::TextView update_notes_;
+    float update_fade_ = 0, update_notes_fade_ = 0, update_closing_age_ = 0;
     float tabs_left_ = 0, tabs_width_ = 0;
 
     std::vector<int> visible_models_;
