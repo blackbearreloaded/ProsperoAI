@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 01.005.000
+
+- Output and context ceilings are now 131072 and 262144 tokens; response and session
+  storage grow dynamically to fit. Leaving output length unset (API) or on its new "Auto"
+  default (native and web) fills the remaining context instead of stopping at 512 tokens.
+- Generated images and audio now play, preview and download directly in the web chat,
+  matching what the native app already did; the model downloader's fit estimate now reads
+  the console's actual reported memory instead of a fixed figure.
+- Fixed the web Settings page rejecting a 256K context selection, several mobile layout
+  issues (the Models search/filters row, the chat header, and the conversation history
+  drawer), and conversation drafts left without a message no longer clutter history.
+- Raised the HTTP server's concurrent-connection limit so an ordinary page load no longer
+  risks "Too many active connections."
+
 ## 01.004.000
 
 - Text, image, audio and voice now use one Vulkan runtime. The older AGC inference
