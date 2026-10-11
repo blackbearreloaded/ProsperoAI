@@ -4,6 +4,10 @@ const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(k
 const save = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { $('feedback').textContent = 'Your browser could not save this conversation.'; } };
 const preferences = load('prospero-preferences', {theme:'midnight',accent:'gold',size:'normal',motion:false,contrast:false,temperature:0.7,length:512});
 preferences.sounds ??= false; preferences.volume ??= 0.4;
+for (const tokens of [8192, 16384, 32768, 65536, 131072]) {
+    if (![...$('length').options].some(option => Number(option.value) === tokens))
+        $('length').add(new Option(`${tokens} tokens`, String(tokens)));
+}
 let conversations = load('prospero-conversations', []);
 if (!Array.isArray(conversations)) conversations = [];
 conversations = conversations.filter(c => c && typeof c.id === 'string' && Array.isArray(c.messages));

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_app.hpp"
 #include "runtime_settings.hpp"
+#include "generation_limits.hpp"
 
 #include "debug_log.hpp"
 #ifdef PS5_LLAMA_VULKAN
@@ -52,8 +53,7 @@ prospero_session::Message message(const char *role, const std::string &text)
 {
     prospero_session::Message value{};
     std::snprintf(value.role, sizeof(value.role), "%s", role);
-    const auto content = truncate_utf8(text, sizeof(value.content) - 1);
-    std::memcpy(value.content, content.c_str(), content.size() + 1);
+    value.content = truncate_utf8(text, prospero_session::MessageBytes - 1);
     timeval now{};
     struct timezone zone
     {
@@ -71,9 +71,7 @@ void validate(Preferences &p)
     if (!prospero_settings::valid_context(p.context_length))
         p.context_length = 0;
     p.kv_cache = 0; // Cache precision is always automatic.
-    if (p.output_limit != 64 && p.output_limit != 128 && p.output_limit != 192 &&
-        p.output_limit != 256 && p.output_limit != 512 && p.output_limit != 1024 &&
-        p.output_limit != 2048 && p.output_limit != 4096)
+    if (!prospero_generation::valid_output_limit(p.output_limit))
         p.output_limit = 128;
     p.theme = std::min(p.theme, 1U);
     p.accent = std::min(p.accent, 2U);
@@ -301,7 +299,7 @@ void App::poll()
     if (running_ && version != displayed_stream_ &&
         !stream_lock_.test_and_set(std::memory_order_acquire))
     {
-        state_.stream = stream_buffer_;
+        state_.stream = stream_buffer_.data();
         stream_lock_.clear(std::memory_order_release);
         displayed_stream_ = version;
         ++state_.revision;
@@ -501,7 +499,7 @@ void App::stream_callback(const char *text)
     // Coalesce progress updates if the render thread is copying one. Never block inference.
     if (app->stream_lock_.test_and_set(std::memory_order_acquire))
         return;
-    std::snprintf(app->stream_buffer_, sizeof(app->stream_buffer_), "%s", text);
+    std::snprintf(app->stream_buffer_.data(), app->stream_buffer_.size(), "%s", text);
     app->stream_lock_.clear(std::memory_order_release);
     app->stream_version_.fetch_add(1, std::memory_order_release);
 }
@@ -551,7 +549,7 @@ void App::refresh_images()
     {
         if (std::strcmp(message.role, "assistant") != 0)
             continue;
-        const auto path = media_path(message.content, ".tga");
+        const auto path = media_path(message.content.c_str(), ".tga");
         if (path.empty() || path.find("..") != std::string::npos ||
             (path.find("/download0/ProsperoAI/sessions/") != 0 &&
              path.find("/download0/ProsperoAI/work/image/") != 0 &&
@@ -719,7 +717,7 @@ void App::work()
 #ifdef PS5_MEDIA_AUDIO
         for (auto it = result_.messages.rbegin(); it != result_.messages.rend(); ++it)
         {
-            const auto path = media_path(it->content, ".wav");
+            const auto path = media_path(it->content.c_str(), ".wav");
             if (path.empty())
                 continue;
             result_.status =
@@ -820,7 +818,7 @@ void App::generate()
         result_.status = "Could not save your message. Check available storage, then retry.";
         return;
     }
-    char response[prospero_session::MessageBytes]{};
+    std::vector<char> response(prospero_session::MessageBytes);
     result_.unsaved = false;
     int status = 1;
     const auto runtime = prospero_settings::get();
@@ -828,7 +826,7 @@ void App::generate()
     {
         std::vector<gpt_runtime_message_t> context{{"system", kPrompts[result_.preferences.style]}};
         for (std::size_t i = result_.session.context_start; i < result_.messages.size(); ++i)
-            context.push_back({result_.messages[i].role, result_.messages[i].content});
+            context.push_back({result_.messages[i].role, result_.messages[i].content.c_str()});
         auto settings =
             gpt_runtime_settings_t{result_.preferences.style, result_.preferences.output_limit};
         settings.context_length = runtime.context;
@@ -837,7 +835,7 @@ void App::generate()
         settings.model_id = result_.preferences.model_id.c_str();
         status =
             gpt_runtime_generate(context.data(), static_cast<unsigned>(context.size()), settings,
-                                 response, sizeof(response), &result_.stats, stream_callback);
+                                 response.data(), response.size(), &result_.stats, stream_callback);
         if (!status || !gpt_runtime_context_full() ||
             result_.session.context_start + 2 >= result_.messages.size())
             break;
@@ -847,15 +845,15 @@ void App::generate()
     if (status)
     {
         result_.notice = Notice::GenerationFailed;
-        result_.status =
-            response[0] ? response : "Generation failed. Your message is saved; you can retry.";
+        result_.status = response[0] ? response.data()
+                                     : "Generation failed. Your message is saved; you can retry.";
         refresh_sessions();
         return;
     }
     prospero_session::OutputMetadata metadata;
     metadata.model_id = model.id.c_str();
     metadata.model_name = model.name.c_str();
-    metadata.prompt = result_.messages.back().content;
+    metadata.prompt = result_.messages.back().content.c_str();
     metadata.response_style = result_.preferences.style;
     metadata.output_limit = result_.preferences.output_limit;
     metadata.requested_context = runtime.context;
@@ -866,13 +864,13 @@ void App::generate()
     {
         char path[320]{};
         archived = prospero_session::archive_text(result_.session.id, result_.messages.size(),
-                                                  response, metadata, path, sizeof(path));
+                                                  response.data(), metadata, path, sizeof(path));
     }
     else
     {
         const bool image = model.capability == Capability::Image;
-        const auto source =
-            image ? media_path(response, ".tga") : std::string("/download0/prosperoai-audio.wav");
+        const auto source = image ? media_path(response.data(), ".tga")
+                                  : std::string("/download0/prosperoai-audio.wav");
         char path[320]{};
         archived = !source.empty() &&
                    prospero_session::archive_media(
@@ -882,10 +880,10 @@ void App::generate()
                                                                : "audio",
                        source.c_str(), path, sizeof(path), &metadata);
         if (archived)
-            std::snprintf(response, sizeof(response), "%s generated locally.\n%s",
+            std::snprintf(response.data(), response.size(), "%s generated locally.\n%s",
                           image ? "Image" : "Audio", path);
     }
-    result_.messages.push_back(message("assistant", response));
+    result_.messages.push_back(message("assistant", response.data()));
     refresh_images();
     const bool saved = prospero_session::save(&result_.session, result_.messages.data(),
                                               static_cast<unsigned>(result_.messages.size()));

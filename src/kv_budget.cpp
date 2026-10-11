@@ -18,7 +18,7 @@ KvChoice choose_auto(const ModelKvShape &shape, std::uint64_t weights_bytes,
                      std::uint64_t compute_reserve_bytes, std::uint64_t free_bytes,
                      const KvType *fixed_type)
 {
-    constexpr std::array<unsigned, 6> steps{4096, 8192, 16384, 32768, 65536, 131072};
+    constexpr std::array<unsigned, 7> steps{4096, 8192, 16384, 32768, 65536, 131072, 262144};
     // A model trained at a context shorter than the smallest step (e.g. 2048) has nothing in
     // `steps` to clamp to; return its own ceiling directly rather than falling through to the
     // loop below, which would otherwise return the unclamped steps[0].

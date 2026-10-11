@@ -54,13 +54,10 @@ int main()
     Message written[2]{};
     std::snprintf(written[0].role, sizeof(written[0].role), "user");
     std::snprintf(written[0].timestamp, sizeof(written[0].timestamp), "02:08");
-    std::snprintf(written[0].content, sizeof(written[0].content), "Reverse a linked list");
+    written[0].content = "Reverse a linked list";
     std::snprintf(written[1].role, sizeof(written[1].role), "assistant");
     std::snprintf(written[1].timestamp, sizeof(written[1].timestamp), "02:09");
-    std::snprintf(written[1].content, sizeof(written[1].content),
-                  "Walk it once.\nKeep three pointers.");
-    std::memset(written[1].content, 'x', 24000);
-    written[1].content[24000] = 0;
+    written[1].content.assign(400000, 'x');
     assert(save(&record, written, 2));
 
     Record loaded{};
@@ -69,7 +66,7 @@ int main()
     assert(loaded.message_count == 2 && std::strcmp(loaded.model_id, model) == 0);
     assert(std::strcmp(read[0].role, "user") == 0 && std::strcmp(read[0].timestamp, "02:08") == 0);
     assert(std::strcmp(read[1].timestamp, "02:09") == 0);
-    assert(std::strcmp(read[1].content, written[1].content) == 0);
+    assert(read[1].content == written[1].content);
 
     assert(matches(loaded, "text", "LINKED") == false); // title is still default
     assert(matches(loaded, "text", "QWEN"));

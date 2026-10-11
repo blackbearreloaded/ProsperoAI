@@ -220,9 +220,9 @@ bool write_message(const char *id, unsigned index, const Message &message)
     std::FILE *file = std::fopen(temporary, "wb");
     if (!file)
         return false;
-    const std::size_t content_length = std::strlen(message.content);
+    const std::size_t content_length = message.content.size();
     bool written = std::fprintf(file, "%s\n%s\n", message.role, message.timestamp) > 0 &&
-                   std::fwrite(message.content, 1, content_length, file) == content_length;
+                   std::fwrite(message.content.data(), 1, content_length, file) == content_length;
     written = std::fclose(file) == 0 && written;
     if (!written)
     {
@@ -268,8 +268,14 @@ bool read_message(const char *id, unsigned index, Message *message)
     }
     std::memcpy(parsed.role, role, std::strlen(role) + 1);
     std::memcpy(parsed.timestamp, timestamp, stamp + 1);
-    const std::size_t bytes = std::fread(parsed.content, 1, sizeof(parsed.content) - 1, file);
-    parsed.content[bytes] = '\0';
+    parsed.content.resize(MessageBytes);
+    const std::size_t bytes = std::fread(parsed.content.data(), 1, MessageBytes, file);
+    if (bytes == MessageBytes && std::fgetc(file) != EOF)
+    {
+        std::fclose(file);
+        return false;
+    }
+    parsed.content.resize(bytes);
     std::fclose(file);
     *message = parsed;
     return true;

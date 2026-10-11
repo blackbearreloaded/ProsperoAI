@@ -101,7 +101,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
     assert(count >= 2 && std::strcmp(messages[count - 1].role, "user") == 0);
     if (std::strcmp(messages[count - 1].content, "Long response") == 0)
     {
-        assert(settings.max_output_tokens == 4096 && settings.context_length == 32768);
+        assert(settings.max_output_tokens == 65536 && settings.context_length == 32768);
         assert(settings.model_id && std::strcmp(settings.model_id, "model-499") == 0);
         const std::string text(24000, 'x');
         for (unsigned i = 0; i < 20; ++i)
@@ -110,7 +110,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
         }
         std::snprintf(output, capacity, "%s", text.c_str());
-        stats->generated_tokens = 4096;
+        stats->generated_tokens = 65536;
         return 0;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
@@ -220,7 +220,7 @@ int main(int argc, char **argv)
         assert(app.state().session_search.size() == 1 && app.state().session_search[0].text);
         assert(prospero_session::contains(app.state().session_search[0].text->c_str(),
                                           "complete response"));
-        assert(std::strstr(app.state().messages.back().content, "世界"));
+        assert(app.state().messages.back().content.find("世界") != std::string::npos);
         assert(app.state().stats_valid && app.state().stats.generated_tokens == 10);
         assert(told(app, prospero::Notice::ReplyReady));
         assert(app.select_model(12));
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
         assert(app.send("A second try"));
         settle(app);
         assert(app.state().messages.size() == 10);
-        assert(std::strcmp(app.state().messages[8].content, "A second try") == 0 &&
+        assert(app.state().messages[8].content == "A second try" &&
                std::strcmp(app.state().messages[9].role, "assistant") == 0);
         assert(app.state().preferences.output_limit == 192); // Legacy preference loaded above.
         assert(app.state().preferences.context_length == 0);
@@ -275,7 +275,7 @@ int main(int argc, char **argv)
         preferences.context_length = 32768;
         preferences.kv_cache = 2; // Legacy manual precision is normalized back to Auto.
         preferences.thinking = true;
-        preferences.output_limit = 4096;
+        preferences.output_limit = 65536;
         app.set_preferences(preferences);
         settle(app);
         // An API client may have selected another model between UI requests.
@@ -289,8 +289,8 @@ int main(int argc, char **argv)
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         assert(saw_long_stream);
-        assert(std::strlen(app.state().messages.back().content) == 24000);
-        assert(app.state().stats.generated_tokens == 4096);
+        assert(app.state().messages.back().content.size() == 24000);
+        assert(app.state().stats.generated_tokens == 65536);
     }
     {
         prospero::App app;
@@ -300,7 +300,7 @@ int main(int argc, char **argv)
         assert(app.state().preferences.reduced_motion && app.state().preferences.accent == 2);
         assert(app.state().preferences.context_length == 32768);
         assert(app.state().preferences.kv_cache == 0 && app.state().preferences.thinking);
-        assert(app.state().preferences.output_limit == 4096);
+        assert(app.state().preferences.output_limit == 65536);
         saved.begin()->second.record.model_id[0] = 'x';
         assert(app.open_session(0));
         settle(app);

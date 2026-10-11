@@ -11,7 +11,8 @@ namespace prospero_settings {
 struct Runtime { unsigned context = 0, kv = 0; bool thinking = false; };
 inline std::mutex mutex;
 inline bool valid_context(unsigned n) {
-    return n == 0 || n == 4096 || n == 8192 || n == 16384 || n == 32768 || n == 65536 || n == 131072;
+    return n == 0 || n == 4096 || n == 8192 || n == 16384 || n == 32768 || n == 65536 ||
+           n == 131072 || n == 262144;
 }
 inline Runtime read_unlocked() {
     Runtime p;

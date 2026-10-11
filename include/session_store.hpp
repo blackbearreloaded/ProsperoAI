@@ -8,13 +8,16 @@
 #include <cstdint>
 #include <cstring>
 #include <cctype>
+#include <string>
 
 namespace prospero_session
 {
 
 constexpr unsigned MessageCapacity = 64;
 constexpr unsigned CatalogCapacity = 64;
-constexpr unsigned MessageBytes = 32768;
+// Long responses are bounded separately from the context window. Keep enough
+// UTF-8 storage for the supported 64K-token response ceiling.
+constexpr unsigned MessageBytes = 2 * 1024 * 1024;
 // Room for a downloaded file's ID, "<owner>-<repository>--<file>.gguf". At 48 bytes a
 // longer ID was cut, and the conversation no longer matched its model.
 constexpr unsigned ModelIdBytes = 384;
@@ -23,7 +26,7 @@ struct Message
 {
     char role[12];
     char timestamp[9];
-    char content[MessageBytes];
+    std::string content;
 };
 
 struct Record

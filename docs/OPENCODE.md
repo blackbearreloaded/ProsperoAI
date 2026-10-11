@@ -24,10 +24,11 @@ title to load it. The server then requires `Authorization: Bearer <key>` on all 
 routes; the built-in web page does not supply this header, so adding a key breaks it.
 Keep keys out of Git and PR descriptions.
 
-The Vulkan context defaults to 4096 tokens. For OpenCode, put `16384` in
-`context_size.txt` beside `api_key.txt`, then restart. Supported values are
-512–16384, capped by the model's trained context. Larger contexts consume more
-GPU memory. The benchmark report used 4096; its buffer figures do not describe 16K.
+The Vulkan context is selected in ProsperoAI's Generation settings and defaults to Auto.
+For older builds, `context_size.txt` beside `api_key.txt` remains a 512–16384 compatibility
+override. Current API requests may select 512–262144 with `context_tokens`, capped by the
+model's trained context and available memory. Larger contexts consume more GPU memory.
+The benchmark report used 4096; its buffer figures do not describe larger contexts.
 
 ## Configure OpenCode
 
@@ -47,7 +48,7 @@ by default, matching the server's unauthenticated default above:
       "models": {
         "Mistral-7B-Instruct-v0.3.Q4_0.gguf": {
           "name": "Mistral PS5",
-          "limit": {"context": 16384, "output": 4096},
+          "limit": {"context": 16384, "output": 8192},
           "tool_call": true
         }
       }
@@ -81,10 +82,11 @@ Invalid or incomplete tool output returns an error rather than executing a
 fabricated call. Model ability to choose useful tools still needs workload testing. In an OpenCode read test with automatic tool choice, Mistral 7B answered with invented file contents instead of calling the tool. A diagnostic proxy forcing `tool_choice=required` on the first OpenCode request did complete the `read` tool and returned the real `PROSPERO_TOOL_OK` file contents. That verifies the protocol roundtrip, not automatic tool selection. API compatibility does not establish coding-agent reliability for this model.
 
 Requests accept up to 128 text messages and 256 KiB including headers. Content
-may be a string, null, or an array of text parts. Output defaults to 512 tokens and is capped at 4096;
+may be a string, null, or an array of text parts. Output defaults to 512 tokens and is capped at 131072;
 `max_tokens` and `max_completion_tokens` are accepted. The optional
-`context_tokens` extension selects 512-16384 tokens for a request; omitting it
-uses `context_size.txt` or the 4096-token default. Temperature defaults to
+`context_tokens` extension selects 512-262144 tokens for a request; omitting it
+uses the shared Generation setting. The actual output is always capped by the space remaining
+after the prompt. Temperature defaults to
 zero (greedy); values above zero use top-k 40 / top-p 0.95 sampling. Only `n=1`
 and text responses are supported; custom stop sequences are rejected. Requests
 must use Content-Length; chunked request bodies are rejected. Unknown model IDs

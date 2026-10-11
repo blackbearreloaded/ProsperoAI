@@ -18,6 +18,10 @@ Updated: 2026-10-11. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
 - Shared web/native conversation create, read and delete passed against the console HTTP
   server. Host self-update integration passes outside the managed sandbox; its Unix socket
   transport is blocked by the sandbox itself.
+- Long-generation plumbing now accepts up to 131072 output tokens and 262144 context tokens.
+  A full 32712-token MiniCPM5 run reached the 32K context boundary with `length`; a 0.8B
+  Qwen3.5 smoke run loaded and generated successfully at 256K context. A full 128K output
+  run is not yet claimed because that model emitted EOS after one token.
 
 ## Release preparation
 

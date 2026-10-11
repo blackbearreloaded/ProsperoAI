@@ -548,3 +548,20 @@ bounded residency move to the subsequent draft PR.
 - Final host validation: lint passed; all 50 tracked tests passed with one opt-in real-model test
   skipped; the release ZIP contains 121 entries, the ELF has entry `0x120`, 14 program
   headers and 15 NEEDED libraries, and `self-updater.elf` is present.
+
+## 2026-10-11 — extended output and context limits
+
+- Replaced the 4096-token output cap and 16K request-context cap with shared validated
+  limits. The current API/native ceiling is 131072 output tokens and 262144 context tokens;
+  response/session storage is dynamic with a 2 MiB byte guard.
+- Host HTTP tests, native controller/session tests, lint and the PS5 Vulkan folder build pass.
+- On `PPSA99023`, MiniCPM5 generated 32712 completion tokens from a 56-token prompt,
+  filling a 32768-token context and returning `finish_reason: length`. This exceeded both
+  the old 4096-token and 32 KiB response limits without a crash or truncation.
+- Added `Qwen3.5-0.8B-Q4_0.gguf` (563036064 bytes, SHA-256
+  `57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf`) as the small
+  long-context probe. It loaded at `context_tokens: 262144` and returned the requested
+  six-token smoke response. The first 131072-output request ended normally after one token
+  because the model selected EOS, so a full 128K output is not yet verified.
+- An initial 2 MiB fixed native streaming buffer caused a pre-main/early-start failure;
+  moving that buffer to heap storage restored a clean launch and HTTP service. No reboot.

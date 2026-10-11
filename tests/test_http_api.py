@@ -121,21 +121,29 @@ class HttpApiTests(unittest.TestCase):
         for route in ["/api/generate", "/api/chat"]:
             body = {"model": "tiny.gguf", "prompt": "limits",
                     "messages": [{"role": "user", "content": "limits"}],
-                    "options": {"num_predict": 4096, "num_ctx": 16384}}
+                    "options": {"num_predict": 131072, "num_ctx": 262144}}
             _, response = self.request(route, body)
             data = json.loads(response)
-            self.assertEqual(data.get("response") or data["message"]["content"], "4096:16384")
+            self.assertEqual(data.get("response") or data["message"]["content"], "131072:262144")
+            body["options"] = {"num_predict": 131073, "num_ctx": 262145}
+            _, response = self.request(route, body)
+            data = json.loads(response)
+            self.assertEqual(data.get("response") or data["message"]["content"], "131072:262144")
             body["prompt"] = "long"
             body["messages"][0]["content"] = "long"
             _, response = self.request(route, body)
             data = json.loads(response)
             self.assertEqual(len(data.get("response") or data["message"]["content"]), 24000)
-        _, response = self.request(body={"model": "tiny.gguf", "max_tokens": 4096, "context_tokens": 16384,
+        _, response = self.request(body={"model": "tiny.gguf", "max_tokens": 131072, "context_tokens": 262144,
                                        "messages": [{"role": "user", "content": "limits"}]})
-        self.assertEqual(json.loads(response)["choices"][0]["message"]["content"], "4096:16384")
+        self.assertEqual(json.loads(response)["choices"][0]["message"]["content"], "131072:262144")
+        header, response = self.request(body={"model": "tiny.gguf", "max_tokens": 131073,
+                                             "messages": [{"role": "user", "content": "limits"}]})
+        self.assertIn("400 Bad Request", header)
+        self.assertEqual(json.loads(response)["error"]["code"], "invalid_max_tokens")
 
     def test_context_validation_and_preserved_defaults(self):
-        for value in [0, -1, 16385, "8192"]:
+        for value in [0, -1, 262145, "8192"]:
             header, response = self.request(body={"model": "tiny.gguf", "context_tokens": value,
                                                  "messages": [{"role": "user", "content": "limits"}]})
             self.assertIn("400 Bad Request", header)

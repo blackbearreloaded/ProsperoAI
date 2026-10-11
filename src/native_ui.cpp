@@ -977,18 +977,24 @@ void NativeUI::Impl::build_form()
                          static_cast<int>(p.style));
         form_.add_choice(7, "Response length",
                          {"64 tokens", "128 tokens", "192 tokens", "256 tokens", "512 tokens",
-                          "1024 tokens", "2048 tokens", "4096 tokens"},
-                         p.output_limit <= 256    ? static_cast<int>(p.output_limit / 64 - 1)
-                         : p.output_limit == 512  ? 4
-                         : p.output_limit == 1024 ? 5
-                         : p.output_limit == 2048 ? 6
-                                                  : 7);
-        constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072};
+                          "1024 tokens", "2048 tokens", "4096 tokens", "8192 tokens",
+                          "16384 tokens", "32768 tokens", "65536 tokens", "131072 tokens"},
+                         p.output_limit <= 256     ? static_cast<int>(p.output_limit / 64 - 1)
+                         : p.output_limit == 512   ? 4
+                         : p.output_limit == 1024  ? 5
+                         : p.output_limit == 2048  ? 6
+                         : p.output_limit == 4096  ? 7
+                         : p.output_limit == 8192  ? 8
+                         : p.output_limit == 16384 ? 9
+                         : p.output_limit == 32768 ? 10
+                                                   : 11);
+        constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
         int selected_context = 0;
-        for (int i = 0; i < 7; ++i)
+        for (int i = 0; i < 8; ++i)
             if (contexts[i] == p.context_length)
                 selected_context = i;
-        form_.add_choice(17, "Context length", {"Auto", "4K", "8K", "16K", "32K", "64K", "128K"},
+        form_.add_choice(17, "Context length",
+                         {"Auto", "4K", "8K", "16K", "32K", "64K", "128K", "256K"},
                          selected_context);
         form_.add_toggle(19, "Thinking", p.thinking);
         form_.add_value(9, "Processing", "On this console");
@@ -1032,10 +1038,11 @@ void NativeUI::Impl::apply_form()
     else if (category_ == 1)
     {
         p.style = static_cast<unsigned>(form_.choice_index(6));
-        constexpr unsigned limits[] = {64, 128, 192, 256, 512, 1024, 2048, 4096};
+        constexpr unsigned limits[] = {64,   128,  192,   256,   512,   1024,  2048,
+                                       4096, 8192, 16384, 32768, 65536, 131072};
         p.output_limit = limits[form_.choice_index(7)];
-        constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072};
-        p.context_length = contexts[std::clamp(form_.choice_index(17), 0, 6)];
+        constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
+        p.context_length = contexts[std::clamp(form_.choice_index(17), 0, 7)];
         p.kv_cache = 0;
         p.thinking = form_.toggle_value(19);
     }
@@ -1124,7 +1131,7 @@ void NativeUI::Impl::sync()
     {
         auto &row = chat_rows_[i];
         const bool stored = i < state.messages.size();
-        const char *value = stored ? state.messages[i].content : state.stream.c_str();
+        const char *value = stored ? state.messages[i].content.c_str() : state.stream.c_str();
         const char *role = stored ? state.messages[i].role : "assistant";
         if (i >= previous)
             row.age = 0;
