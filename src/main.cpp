@@ -24,7 +24,9 @@
 #endif
 #include <SDL2/SDL.h>
 #include <algorithm>
+#include <cstdlib>
 #include <cstdio>
+#include <unistd.h>
 #include <vector>
 
 void prospero_setup_sdl_memory();
@@ -120,6 +122,17 @@ int main()
     // Filesystem access first, while this is the only thread: every path the app uses
     // is settled here (vulkan/storage.cpp).
     const prospero::Storage &storage = prospero::prepare_storage();
+#ifdef PS5_LLAMA_VULKAN
+    // The UI renderer also creates a Vulkan instance. llama.cpp snapshots its
+    // profiling environment while the first Vulkan instance is initialized,
+    // so configure it before constructing the display rather than on the first
+    // inference request.
+    if (access("/app0/vulkan_profile.txt", F_OK) == 0)
+    {
+        setenv("GGML_VK_PERF_LOGGER", "1", 1);
+        setenv("GGML_VK_PERF_LOGGER_FREQUENCY", "1", 1);
+    }
+#endif
 #endif
     // The debug log's switch is read here, before anything else can go wrong.
     prospero::debug::start("/download0/ProsperoAI/logs");
