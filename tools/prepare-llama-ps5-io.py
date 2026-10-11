@@ -76,3 +76,21 @@ if marker not in text:
     }
 '''
     vulkan.write_text(text[:begin] + body + text[end:])
+
+# Oberon's RDNA2 UMA benefits from computing four adjacent standard-quant
+# output rows per subgroup. A console A/B on Mistral 7B Q4_0 measured
+# 65.51 versus 62.93 decode tokens/s (+4.1%). Keep this PS5-only rather than
+# changing the generic upstream AMD heuristic.
+replace(vulkan, '''        if (device->architecture == AMD_GCN) {
+            rm_stdq = 2;
+            rm_kq = 4;
+            rm_stdq_int = 4;
+        }
+''', '''        if (device->architecture == AMD_GCN) {
+            rm_stdq = 2;
+            rm_kq = 4;
+            rm_stdq_int = 4;
+        } else if (device->architecture == AMD_RDNA2 && device->uma) {
+            rm_stdq = 2;
+        }
+''')

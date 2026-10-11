@@ -648,3 +648,22 @@ bounded residency move to the subsequent draft PR.
   4 would have been rejected), and a realistic cold-load burst (the 6 static assets plus
   `/v1/models` and `/api/conversations`) all succeeded concurrently. Host lint and all 55
   tests pass.
+
+## 2026-10-12 — RDNA2 UMA mul_mat_vec row heuristic (PS5-only), measured +4%
+
+- GPU timestamps on `PPSA99023` identified the decode hotspots on Mistral 7B Q4_0:
+  `MUL_MAT_VEC q4_0 m=14336,n=1,k=4096` at ~6.0-7.7 ms and the fused
+  `MUL_MAT_ADD ... m=4096,k=14336` at ~3.5-5.3 ms out of ~15.8 ms GPU time per token.
+  Profiling itself costs throughput, so its tokens/s is not comparable with a normal run.
+- The pinned llama.cpp gives AMD GCN `rm_stdq = 2` (4 output rows per workgroup for
+  standard quants) but leaves RDNA2 at the conservative default of 1 (2 rows). The PS5-only
+  build patch in `tools/prepare-llama-ps5-io.py` now sets `rm_stdq = 2` for
+  `AMD_RDNA2 && uma`, which is Oberon here, and leaves the generic upstream heuristic alone.
+- Fair A/B, identical folder deploy and identical protocol (Mistral 7B Q4_0, context 512,
+  batch/ubatch 128, 64 generated tokens, 3 runs, no profiler build):
+  reference median `62.9287` tokens/s, 4-row variant median `65.5106` tokens/s, about
+  `+4.1%`. All 6 runs passed with valid deterministic output.
+- The winning `eboot.bin` was rebuilt from the committed patch and deployed over FTP with
+  mode `755`; the deployed build re-measured `65.4261` tokens/s median (3/3 passed), which
+  confirms the gain comes from the committed source and not from the experiment tree.
+- Evidence: `performance/2026-10-12/rdna2-rm-stdq-{baseline,4rows,4rows-deployed}.json`.
