@@ -545,6 +545,6 @@ bounded residency move to the subsequent draft PR.
 - Media passed through HTTP: SD-Turbo 30.324 s, Stable Audio 148.888 s and Kokoro 89.014 s.
   Artifacts match the prior candidate hashes, WAV properties are valid with no clipping, and
   text generation passed before media and after every model.
-- Final host validation: lint passed; all 55 tests passed with one opt-in real-model test
+- Final host validation: lint passed; all 50 tracked tests passed with one opt-in real-model test
   skipped; the release ZIP contains 121 entries, the ELF has entry `0x120`, 14 program
   headers and 15 NEEDED libraries, and `self-updater.elf` is present.
