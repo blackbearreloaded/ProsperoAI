@@ -82,11 +82,12 @@ void scan()
         const std::string source = preset.files[0].source;
         const std::string basename = source.substr(source.find_last_of('/') + 1);
         const auto found = std::find_if(models.begin(), models.end(), [&](const Model &m)
-                                       { return m.id == id || m.id == basename; });
+                                        { return m.id == id || m.id == basename; });
         if (found != models.end())
         {
             const unsigned index = found->text_index;
-            models.push_back({legacy, std::string(preset.name) + " (GGUF)", "", kVulkanText, index});
+            models.push_back(
+                {legacy, std::string(preset.name) + " (GGUF)", "", kVulkanText, index});
         }
     }
     for (const auto &preset : prospero_model_download::presets)
@@ -191,6 +192,10 @@ bool gpt_runtime_context_full()
     if (selected >= models.size())
         return false;
     return models[selected].kind == kVulkanText && prospero_vulkan::gpt_runtime_context_full();
+}
+std::uint64_t gpt_runtime_vulkan_heap_bytes()
+{
+    return prospero_vulkan::gpt_runtime_vulkan_heap_bytes();
 }
 namespace
 {

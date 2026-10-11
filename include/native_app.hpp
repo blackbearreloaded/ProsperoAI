@@ -29,7 +29,7 @@ struct Model
 };
 struct Preferences
 {
-    unsigned style = 0, output_limit = 128;
+    unsigned style = 0, output_limit = 0; // 0 = Auto (fill the remaining context)
     unsigned context_length = 0, kv_cache = 0;
     bool thinking = false;
     unsigned theme = 0, accent = 0, volume = 35, text_size = 0;

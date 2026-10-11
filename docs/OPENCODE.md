@@ -82,11 +82,13 @@ Invalid or incomplete tool output returns an error rather than executing a
 fabricated call. Model ability to choose useful tools still needs workload testing. In an OpenCode read test with automatic tool choice, Mistral 7B answered with invented file contents instead of calling the tool. A diagnostic proxy forcing `tool_choice=required` on the first OpenCode request did complete the `read` tool and returned the real `PROSPERO_TOOL_OK` file contents. That verifies the protocol roundtrip, not automatic tool selection. API compatibility does not establish coding-agent reliability for this model.
 
 Requests accept up to 128 text messages and 256 KiB including headers. Content
-may be a string, null, or an array of text parts. Output defaults to 512 tokens and is capped at 131072;
-`max_tokens` and `max_completion_tokens` are accepted. The optional
+may be a string, null, or an array of text parts. Output is capped at 131072 tokens;
+omitting `max_tokens`/`max_completion_tokens` fills the remaining context instead of
+stopping early, so it is always bounded by the space remaining after the prompt and
+stops sooner on its own end-of-generation token. Pass a smaller or larger explicit
+value to override. The optional
 `context_tokens` extension selects 512-262144 tokens for a request; omitting it
-uses the shared Generation setting. The actual output is always capped by the space remaining
-after the prompt. Temperature defaults to
+uses the shared Generation setting. Temperature defaults to
 zero (greedy); values above zero use top-k 40 / top-p 0.95 sampling. Only `n=1`
 and text responses are supported; custom stop sequences are rejected. Requests
 must use Content-Length; chunked request bodies are rejected. Unknown model IDs

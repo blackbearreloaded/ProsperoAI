@@ -47,6 +47,10 @@ bool gpt_runtime_context_full()
 {
     return true;
 }
+std::uint64_t gpt_runtime_vulkan_heap_bytes()
+{
+    return 0;
+}
 bool gpt_runtime_select_model(unsigned i)
 {
     text_selected = i;

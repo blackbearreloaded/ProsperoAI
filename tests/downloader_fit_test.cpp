@@ -53,6 +53,11 @@ void line(const char *, const char *, ...)
 {
 }
 } // namespace prospero::debug
+// No Vulkan device on the host; estimate_fit() falls back to its known-heap constant.
+std::uint64_t gpt_runtime_vulkan_heap_bytes()
+{
+    return 0;
+}
 
 int main()
 {

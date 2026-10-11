@@ -565,3 +565,34 @@ bounded residency move to the subsequent draft PR.
   because the model selected EOS, so a full 128K output is not yet verified.
 - An initial 2 MiB fixed native streaming buffer caused a pre-main/early-start failure;
   moving that buffer to heap storage restored a clean launch and HTTP service. No reboot.
+
+## 2026-10-11 — auto output fill, VRAM-derived fit estimate, web media rendering
+
+- An omitted `max_tokens`/`num_predict` (API) or "Auto" `output_limit` (native Response
+  length, now the default) fills the remaining context instead of stopping at a fixed
+  512-token default; the existing remaining-context clamp and EOS stop still bound it.
+  Native UI gained an "Auto" entry on Response length, mirroring Context length's.
+- On `PPSA99023`, Qwen3.5-0.8B with no `max_tokens` generated 8151 completion tokens into an
+  8192-token context (`finish_reason: length`, `total_tokens: 8192`), and separately 32726
+  into a 32768-token context (`total_tokens: 32768`) — the auto fill tracks whatever context
+  is requested, not a fixed ceiling.
+- `prospero_model_download::estimate_fit` now derives its comfortable/ceiling thresholds from
+  the Vulkan backend's actually reported heap (`gpt_runtime_vulkan_heap_bytes`, forwarded
+  through the text/media router) instead of a hardcoded figure, falling back to the known
+  11,712 MiB RADV figure when no device is registered (host tests).
+- Added a `GET /download0/<path>` HTTP route, gated by the same bearer-key check as the rest
+  of the API, serving only the fresh-output and archived-media paths the runtime itself
+  writes (mirrors the native app's own `media_path`/`refresh_images` allowlist); rejects any
+  other path or one containing `..` with 404. Verified on `PPSA99023`: fetching a freshly
+  generated SD-Turbo `.tga` returned the expected 512x512x4+18-byte file with a correct
+  header, and a Stable Audio `.wav` returned a valid RIFF file; three traversal/disallowed
+  paths were rejected with 404.
+- The web UI previously showed the raw `/download0/...` path as text with no way to view,
+  play or download the result (the native app already renders these inline). `app.js` now
+  detects the same markers, strips them from the visible text, and fetches the file through
+  the new route: a `.tga` is decoded client-side (plain 32-bit uncompressed TGA, no new
+  dependency) onto a canvas with a PNG download link; a `.wav` gets an `<audio controls>`
+  element and a download link. CSP's `img-src`/`media-src` extended to allow `blob:`.
+- Regression after all of the above, on `PPSA99023`: Bonsai answered correctly (bounded
+  `max_tokens`), SD-Turbo completed in 29.7 s, Stable Audio in 153.1 s, matching prior
+  baselines. Host lint and all 55 tests pass; the PS5 Vulkan folder build links cleanly.

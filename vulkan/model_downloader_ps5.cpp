@@ -29,14 +29,24 @@ int scePthreadJoin(void *, void **);
 
 namespace prospero_model_download {
 Fit estimate_fit(std::uint64_t file_bytes) {
-    // The RADV heap is fixed (11,712 MiB reported, docs/VK_LOG.md); about 1 GiB goes to the
-    // interface and a margin, leaving roughly 10.7 GiB. These file-size badges are
-    // estimates: catalog metadata cannot determine a model's KV/compute allocations
-    // or prove that a chosen model/context fits the actual RADV allocation ceiling.
-    constexpr std::uint64_t kComfortableBytes = 8ULL * 1024 * 1024 * 1024;
-    constexpr std::uint64_t kCeilingBytes = 10ULL * 1024 * 1024 * 1024 + 717ULL * 1024 * 1024;
-    if (file_bytes < kComfortableBytes) return Fit::Fits;
-    if (file_bytes <= kCeilingBytes) return Fit::Tight;
+    // Derive the thresholds from the Vulkan backend's actual reported heap rather than a
+    // hardcoded figure, so this tracks reality if the reported heap ever changes. Falls back
+    // to the known RADV heap figure (11,712 MiB, docs/VK_LOG.md) when the backend has not
+    // registered a device yet (host tests, or called before the Vulkan backend initializes).
+    // About 1 GiB goes to the interface and a margin, leaving roughly 10.7 GiB; comfortable
+    // headroom beyond that leaves room for KV/compute allocations at a typical context. These
+    // file-size badges are still estimates: catalog metadata cannot determine a model's actual
+    // KV/compute allocations or prove that a chosen model/context fits the allocation ceiling.
+    constexpr std::uint64_t kFallbackTotalBytes = 11712ULL * 1024 * 1024;
+    constexpr std::uint64_t kInterfaceReserveBytes = 755ULL * 1024 * 1024;
+    constexpr std::uint64_t kKvComputeHeadroomBytes = 2765ULL * 1024 * 1024;
+    const std::uint64_t reported_total = gpt_runtime_vulkan_heap_bytes();
+    const std::uint64_t total = reported_total ? reported_total : kFallbackTotalBytes;
+    const std::uint64_t ceiling = total > kInterfaceReserveBytes ? total - kInterfaceReserveBytes : 0;
+    const std::uint64_t comfortable =
+        ceiling > kKvComputeHeadroomBytes ? ceiling - kKvComputeHeadroomBytes : 0;
+    if (file_bytes < comfortable) return Fit::Fits;
+    if (file_bytes <= ceiling) return Fit::Tight;
     return Fit::DoesNotFit;
 }
 namespace {

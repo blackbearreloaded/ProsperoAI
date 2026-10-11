@@ -976,18 +976,19 @@ void NativeUI::Impl::build_form()
         form_.add_choice(6, "Response style", {"Balanced", "Precise", "Creative"},
                          static_cast<int>(p.style));
         form_.add_choice(7, "Response length",
-                         {"64 tokens", "128 tokens", "192 tokens", "256 tokens", "512 tokens",
-                          "1024 tokens", "2048 tokens", "4096 tokens", "8192 tokens",
+                         {"Auto", "64 tokens", "128 tokens", "192 tokens", "256 tokens",
+                          "512 tokens", "1024 tokens", "2048 tokens", "4096 tokens", "8192 tokens",
                           "16384 tokens", "32768 tokens", "65536 tokens", "131072 tokens"},
-                         p.output_limit <= 256     ? static_cast<int>(p.output_limit / 64 - 1)
-                         : p.output_limit == 512   ? 4
-                         : p.output_limit == 1024  ? 5
-                         : p.output_limit == 2048  ? 6
-                         : p.output_limit == 4096  ? 7
-                         : p.output_limit == 8192  ? 8
-                         : p.output_limit == 16384 ? 9
-                         : p.output_limit == 32768 ? 10
-                                                   : 11);
+                         p.output_limit == 0       ? 0
+                         : p.output_limit <= 256   ? static_cast<int>(p.output_limit / 64)
+                         : p.output_limit == 512   ? 5
+                         : p.output_limit == 1024  ? 6
+                         : p.output_limit == 2048  ? 7
+                         : p.output_limit == 4096  ? 8
+                         : p.output_limit == 8192  ? 9
+                         : p.output_limit == 16384 ? 10
+                         : p.output_limit == 32768 ? 11
+                                                   : 12);
         constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
         int selected_context = 0;
         for (int i = 0; i < 8; ++i)
@@ -1038,9 +1039,9 @@ void NativeUI::Impl::apply_form()
     else if (category_ == 1)
     {
         p.style = static_cast<unsigned>(form_.choice_index(6));
-        constexpr unsigned limits[] = {64,   128,  192,   256,   512,   1024,  2048,
-                                       4096, 8192, 16384, 32768, 65536, 131072};
-        p.output_limit = limits[form_.choice_index(7)];
+        constexpr unsigned limits[] = {0,    64,   128,  192,   256,   512,   1024,
+                                       2048, 4096, 8192, 16384, 32768, 65536, 131072};
+        p.output_limit = limits[std::clamp(form_.choice_index(7), 0, 13)];
         constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
         p.context_length = contexts[std::clamp(form_.choice_index(17), 0, 7)];
         p.kv_cache = 0;

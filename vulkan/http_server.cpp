@@ -422,8 +422,9 @@ bool serve_ui_asset(const NetApi &api, int sock, const char *path)
                       "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n"
                       "X-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\n"
                       "Content-Security-Policy: default-src 'self'; style-src 'self'; script-src "
-                      "'self'; connect-src 'self'; font-src 'self'; img-src 'self' data:; "
-                      "frame-ancestors 'none'\r\nConnection: close\r\n\r\n",
+                      "'self'; connect-src 'self'; font-src 'self'; img-src 'self' data: blob:; "
+                      "media-src 'self' blob:; frame-ancestors 'none'\r\nConnection: "
+                      "close\r\n\r\n",
                       asset.type, size);
         send_all(api, sock, header, std::strlen(header));
         char buffer[16384];
@@ -541,7 +542,7 @@ void handle_generate(const NetApi &api, int sock, const char *request_body)
     const gpt_runtime_message_t messages[1] = {{"user", prompt}};
     std::vector<char> response_text(kResponseTextCapacity);
     const unsigned max_tokens = request_option(request_body, "num_predict",
-                                               prospero_generation::DefaultOutputTokens,
+                                               prospero_generation::MaxOutputTokens,
                                                prospero_generation::MaxOutputTokens);
     const unsigned context_tokens = request_option(request_body, "num_ctx", 0,
                                                    prospero_generation::MaxContextTokens);
@@ -602,7 +603,7 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
     gpt_runtime_stats_t stats{};
     const bool ok = run_generation(
         messages, message_count, response_text.data(), response_text.size(),
-        request_option(request_body, "num_predict", prospero_generation::DefaultOutputTokens,
+        request_option(request_body, "num_predict", prospero_generation::MaxOutputTokens,
                        prospero_generation::MaxOutputTokens),
         &stats, model,
         request_option(request_body, "num_ctx", 0, prospero_generation::MaxContextTokens));
@@ -956,6 +957,60 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
     send_json(api, sock, response.c_str());
 }
 
+// Same allowlist the native app uses to recognize a generated-media reference inside a
+// message's own text (src/native_app.cpp:media_path/refresh_images): no traversal, and only
+// the fresh-output or archived-media paths the runtime itself writes under /download0.
+bool media_path_allowed(const std::string &path)
+{
+    if (path.find("..") != std::string::npos)
+        return false;
+    static const char *prefixes[] = {
+        "/download0/ProsperoAI/sessions/", "/download0/ProsperoAI/work/image/",
+        "/download0/ProsperoAI/work/audio/", "/download0/ProsperoAI/work/voice/",
+        "/download0/prosperoai-image-", "/download0/prosperoai-audio.wav"};
+    for (const char *prefix : prefixes)
+        if (path.compare(0, std::strlen(prefix), prefix) == 0)
+            return true;
+    return false;
+}
+
+void handle_media_file(const NetApi &api, int sock, const char *path)
+{
+    if (!media_path_allowed(path))
+    {
+        send_status(api, sock, "404 Not Found", "text/plain", "Not found.");
+        return;
+    }
+    FILE *file = std::fopen(path, "rb");
+    if (!file)
+    {
+        send_status(api, sock, "404 Not Found", "text/plain", "Not found.");
+        return;
+    }
+    std::fseek(file, 0, SEEK_END);
+    const long size = std::ftell(file);
+    std::rewind(file);
+    const std::size_t path_length = std::strlen(path);
+    const bool is_wav = path_length >= 4 && std::strcmp(path + path_length - 4, ".wav") == 0;
+    if (size < 0 || size > 64 * 1024 * 1024)
+    {
+        std::fclose(file);
+        send_status(api, sock, "500 Internal Server Error", "text/plain", "Media unavailable.");
+        return;
+    }
+    char header[256];
+    std::snprintf(header, sizeof(header),
+                  "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n"
+                  "X-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\nConnection: "
+                  "close\r\n\r\n",
+                  is_wav ? "audio/wav" : "application/octet-stream", size);
+    send_all(api, sock, header, std::strlen(header));
+    char buffer[16384];
+    for (std::size_t count; (count = std::fread(buffer, 1, sizeof(buffer), file)) != 0;)
+        send_all(api, sock, buffer, count);
+    std::fclose(file);
+}
+
 bool handle_conversations(const NetApi &api, int sock, const char *method, const char *path,
                           const char *body)
 {
@@ -1177,6 +1232,8 @@ void handle_connection(const NetApi &api, int sock)
         handle_openai_chat(api, sock, body);
 #endif
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+    else if (std::strcmp(method, "GET") == 0 && std::strncmp(path, "/download0/", 11) == 0)
+        handle_media_file(api, sock, path);
     else if (std::strncmp(path, "/api/conversations", 18) == 0 &&
              handle_conversations(api, sock, method, path, body))
         ;

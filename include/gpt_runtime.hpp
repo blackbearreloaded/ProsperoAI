@@ -50,6 +50,9 @@ bool gpt_runtime_select_model(unsigned index);
 void gpt_runtime_refresh_models();
 int gpt_runtime_prepare();
 bool gpt_runtime_context_full();
+// Reported total Vulkan device memory in bytes, or 0 when the backend is not available
+// (host tests, or called before the Vulkan backend has registered its device).
+std::uint64_t gpt_runtime_vulkan_heap_bytes();
 int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned message_count,
                          const gpt_runtime_settings_t &settings, char *output,
                          std::size_t output_capacity, gpt_runtime_stats_t *stats,

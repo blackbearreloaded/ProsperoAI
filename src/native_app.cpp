@@ -72,7 +72,7 @@ void validate(Preferences &p)
         p.context_length = 0;
     p.kv_cache = 0; // Cache precision is always automatic.
     if (!prospero_generation::valid_output_limit(p.output_limit))
-        p.output_limit = 128;
+        p.output_limit = 0;
     p.theme = std::min(p.theme, 1U);
     p.accent = std::min(p.accent, 2U);
     p.volume = std::min(p.volume, 100U);

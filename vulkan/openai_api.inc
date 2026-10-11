@@ -85,7 +85,7 @@ struct ApiChatRequest {
     ApiJson tools = ApiJson::array();
     std::string forced_tool;
     bool stream = false, include_usage = false, structured = false, required = false;
-    unsigned max_tokens = prospero_generation::DefaultOutputTokens;
+    unsigned max_tokens = prospero_generation::MaxOutputTokens;
     unsigned context_tokens = 0;
     float temperature = 0;
     bool parallel_tools = true;
@@ -104,7 +104,7 @@ ApiChatRequest parse_api_chat(const ApiJson &body) {
         result.include_usage = body["stream_options"].value("include_usage", false);
     const auto limit = body.contains("max_completion_tokens")
                            ? body["max_completion_tokens"]
-                           : body.value("max_tokens", ApiJson(prospero_generation::DefaultOutputTokens));
+                           : body.value("max_tokens", ApiJson(prospero_generation::MaxOutputTokens));
     if (!limit.is_number_integer() || limit.get<long long>() <= 0)
         throw ApiError("400 Bad Request", "invalid_max_tokens", "max_tokens must be a positive integer.");
     if (limit.get<long long>() > prospero_generation::MaxOutputTokens)

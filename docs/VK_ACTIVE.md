@@ -22,6 +22,12 @@ Updated: 2026-10-11. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
   A full 32712-token MiniCPM5 run reached the 32K context boundary with `length`; a 0.8B
   Qwen3.5 smoke run loaded and generated successfully at 256K context. A full 128K output
   run is not yet claimed because that model emitted EOS after one token.
+- An omitted output-length request now fills the remaining context (verified 8192- and
+  32768-token full fills on `PPSA99023`) instead of a fixed 512-token default; native
+  Response length gained a matching "Auto" default. The downloader's fit badge now reads
+  the Vulkan backend's real reported heap instead of a hardcoded figure. The web UI can now
+  view/play/download generated images and audio inline (new authenticated `/download0/<path>`
+  route plus client-side TGA decode), matching what the native app already did. PR #22.
 
 ## Release preparation
 

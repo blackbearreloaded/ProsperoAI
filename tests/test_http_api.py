@@ -142,7 +142,7 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn("400 Bad Request", header)
         self.assertEqual(json.loads(response)["error"]["code"], "invalid_max_tokens")
 
-    def test_context_validation_and_preserved_defaults(self):
+    def test_context_validation_and_auto_output_default(self):
         for value in [0, -1, 262145, "8192"]:
             header, response = self.request(body={"model": "tiny.gguf", "context_tokens": value,
                                                  "messages": [{"role": "user", "content": "limits"}]})
@@ -150,9 +150,9 @@ class HttpApiTests(unittest.TestCase):
             self.assertEqual(json.loads(response)["error"]["code"], "invalid_context_tokens")
         _, response = self.request(body={"model": "tiny.gguf",
                                        "messages": [{"role": "user", "content": "limits"}]})
-        self.assertEqual(json.loads(response)["choices"][0]["message"]["content"], "512:0")
+        self.assertEqual(json.loads(response)["choices"][0]["message"]["content"], "131072:0")
         _, response = self.request("/api/generate", {"model": "tiny.gguf", "prompt": "limits"})
-        self.assertEqual(json.loads(response)["response"], "512:0")
+        self.assertEqual(json.loads(response)["response"], "131072:0")
 
     def test_public_ui_preserves_private_api(self):
         header, body = self.request("/", key="private")
