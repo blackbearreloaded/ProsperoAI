@@ -1020,7 +1020,7 @@ void NativeUI::Impl::build_form()
         const std::string label = PROSPERO_BUILD_LABEL;
         form_.add_value(10, "Version",
                         label.empty() ? PROSPERO_VERSION : PROSPERO_VERSION "  \xC2\xB7  " + label);
-        form_.add_value(11, "Made by", "BlackBearReloaded");
+        form_.add_value(11, "Made by", "BlackBearReloaded and Quatrixone");
         form_.add_value(12, "Interface", "ps5-homebrew-ui");
         form_.add_value(13, "Graphics", "ps5-opengl");
         form_.add_value(14, "License", "GPL-3.0-or-later");
