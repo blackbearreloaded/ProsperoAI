@@ -1,0 +1,29 @@
+[
+  {
+    "test": "8k-1024",
+    "prompt_tokens": 30,
+    "generated_tokens": 1024,
+    "response_bytes": 4717,
+    "decode_seconds": 10.956153,
+    "tokens_per_second": 93.46346295090986,
+    "prefill_seconds": 0.052084
+  },
+  {
+    "test": "16k-4096",
+    "prompt_tokens": 44,
+    "generated_tokens": 4096,
+    "response_bytes": 20619,
+    "decode_seconds": 45.535134,
+    "tokens_per_second": 89.95251886158938,
+    "prefill_seconds": 0.07197
+  },
+  {
+    "test": "16k-long-prompt",
+    "prompt_tokens": 10026,
+    "generated_tokens": 32,
+    "response_bytes": 134,
+    "decode_seconds": 0.388587,
+    "tokens_per_second": 82.34964113570449,
+    "prefill_seconds": 11.211464
+  }
+]

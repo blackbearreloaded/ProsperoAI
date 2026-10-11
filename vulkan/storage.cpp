@@ -177,38 +177,57 @@ bool copy_file(const std::string &from, const std::string &to)
     return ok;
 }
 
-void copy_tree(const std::string &from, const std::string &to, int depth)
+bool copy_tree(const std::string &from, const std::string &to, int depth)
 {
     ::mkdir(to.c_str(), 0777);
+    if (!is_directory(to))
+        return false;
+    bool ok = true;
     for (const std::string &name : names_in(from))
     {
         const std::string source = from + "/" + name;
         const std::string target = to + "/" + name;
         if (is_directory(source))
         {
-            if (depth < 4)
-                copy_tree(source, target, depth + 1);
+            ok = depth < 4 && copy_tree(source, target, depth + 1) && ok;
         }
         else if (!is_file(target))
-            copy_file(source, target);
+            ok = copy_file(source, target) && ok;
     }
+    return ok;
 }
 
 // Once: the settings and conversations the app kept in its sandbox are copied to the
 // data folder (the originals stay, for a console where access is refused next time).
 void adopt_sandbox_data()
 {
+    const std::string sandbox = "/mnt/sandbox/" + settled.title_id + "_000" + kSandboxDownload;
+    const std::string work_marker = settled.data_root + "/.sandbox-work-copied";
+    if (!is_file(work_marker) && is_directory(sandbox + "/ProsperoAI/work"))
+    {
+        bool ok = true;
+        for (const char *kind : {"text", "image", "audio", "voice"})
+        {
+            const std::string source = sandbox + "/ProsperoAI/work/" + kind;
+            if (is_directory(source))
+                ok = copy_tree(source, settled.data_root + "/work/" + kind, 0) && ok;
+        }
+        if (ok)
+            if (std::FILE *file = std::fopen(work_marker.c_str(), "wb"))
+                std::fclose(file);
+    }
     const std::string marker = settled.data_root + "/.sandbox-data-copied";
     if (is_file(marker))
         return;
-    const std::string sandbox = "/mnt/sandbox/" + settled.title_id + "_000" + kSandboxDownload;
     const std::string settings = settled.data_root + "/prosperoai.cfg";
+    bool ok = true;
     if (is_file(sandbox + "/prosperoai.cfg") && !is_file(settings))
-        copy_file(sandbox + "/prosperoai.cfg", settings);
+        ok = copy_file(sandbox + "/prosperoai.cfg", settings);
     if (is_directory(sandbox + "/ProsperoAI/sessions"))
-        copy_tree(sandbox + "/ProsperoAI/sessions", settled.data_root + "/sessions", 0);
-    if (std::FILE *file = std::fopen(marker.c_str(), "wb"))
-        std::fclose(file);
+        ok = copy_tree(sandbox + "/ProsperoAI/sessions", settled.data_root + "/sessions", 0) && ok;
+    if (ok)
+        if (std::FILE *file = std::fopen(marker.c_str(), "wb"))
+            std::fclose(file);
 }
 
 bool starts_with(const char *path, const char *prefix, const char **rest)
@@ -255,7 +274,8 @@ const Storage &prepare_storage()
     else
         ::mkdir(kSandboxData, 0777);
     settled.model_root = settled.data_root + "/models";
-    for (const char *folder : {"/models", "/sessions", "/logs", "/work"})
+    for (const char *folder : {"/models", "/sessions", "/logs", "/work", "/work/text",
+                               "/work/image", "/work/audio", "/work/voice", "/work/tmp"})
         ::mkdir((settled.data_root + folder).c_str(), 0777);
     model_root_slot() = settled.model_root.c_str();
 
@@ -310,7 +330,12 @@ std::string real_path(const char *path)
     if (starts_with(path, "/app0/models", &rest))
         return settled.model_root + rest;
     if (!real_paths)
+    {
+        if (!settled.data_root.empty() && !starts_with(path, kSandboxData, &rest) &&
+            std::strcmp(path, kSandboxSettings) != 0 && starts_with(path, kSandboxDownload, &rest))
+            return settled.data_root + "/work/tmp" + rest;
         return path;
+    }
     if (starts_with(path, kSandboxApp, &rest))
         return settled.app_dir + rest;
     if (starts_with(path, kSandboxData, &rest))
@@ -319,7 +344,7 @@ std::string real_path(const char *path)
         return settled.data_root + "/prosperoai.cfg";
     // Whatever else was written to the sandbox's root: the runtimes' scratch files.
     if (starts_with(path, kSandboxDownload, &rest))
-        return settled.data_root + "/work" + rest;
+        return settled.data_root + "/work/tmp" + rest;
     return path;
 }
 } // namespace prospero

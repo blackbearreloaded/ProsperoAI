@@ -18,7 +18,11 @@ struct gpt_runtime_settings_t
     unsigned max_output_tokens;
     float temperature = 0;
     const char* model_id = nullptr; // Select atomically with Vulkan generation.
+    unsigned context_tokens = 0; // Zero uses the model-load configuration.
     const char* grammar = nullptr; // Optional GBNF constraint (Vulkan only).
+    unsigned context_length = 0;   // 0 = Auto (see prospero_kv::choose_auto)
+    const char* kv_cache = nullptr; // nullptr/"auto", "f16", "q8_0", "q4_0"
+    bool thinking = false;
 };
 
 struct gpt_runtime_stats_t

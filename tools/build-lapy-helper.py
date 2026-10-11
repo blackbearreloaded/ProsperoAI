@@ -19,6 +19,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / ".deps/lapy"
+# Keep the helper source/protocol used by release 01.003.000 during media migration.
 LAPY_COMMIT = "c3bdfe3a399366d8eacfc580f20b19fd03b16ca3"
 LAPY = CACHE / f"PS5-Lapy-JB-Daemon-{LAPY_COMMIT[:7]}"
 SDK = CACHE / "ps5-payload-sdk-v0.42"

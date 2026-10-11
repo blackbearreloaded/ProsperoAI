@@ -1,0 +1,7 @@
+[    2.933] [sys] [ProsperoAI/Vulkan] inference config: ctx=4096 batch=256 ubatch=256 threads=4 threads_batch=4 flash=auto
+[   12.201] [sys] [ProsperoAI/Vulkan] inference config: ctx=8192 batch=256 ubatch=256 threads=4 threads_batch=4 flash=auto
+[   23.214] [sys] [ProsperoAI/Vulkan] gpu_stats rc=00000000 prompt=30 generated=1024 reused=0 prefill_us=52084 elapsed_us=11008237
+[   25.604] [sys] [ProsperoAI/Vulkan] inference config: ctx=16384 batch=256 ubatch=256 threads=4 threads_batch=4 flash=auto
+[   71.216] [sys] [ProsperoAI/Vulkan] gpu_stats rc=00000000 prompt=44 generated=4096 reused=0 prefill_us=71970 elapsed_us=45607104
+[   82.926] [sys] [ProsperoAI/Vulkan] gpu_stats rc=00000000 prompt=10026 generated=32 reused=4 prefill_us=11211464 elapsed_us=11600051
+[  101.289] [sys] [ProsperoAI/Vulkan] gpu_stats rc=00000000 prompt=12 generated=32 reused=4 prefill_us=102904 elapsed_us=436756

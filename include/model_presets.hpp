@@ -132,12 +132,24 @@ inline constexpr PresetFile preset_files_4[] = {
     {"kokoro-82m-fp16/weights/model.fp16.meta.json", "weights/model.fp16.meta.json", "d01ee4ba415b0e0dd8abfaa1dde9bc27f814db963b1aab52ce1be83b32e19e56", 120670ULL},
     {"provenance/model-preparation.json", "licenses/provenance/model-preparation.json", "f9e710c3079daa116b5341964acfb3e1aea5fc21909bfa7745709cdc56b3c996", 14562ULL},
 };
+inline constexpr PresetFile preset_files_5[] = {
+    {"MiniCPM5-2B-Q8_0.gguf", "", "c5415f8989bf88a8288f1b55a3cc371af53c07b0faa220a63bd7a990cfaba078", 2679710688ULL},
+};
+#ifdef PROSPERO_PRISM_RUNTIME
+inline constexpr PresetFile preset_files_6[] = {
+    {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "", "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3", 5946648928ULL},
+};
+#endif
 inline constexpr Preset presets[] = {
     {"mistral-7b-instruct-v0.3-q4-0.gguf", "Mistral 7B Instruct v0.3 Q4_0", "QuantFactory/Mistral-7B-Instruct-v0.3-GGUF", "a83fbb7c79c1afd59dfcce75272591cbe5a2412f", 0, 4113289152ULL, preset_files_0, 1},
     {"qwen3.5-9b-q4-0.gguf", "Qwen3.5 9B Q4_0", "unsloth/Qwen3.5-9B-GGUF", "3885219b6810b007914f3a7950a8d1b469d598a5", 0, 5379417312ULL, preset_files_1, 1},
     {"sd-turbo-fp16", "SD-Turbo FP16", "blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5", "77d748daee145ea432a0cc20744ba18b5ef4c137", 1, 2580079090ULL, preset_files_2, 8},
     {"stable-audio-open-small", "Stable Audio Open Small", "blackbearreloaded/ProsperoAI-Stable-Audio-Open-Small-FP16-PS5", "777d629293bbaec7b5f0a8a3042c0b435b7e94d9", 2, 1421697482ULL, preset_files_3, 73},
     {"kokoro-82m-fp16", "Kokoro 82M FP16", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 165171053ULL, preset_files_4, 34},
+    {"minicpm5-2b-q8-0.gguf", "MiniCPM5 2B Q8_0", "openbmb/MiniCPM5-2B-GGUF", "2079a22f3beaa4e306449978533478fe0522f4b3", 0, 2679710688ULL, preset_files_5, 1},
+#ifdef PROSPERO_PRISM_RUNTIME
+    {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "Ternary Bonsai 2 27B PTQ1_0", "prism-ml/Ternary-Bonsai-2-27B-gguf", "b072e1d3b35a0a630cece372c2127528e0994386", 0, 5946648928ULL, preset_files_6, 1},
+#endif
 };
 inline constexpr std::size_t preset_count = sizeof(presets) / sizeof(presets[0]);
 }

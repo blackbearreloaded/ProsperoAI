@@ -11,6 +11,11 @@ on:
       - "[0-9][0-9].[0-9][0-9][0-9].[0-9][0-9][0-9]"
   pull_request:
   workflow_dispatch:
+    inputs:
+      snapshot:
+        description: "Also publish this run's compiler cache as the build-cache snapshot (run it on main)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -76,6 +81,21 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-clang18-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             ccache-${{ runner.os }}-${{ runner.arch }}-clang18-
+
+      # GitHub drops a cache nobody used for a week, and a pull request only sees main's. When
+      # nothing was restored, start from the snapshot kept as a file of the build-cache release;
+      # a manual run on main with "snapshot" ticked replaces that file (build-cache.yml).
+      - name: Fetch the compiler cache snapshot
+        run: |
+          if [ -z "$(ls -A "$CCACHE_DIR" 2>/dev/null)" ]; then
+            url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/build-cache/ccache-clang18.tar"
+            if curl -fsSL --retry 3 -o "$RUNNER_TEMP/ccache-clang18.tar" "$url"; then
+              mkdir -p "$CCACHE_DIR"
+              tar -xf "$RUNNER_TEMP/ccache-clang18.tar" -C "$CCACHE_DIR"
+              rm "$RUNNER_TEMP/ccache-clang18.tar"
+              echo "::notice title=Compiler cache::Started from the build-cache snapshot."
+            fi
+          fi
 
       - name: Configure parallel compilation
         run: |
@@ -150,6 +170,20 @@ jobs:
       - name: Report compiler cache statistics
         if: always()
         run: ccache --show-stats
+
+      # ccache compresses what it stores, so the snapshot is a plain tar.
+      - name: Pack the compiler cache snapshot
+        if: github.event_name == 'workflow_dispatch' && inputs.snapshot
+        run: tar -cf "$RUNNER_TEMP/ccache-clang18.tar" -C "$CCACHE_DIR" .
+
+      - name: Upload the compiler cache snapshot
+        if: github.event_name == 'workflow_dispatch' && inputs.snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ccache-snapshot
+          path: ${{ runner.temp }}/ccache-clang18.tar
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Verify and archive release
         shell: bash
@@ -267,3 +301,28 @@ jobs:
           done <<< "$existing"
           # Notes written in advance, or a draft: add the two files, leave title and notes alone.
           gh release upload "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY"
+
+  shared-vulkan:
+    name: Shared Vulkan ABI and media correctness
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      HOST_CXX: clang++-18
+      CC: clang-18
+      CXX: clang++-18
+      BUILD_JOBS: 4
+      PROSPERO_REQUIRE_SHARED_VULKAN: "1"
+      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install host Vulkan toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-18 cmake ninja-build ccache glslc spirv-headers libvulkan-dev mesa-vulkan-drivers git unzip
+      - name: Fetch pinned shared sources
+        run: python3 tools/deps.py fetch llama-cpp vulkan-headers stable-diffusion-vulkan
+      - name: Build shared stack and test binaries
+        run: bash tools/build-shared-vulkan.sh host
+      - name: Run mandatory ABI and Vulkan media tests
+        run: python3 -m unittest discover -s tests -p test_shared_ggml.py -v

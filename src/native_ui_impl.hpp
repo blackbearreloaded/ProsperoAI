@@ -78,6 +78,7 @@ struct NativeUI::Impl
                      bool destructive, ui::Feedback &feedback, const char *other = "Not now");
     void change_page(int page);
     void refresh_models();
+    void refresh_sessions();
     void build_form();
     void apply_form();
     void type(char character, ui::Feedback &feedback);
@@ -153,7 +154,10 @@ struct NativeUI::Impl
     ui::TabBar tabs_, filters_;
     ui::ListView sessions_, categories_;
     ui::GridView models_;
-    ui::SearchField search_;
+    ui::SearchField search_, session_search_;
+    std::vector<unsigned> visible_sessions_;
+    unsigned session_category_ = 0;
+    std::string session_query_;
     ui::Keyboard keyboard_;
     ui::Form form_;
     ui::Dialog dialog_;

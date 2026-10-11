@@ -1,0 +1,22 @@
+{
+  "endpoint": "/api/generate",
+  "model": "MiniCPM5-2B-Q8_0.gguf",
+  "stream": false,
+  "requests": [
+    {
+      "num_ctx": 8192,
+      "num_predict": 1024,
+      "prompt": "Write a detailed tutorial on building a small HTTP server in Python. Explain every component and include complete code."
+    },
+    {
+      "num_ctx": 16384,
+      "num_predict": 4096,
+      "prompt": "Write a 3000 word detailed guide to implementing a database from scratch, covering storage, indexing, transactions, concurrency and crash recovery. Include concrete code examples for each part."
+    },
+    {
+      "num_ctx": 16384,
+      "num_predict": 32,
+      "prompt_expression": "\"Remember this repeated word list:\\n\" + \" apple\" * 10000 + \"\\nWhat fruit appears in the list? Answer briefly.\""
+    }
+  ]
+}

@@ -7,11 +7,11 @@ SHELL := /bin/bash
 
 -include .env
 
-APP_DEFINITIONS ?= PS5_DUAL_BACKEND PS5_MEDIA_AUDIO PS5_MEDIA_IMAGE PS5_SANDBOX_APP PS5_APP_HAS_DSO_HANDLE PS5_AGC_LINKED PS5_AGC_STABLE_AUDIO PS5_SD_GENERATE PS5_WRAP_MALLOC CL_TARGET_OPENCL_VERSION=120
+APP_DEFINITIONS ?= PS5_MEDIA_AUDIO PS5_MEDIA_IMAGE PS5_SANDBOX_APP PS5_APP_HAS_DSO_HANDLE PS5_SD_GENERATE PS5_WRAP_MALLOC CL_TARGET_OPENCL_VERSION=120
 APP_CXXFLAGS ?=
 APP_INCLUDE_PATHS ?= vendor/include src
-MEDIA_ARCHIVES := vendor/lib/libstable-diffusion.a vendor/lib/libggml.a vendor/lib/libggml-cpu.a vendor/lib/libggml-base.a vendor/lib/libstable-audio.a vendor/lib/libkokoro-tts.a vendor/lib/libespeak-ng.a vendor/lib/libpocket-tts-runtime.a vendor/lib/libllama.a vendor/lib/libmtmd.a vendor/lib/libvendor-hash.a vendor/lib/libtts-ggml.a vendor/lib/libtts-ggml-cpu.a vendor/lib/libtts-ggml-base.a vendor/lib/libcompat.a
-APP_STATIC_ARCHIVES ?= $(MEDIA_ARCHIVES) $(MEDIA_ARCHIVES) $(MEDIA_ARCHIVES)
+# Inference archives are selected by tools/build-vulkan-native.sh as one shared stack.
+APP_STATIC_ARCHIVES ?=
 APP_RUNTIME_MODULES ?=
 PACBREW_PACKAGES ?=
 PACBREW_INCLUDE_PATHS ?=
@@ -98,11 +98,9 @@ vulkan-smoke: ## Build PS5 Vulkan startup/device-discovery test folder (PPSA9902
 llama-vulkan-title: llama-ps5 ## Build model inference test folder (requires build/vulkan-models/stories260K.gguf)
 	@LLAMA_SMOKE=1 bash tools/build-vulkan-smoke.sh
 
-app-vulkan: llama-ps5 ## Build ProsperoAI UI/API with llama.cpp Vulkan in test slot PPSA99023
-	@PROSPERO_VULKAN_APP=1 bash tools/build-vulkan-smoke.sh
+app-vulkan: vulkan-runtime ## Alias for the shared Vulkan runtime
 
-app-vulkan-folder: llama-ps5 ## Build the Vulkan app folder in test slot PPSA99023
-	@PROSPERO_VULKAN_APP=1 bash tools/build-vulkan-smoke.sh
+app-vulkan-folder: vulkan-runtime ## Alias for the shared Vulkan runtime
 
 pacbrew:
 	@printf '%s\n' '==> [pacbrew] Fetching the pinned prebuilt ports sysroot'
@@ -124,9 +122,9 @@ $(RUNTIME): $(RUNTIME_INPUTS)
 	@printf '%s\n' '==> [libc] Generating the missing or outdated runtime'
 	@bash tools/rebuild-libc.sh
 
-app: $(RUNTIME)
+app: $(RUNTIME) shared-vulkan
 	@printf '%s\n' '==> [app] Compiling, linking, signing, and assembling the app folder'
-	@bash tools/build.sh Folder
+	@bash tools/build-hybrid-release.sh
 
 deploy:
 	@printf '%s\n' '==> [deploy] Building and publishing the app folder over FTP'
@@ -196,5 +194,27 @@ help:
 	  'make distclean       Also remove the ignored .deps/ cache'
 
 .PHONY: app-release
-app-release: app llama-ps5 ## Package the hybrid Vulkan/AGC release folder and ZIP
-	@bash tools/build-hybrid-release.sh
+app-release: app ## Package the vulkan-runtime folder and ZIP
+	@true
+
+# Runtime aliases; folder only, no console deployment.
+.PHONY: app-vulkan-media-folder sd-vulkan-check
+app-vulkan-media-folder: vulkan-runtime
+
+# Compile SD and llama together against the shared 160-name ggml ABI.
+sd-vulkan-check:
+	bash tools/build-sd-vulkan.sh
+
+.PHONY: shared-vulkan app-vulkan-shared-folder
+shared-vulkan: deps ## Build llama/SD against one ggml ABI and Vulkan backend (host-only cross build)
+	bash tools/build-shared-vulkan.sh ps5
+
+app-vulkan-shared-folder: shared-vulkan ## Shared runtime folder; no deployment
+	SHARED_SD=1 MEDIA_VULKAN=1 bash tools/build-vulkan-native.sh
+
+.PHONY: app-bonsai-folder
+app-bonsai-folder: vulkan-runtime ## Alias: shared runtime includes the Bonsai 2 preset
+
+.PHONY: vulkan-runtime
+vulkan-runtime: shared-vulkan ## Shared Prism/Vulkan text, image, audio and voice; no deployment
+	bash tools/build-vulkan-native.sh

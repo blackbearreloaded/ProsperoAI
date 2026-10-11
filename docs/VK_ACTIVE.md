@@ -1,57 +1,32 @@
 # Active work
 
-Updated: 2026-10-09. Plan: [VK_PLAN.md](VK_PLAN.md); dated evidence: [VK_LOG.md](VK_LOG.md).
+Updated: 2026-10-11. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
 
-## Current console build
+## Verified vulkan-runtime
 
-- Folder test title PPSA99023 runs the native UI rendered with Vulkan. The earlier
-  OpenGL/RADV link blocker is superseded by this Vulkan presentation path.
-- Text inference uses the current Vulkan llama.cpp backend; Image, Audio and Voice
-  link the existing AGC media backend in the same binary. SD's old ggml ABI is isolated
-  with renamed archive/object symbols. Backend switching releases resident allocations.
-- Kokoro 82M FP16 downloaded on console from its pinned manifest, passed size/SHA-256
-  verification and became visible in the combined catalog. HTTPS redirect handling and
-  writes through the sandbox's mounted model directory are verified.
-- Actual HTTP Voice generation succeeded: mono PCM16 WAV, 24000 Hz, 32400 frames
-  (1.35 s), peak 9847, 19502 nonzero samples. Then Mistral Vulkan text succeeded in
-  the same process: “Hello there! How can I assist you today?” (10 output tokens).
-- Catalog/HTTP metadata stays responsive during generation. Separate catalog and inference
-  mutexes replace the recursive-lock path that stalled earlier Voice requests.
-- Image and Audio generation in this combined build are linked but not console-tested.
-  Do not claim those generation paths are verified from Voice success.
+- One complete Prism llama/ggml pin e8fd209, GGML_MAX_NAME=160, source-built SD and
+  Vulkan media bridge. AGC inference, routing, scratch allocator and private ggml
+  copies removed. RADV still requires the console AGC platform driver.
+- Signed test eboot 10758bc0…; entry 0x120, 14 headers, baseline 15 NEEDED; one ggml_init,
+  no AGC inference/private ggml symbols. Test title PPSA99023 booted successfully.
+- Exact Bonsai PTQ1_0: 94 identical tokens on three warm runs, median **11.202328 t/s**.
+  Thinking off/on, 4K/16K, Mistral/MiniCPM5/Qwen GGUF and return to Bonsai pass.
+- Unified SD initial 29.787 s, Audio 153.245 s, Kokoro 89.337 s. Valid image/WAVs,
+  byte-identical to prior shared Vulkan fixtures; return to text after each passes.
+  These initial requests include loading, not three-run warm comparison medians.
+- Earlier AGC versus Vulkan repeat medians: SD 46.048 → 1.001 s; Audio 368.103 → 124.106;
+  voice 84.740 → 85.152 (approximately 0.5% slower, explicitly accepted).
+- Host common-ABI actual Vulkan decode/media parity and real-model ASan/UBSan prefix
+  equivalence pass. Complete host regression and lint pass; release folder/ZIP built.
+- Console remains on test23. Auto/Auto/Thinking off restored; models retained. Main
+  PPSA99004 untouched and no reboot. Legacy ID aliases require matching installed GGUF.
 
-## UI and downloads
+## PR scope
 
-- Matching icon/home background and a quiet system launch backdrop; native splash lettering
-  moved lower. User confirmed the new graphics after their console restart.
-- Models categories use L2/R2; arrows select cards. Search keyboard uses Triangle Space,
-  R2 Done. Contextual search hints replace ambiguous Search/Choose labels.
-- Pinned presets: Mistral 7B Q4_0, Qwen3.5 9B Q4_0, SD-Turbo FP16, Stable Audio Open
-  Small FP16, Kokoro 82M FP16. Bundles stay hidden until every file is verified.
-- Downloading labels and aggregate percentage/byte progress in native and HTTP UI.
-  Public GGUF browsing excludes split/mmproj files and files above 7 GiB; this leaves
-  headroom but cannot guarantee every context/model configuration fits.
-- HTTP Workspace category buttons choose a model of that type or open its preset category.
-  History has confirmed deletion and Back to Workspace preserves conversations.
+PR #15 carries the verified runtime migration and completed compatibility/download work.
+Upstream #19/#17/#18 are merged dependencies. The subsequent draft carries S0 research
+and the remaining AirLLM/Strata S1, voice profiling, peak memory, extended switching and
+capacity gates. No streaming inference, universal quality or real-time audio claim.
 
-## Verification and remaining limits
-
-- Default `make app` and native hybrid folder build/sign succeeded. Hybrid NEEDED list
-  has no additional PRX dependency versus the prior working Vulkan build; entry 0x120,
-  14 program headers. Native hybrid deployed only to PPSA99023; PPSA99004 untouched.
-- `HOST_CXX=clang++-18 make test`: 28 tests passed. Browser interaction checks passed
-  for presets, category selection, download progress, history delete/cancel/back and Speak.
-- The app now automatically starts its bundled title-scoped model-storage helper through
-  the console-local ELF loader. Verified on PS5: app launch created a new resident helper,
-  mounted shared storage and discovered Mistral/Kokoro without manually sending the helper.
-  A working local ELF loader is part of the homebrew environment. See [BUILDING.md](BUILDING.md).
-- Further Image/Audio console testing is outside the user's latest verification request.
-
-## Earlier measurements
-
-- Mistral Q4_0: Vulkan median 69.72 decode tokens/s, official upstream AGC 47.96,
-  context 4096. [Benchmark protocol and limits](VK_BENCHMARK_2026-10-08.md).
-- Raw folder eager load: Vulkan median 2.843 s, upstream AGC 1.526 s. mmap was reverted
-  after allocation stalls; compressed ffpfsc reads remain slow. These results predate
-  this UI/media integration, which has not been rebenchmarked.
-  [Loading measurements](VK_LOAD_BENCHMARK_2026-10-09.md).
+Evidence: performance/2026-10-11/vulkan-runtime-{build,bonsai,media,legacy-alias}.json.
+See [runtime](VULKAN_RUNTIME.md) and [comparison](MEDIA_VULKAN_COMPARISON.md).

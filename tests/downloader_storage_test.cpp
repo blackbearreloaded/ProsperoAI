@@ -146,7 +146,7 @@ int main()
     {
         assert(preset.kind >= 0 && preset.kind < 4);
         kinds[preset.kind] = true;
-        assert(preset.size > 0 && preset.size <= kMaxModelBytes);
+        assert(preset.size > 0 && estimate_fit(preset.size) != Fit::DoesNotFit);
         std::uint64_t total = 0;
         for (std::size_t i = 0; i < preset.count; ++i)
             total += preset.files[i].size;

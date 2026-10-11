@@ -1,0 +1,18 @@
+{
+  "firmware": "13.60",
+  "console_model": "CFI-1016A01Y",
+  "exploit_revision": null,
+  "loader_revision": null,
+  "llama_revision": "cb7934c52ca8710994b2ecc19775ebefcfdb8d01",
+  "mesa_revision": "0b2d6d1a61d9bbf89cf8beb88a696144f67c61f8",
+  "driver_sdk_revision": "95c08f27386fc698f6bbe21dde3030140a41d10b",
+  "build_image": "ubuntu@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55",
+  "comparison_before_sha256": "04e0f243908ee612dcf60e0cb25c0a954b0013531c4fcd467fb7420d71d59d8c",
+  "comparison_after_sha256": "3db12cc57e541efce75038992bc03ca94b66ec32385918f1bd6f45a3e5ee8801",
+  "baseline_runtime_revision": "bd98473028deec7240cbe891341855db3683f056",
+  "qwen_after_signed_sha256": "4b3ed42427bdb404ab2054e5606b028656fc033aaf35416be083415475914275",
+  "mistral_model_sha256": "19c3cf872246d48e7a9784d6def7a694a6c9056cfbeb98f7061d43cd0a7c8b7f",
+  "qwen_model_sha256": "17670346b4260ddcb0173965145155885024f3c9a4a24389a3370751edbcde24",
+  "baseline_public_llm_source_revision": "8b4714b",
+  "pr_base_revision": "bd54e3c74d805b8125ec83ae7efcead1021cbe70"
+}

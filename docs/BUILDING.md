@@ -60,7 +60,16 @@ Ubuntu/Debian example:
 sudo apt-get install -y clang-18 lld-18 cmake ninja-build ccache glslc spirv-headers glslang-tools python3-mako
 ```
 
-## Vulkan backend (work in progress)
+## vulkan-runtime
+
+`make vulkan-runtime` builds the test folder `build/vulkan-runtime/PPSA99023` without
+uploading or launching it. `make app` packages the same runtime for the configured
+release title. The app links one complete Prism llama/ggml pin
+`e8fd209c975c80aa7fb36a8423571ff3b1b7e955`, `GGML_MAX_NAME=160`, source-built SD and
+the Vulkan media bridge. AGC inference and private SD/TTS ggml archives are removed;
+RADV still requires the console's AGC platform driver. See [runtime details](VULKAN_RUNTIME.md).
+
+## Vulkan backend development helpers
 
 These steps need no console:
 
@@ -126,7 +135,7 @@ make llama-vulkan-title # tiny GGUF Vulkan/CPU token validation
 make app-vulkan         # complete UI/HTTP app in test slot PPSA99023
 ```
 
-Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. Production Vulkan and AGC runtimes use the `/data/prosperoai/models` directory: Vulkan discovers GGUF files and AGC discovers prepared model folders. The isolated loading benchmark still packages its fixture inside `/app0/models`. The Vulkan Models screen can browse public Hugging Face repositories and download verified GGUF files to the shared directory. Downloads are limited to 7 GiB to leave room for Vulkan weights and context memory; that limit does not guarantee every model/context combination fits. The app reaches that directory with the filesystem access Lapy gives it at launch (`vulkan/storage.cpp`); the test title PPSA99023 gets a Lapy helper built for its own title ID. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Never overwrite PPSA99004 for testing.
+Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. Production Vulkan and AGC runtimes use the `/data/prosperoai/models` directory: Vulkan discovers GGUF files and AGC discovers prepared model folders. The isolated loading benchmark still packages its fixture inside `/app0/models`. The Vulkan Models screen can browse public Hugging Face repositories and download verified GGUF files to the shared directory. Downloads use file-size memory estimates: below 8 GiB is marked fits, up to about 10.7 GiB is tight, and larger files are excluded. These estimates do not guarantee every model/context combination fits. Context length is selectable or Auto; KV precision is automatic (f16 up to 8K, q8_0 above). These new runtime choices await console verification. The app reaches that directory with the filesystem access Lapy gives it at launch (`vulkan/storage.cpp`); the test title PPSA99023 gets a Lapy helper built for its own title ID. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Never overwrite PPSA99004 for testing.
 
 Build jobs default to available CPUs (four on this host). Compiler cache defaults to `build/ccache`, including host tools. Incremental PS5 llama library build measured about 1.6 seconds with no changes; model copies and multi-gigabyte image compression still take time. Host iGPU is not used for compilation.
 
@@ -248,3 +257,40 @@ The GitHub workflow uses Ubuntu 24.04 LLVM 19 host libraries with the pinned Mes
 and SDK sources via `tools/setup-vulkan-ci.sh`, then builds the application with
 Clang 18. The existing developer `make radv` path remains available on Debian.
 Tag releases are built and attested in CI; published ZIPs are never overwritten.
+
+## Experimental shared Vulkan media builds
+
+`make app-vulkan-media-folder` builds/signs `build/prospero-vulkan-media-native/PPSA99023`
+with the shared Vulkan audio/TTS bridge and legacy SD. `make app-vulkan-shared-folder`
+builds/signs `build/prospero-vulkan-shared-native/PPSA99023` with source-built SD, llama and
+Vulkan against one 160-name ggml ABI, without private SD/tts ggml archives. Legacy AGC text
+still exists for comparison; CPU media kernels remain. Neither target deploys automatically.
+Default packaging retains the comparison runtime until console correctness/speed gates pass.
+Lapy source/SDK/protocol remain those of release 01.003.000 with title-specific helper identity.
+
+`make sd-vulkan-check` now builds that same shared llama/SD stack. The original 64-vs-160
+ABI mismatch is resolved by rebuilding all consumers consistently, not by overriding SD alone.
+For host ABI/device/decoder/parallel/parser and real-Vulkan numerical tests, run:
+
+```sh
+CC=clang-18 CXX=clang++-18 bash tools/build-shared-vulkan.sh host
+TMPDIR="$PWD/build/context-validation-tmp" HOST_CXX=clang++-18 make test
+```
+
+The Vulkan tests use llvmpipe when present and do not benchmark the PS5 GPU. Shared tests
+skip when the optional host build is absent; the tiny GGUF decode runs when the existing
+`build/vulkan-models/stories260K.gguf` fixture is present. [Integration details](VK_MEDIA_MIGRATION.md).
+
+## MiniCPM5 optional preset
+
+See [MINICPM5.md](MINICPM5.md) for its pinned model and template tests.
+
+## Bonsai 2 and existing text models
+
+`make app-bonsai-folder` builds/signs `build/prospero-prism-native/PPSA99023`
+against pinned Prism llama.cpp with ternary/Hadamard Vulkan kernels and a pinned
+Ternary Bonsai 2 27B PTQ1_0 preset. It retains GGUF text, legacy AGC bundles and
+media paths, using the Vulkan bridge for audio/TTS. This is an experimental folder
+build; it does not deploy or change the production title. Stock/shared builds omit
+this preset because their runtime cannot interpret Prism's private quantization.
+See [BONSAI2_PS5.md](BONSAI2_PS5.md) for inputs, console measurements and limitations.

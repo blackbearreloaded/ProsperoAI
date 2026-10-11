@@ -1,9 +1,11 @@
 # RADV/Vulkan backend plan
 
-ProsperoAI runs llama.cpp on the PS5 through AGC (`src/*_runtime_ps5.cpp`, title `PPSA99004`,
-verified on console). This branch's goal is a second backend: llama.cpp's Vulkan backend on
-Mihawk's RADV driver for the PS5, so the GPU is reachable from ordinary Vulkan code instead of
-AGC's native interface. AGC stays the fallback; nothing here removes it.
+The target is `vulkan-runtime`: one pinned Prism ggml/Vulkan runtime for text, image,
+audio and voice on Mihawk's RADV driver. Remove legacy AGC inference and private ggml
+copies after supported-path correctness checks. Report performance tradeoffs explicitly;
+a small voice regression does not require retaining a second backend. Platform AGC
+driver imports remain necessary for RADV. Capacity and voice optimization belong to a
+separate follow-up PR.
 
 This is the top-level plan: what must be proved, the rules that constrain how, and where the
 detail lives. Read once per session. Current step, next action and the last verified runs are in
@@ -19,11 +21,23 @@ A requirement is proved by a console run, not by a plausible build. In order:
    `readelf -l` program headers, and (once available) Mihawk's `make inspect` validator from
    `.deps/mihawk-vulkan-review`.
 3. **Boots to `main`** — a title that only calls `radv_GetInstanceProcAddr` and writes a marker
-   proves the loader/relocation/TLS/init path independently of Vulkan. This is the current gate;
-   see VK_ACTIVE.md.
+   proves the loader/relocation/TLS/init path independently of Vulkan. See VK_ACTIVE.md
+   for the current gate status.
 4. **`vkCreateInstance` succeeds** — proves RADV reaches the real AGC driver (not AGC stubs).
 5. **A model runs through llama.cpp's Vulkan backend** — the actual goal: compare tokens/s against
    the AGC backend for the same model and quantization.
+6. **Media correctness and performance** — Image, Audio and Voice each produce valid
+   outputs on identical fixed fixtures. Compare against the AGC baseline on PS5 and
+   disclose regressions rather than implying every path is faster. Report initial load
+   separately, generation median over at least three runs, peak memory,
+   and repeated text/media switching. Host Vulkan parity is a prerequisite, not this gate.
+7. **One runtime** — rebuild every ggml producer/consumer with the same pinned ABI; remove
+   private renamed ggml copies, legacy AGC inference, routing and scratch allocation after
+   all supported paths pass correctness checks. Migrate legacy text models to GGUF before retiring their path.
+   Necessary CPU operations may remain within the shared runtime, explicitly documented.
+
+Keep Lapy's source, SDK and protocol from release 01.003.000 during this migration.
+Test-title helpers retain their own title identity; never substitute the production helper.
 
 A pass at one gate does not imply the next. Record exact launch result codes, klog output (or its
 absence), and screenshots for every attempt — see AGENTS.md's debugging order.

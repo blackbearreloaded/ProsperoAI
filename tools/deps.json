@@ -49,6 +49,26 @@
       "url": "https://github.com/mihawk-99/PS5_PayloadSDK.git",
       "commit": "95c08f27386fc698f6bbe21dde3030140a41d10b",
       "path": ".deps/mihawk-sdk-review"
+    },
+    {
+      "name": "stable-diffusion-vulkan",
+      "about": "Experimental SD backend built against the same ggml ABI as Vulkan text",
+      "kind": "archive",
+      "url": "https://codeload.github.com/leejet/stable-diffusion.cpp/tar.gz/f89d9b13d730eabeede7314ce49dacd18d3c90c2",
+      "sha256": "14339079bcbfe5567c80bdff4f83bda54d7a6660594470c36e4d1dd18134ecd4",
+      "extract": ".deps/stable-diffusion-vulkan",
+      "strip": 1,
+      "creates": ".deps/stable-diffusion-vulkan/CMakeLists.txt"
+    },
+    {
+      "name": "llama-prism",
+      "about": "Isolated Bonsai 2 PTQ1_0/PQ2_0 and Hadamard runtime, Prism release prism-b10772-e8fd209; does not replace shared media llama",
+      "kind": "archive",
+      "url": "https://api.github.com/repos/PrismML-Eng/llama.cpp/tarball/e8fd209c975c80aa7fb36a8423571ff3b1b7e955",
+      "sha256": "5cb0bf3bba4e96ae1d34bb99e213fdd39cbc405f1e0dbe031b7004e812eb733d",
+      "extract": "build/prism-llama-source",
+      "strip": 1,
+      "creates": "build/prism-llama-source/CMakeLists.txt"
     }
   ]
 }

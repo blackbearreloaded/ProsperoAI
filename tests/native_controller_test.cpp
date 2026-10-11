@@ -93,12 +93,26 @@ bool gpt_runtime_context_full()
     return false;
 }
 int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
-                         const gpt_runtime_settings_t &, char *output, std::size_t capacity,
+                         const gpt_runtime_settings_t &settings, char *output, std::size_t capacity,
                          gpt_runtime_stats_t *stats, gpt_runtime_progress_fn progress)
 {
     off_ui();
     ++generations;
     assert(count >= 2 && std::strcmp(messages[count - 1].role, "user") == 0);
+    if (std::strcmp(messages[count - 1].content, "Long response") == 0)
+    {
+        assert(settings.max_output_tokens == 4096 && settings.context_length == 32768);
+        assert(settings.model_id && std::strcmp(settings.model_id, "model-499") == 0);
+        const std::string text(24000, 'x');
+        for (unsigned i = 0; i < 20; ++i)
+        {
+            progress(text.c_str());
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        std::snprintf(output, capacity, "%s", text.c_str());
+        stats->generated_tokens = 4096;
+        return 0;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(15));
     progress("Thinking about your question...");
     std::snprintf(output, capacity, "%s",
@@ -152,7 +166,13 @@ bool erase(const char *id)
     off_ui();
     return saved.erase(id) != 0;
 }
-bool archive_media(const char *, unsigned, const char *, const char *, char *, std::size_t)
+bool archive_text(const char *, unsigned, const char *, const OutputMetadata &, char *, std::size_t)
+{
+    off_ui();
+    return true;
+}
+bool archive_media(const char *, unsigned, const char *, const char *, char *, std::size_t,
+                   const OutputMetadata *)
 {
     off_ui();
     return false;
@@ -163,12 +183,19 @@ int main(int argc, char **argv)
 {
     assert(argc == 3);
     std::remove(PROSPERO_SETTINGS_PATH);
+    {
+        std::ofstream settings(PROSPERO_SETTINGS_PATH);
+        settings << "style=2\ntokens=192\n";
+    }
     ui_thread = std::this_thread::get_id();
     {
         prospero::App app;
         assert(app.initialize());
         settle(app);
         assert(app.state().models.size() == 500 && app.state().model_counts[0] == 500);
+        assert(app.state().preferences.style == 2 && app.state().preferences.output_limit == 192);
+        assert(app.state().preferences.context_length == 0 &&
+               app.state().preferences.kv_cache == 0 && !app.state().preferences.thinking);
         const auto before_refresh = app.state();
         assert(app.refresh_models());
         assert(!app.refresh_models());
@@ -190,6 +217,9 @@ int main(int argc, char **argv)
         assert(!app.send("Duplicate"));
         settle(app);
         assert(app.state().messages.size() == 2 && app.state().sessions.size() == 1);
+        assert(app.state().session_search.size() == 1 && app.state().session_search[0].text);
+        assert(prospero_session::contains(app.state().session_search[0].text->c_str(),
+                                          "complete response"));
         assert(std::strstr(app.state().messages.back().content, "世界"));
         assert(app.state().stats_valid && app.state().stats.generated_tokens == 10);
         assert(told(app, prospero::Notice::ReplyReady));
@@ -237,11 +267,30 @@ int main(int argc, char **argv)
         assert(app.state().messages.size() == 10);
         assert(std::strcmp(app.state().messages[8].content, "A second try") == 0 &&
                std::strcmp(app.state().messages[9].role, "assistant") == 0);
+        assert(app.state().preferences.output_limit == 192); // Legacy preference loaded above.
+        assert(app.state().preferences.context_length == 0);
         auto preferences = app.state().preferences;
         preferences.reduced_motion = true;
         preferences.accent = 2;
+        preferences.context_length = 32768;
+        preferences.kv_cache = 2; // Legacy manual precision is normalized back to Auto.
+        preferences.thinking = true;
+        preferences.output_limit = 4096;
         app.set_preferences(preferences);
         settle(app);
+        // An API client may have selected another model between UI requests.
+        selected = 12;
+        assert(app.send("Long response"));
+        bool saw_long_stream = false;
+        while (app.busy())
+        {
+            app.poll();
+            saw_long_stream |= app.state().stream.size() == 24000;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        assert(saw_long_stream);
+        assert(std::strlen(app.state().messages.back().content) == 24000);
+        assert(app.state().stats.generated_tokens == 4096);
     }
     {
         prospero::App app;
@@ -249,6 +298,9 @@ int main(int argc, char **argv)
         settle(app);
         assert(app.state().selected_model == 499);
         assert(app.state().preferences.reduced_motion && app.state().preferences.accent == 2);
+        assert(app.state().preferences.context_length == 32768);
+        assert(app.state().preferences.kv_cache == 0 && app.state().preferences.thinking);
+        assert(app.state().preferences.output_limit == 4096);
         saved.begin()->second.record.model_id[0] = 'x';
         assert(app.open_session(0));
         settle(app);

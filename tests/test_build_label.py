@@ -98,9 +98,11 @@ class BuildLabelTests(unittest.TestCase):
 
     def test_build_checks_the_label_first_and_writes_it(self):
         build = (ROOT / "tools/build.sh").read_text(encoding="utf-8")
-        self.assertIn("printf '%s\\n' \"$BUILD_LABEL\" > \"$app/build-label.txt\"", build)
-        self.assertLess(build.index("BUILD_LABEL must be"), build.index("setup-native-dependencies.sh"))
-        self.assertLess(build.index('rm -rf -- "$app"'), build.index('> "$app/build-label.txt"'))
+        self.assertIn('exec bash "$root/tools/build-hybrid-release.sh"', build)
+        self.assertLess(build.index("BUILD_LABEL must be"), build.index('bash "$root/tools/build-shared-vulkan.sh"'))
+        native = (ROOT / "tools/build-vulkan-native.sh").read_text(encoding="utf-8")
+        self.assertIn('"$app/build-label.txt"', native)
+        self.assertIn('label=${BUILD_LABEL:-vulkan-runtime}', native)
 
     def test_label_rule(self):
         build = (ROOT / "tools/build.sh").read_text(encoding="utf-8")

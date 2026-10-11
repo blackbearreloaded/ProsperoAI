@@ -1,6 +1,8 @@
 #include <CL/cl.h>
 
-#include "ps5_agc_gemm.h"
+#ifdef PROSPERO_MEDIA_VULKAN
+#include "media_vulkan.hpp"
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -166,6 +168,15 @@ uint16_t float_to_half(float value)
     return static_cast<uint16_t>(sign | (static_cast<uint32_t>(exponent) << 10) | (rounded >> 13));
 }
 
+// Check a strided half-precision view without overflowing byte arithmetic.
+bool half_view(cl_mem memory, size_t offset, size_t rows, size_t stride, size_t width)
+{
+    if (!memory || !memory->data || !rows || !width || offset > memory->size / 2)
+        return false;
+    const size_t available = memory->size / 2 - offset;
+    return width <= available && (!stride || rows - 1 <= (available - width) / stride);
+}
+
 float load_value(const cl_mem memory, size_t index)
 {
     return half_to_float(reinterpret_cast<const uint16_t *>(memory->data)[index]);
@@ -295,9 +306,17 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfo(cl_device_id, cl_devi
     switch (name)
     {
     case CL_DEVICE_NAME:
-        return write_string("PlayStation 5 AGC compatibility", size, out, written);
+#ifdef PROSPERO_MEDIA_VULKAN
+        return write_string("PS5 Vulkan media bridge (CPU fallback kernels)", size, out, written);
+#else
+        return write_string("ProsperoAI host CPU parity backend", size, out, written);
+#endif
     case CL_DRIVER_VERSION:
-        return write_string("ProsperoAI-AGC-1", size, out, written);
+#ifdef PROSPERO_MEDIA_VULKAN
+        return write_string("ProsperoAI-Vulkan-bridge-1", size, out, written);
+#else
+        return write_string("ProsperoAI-host-CPU-1", size, out, written);
+#endif
     case CL_DEVICE_EXTENSIONS:
         return write_string("cl_khr_fp16", size, out, written);
     case CL_DEVICE_MAX_WORK_GROUP_SIZE:
@@ -733,37 +752,30 @@ extern "C" int ps5cl_gemm(int half_storage, int transpose_a, int transpose_b, si
                           cl_mem b, size_t b_offset, size_t ldb, const void *beta_ptr, cl_mem c,
                           size_t c_offset, size_t ldc)
 {
-    if (!half_storage || transpose_a || !a || !b || !c)
+    if (!half_storage || transpose_a || !a || !b || !c || !alpha_ptr || !beta_ptr || !m || !n || !k)
         return -1;
     active_operation = transpose_b ? "gemm_nt" : "gemm_nn";
     const float alpha = half_to_float(*static_cast<const uint16_t *>(alpha_ptr));
     const float beta = half_to_float(*static_cast<const uint16_t *>(beta_ptr));
-    const size_t a_need = a_offset + (m - 1) * lda + k;
-    const size_t b_need = b_offset + (transpose_b ? (n - 1) * ldb + k : (k - 1) * ldb + n);
-    const size_t c_need = c_offset + (m - 1) * ldc + n;
-    if (!span_ok(a, 0, a_need * 2) || !span_ok(b, 0, b_need * 2) || !span_ok(c, 0, c_need * 2))
+    if (!half_view(a, a_offset, m, lda, k) ||
+        !half_view(b, b_offset, transpose_b ? n : k, ldb, transpose_b ? k : n) ||
+        !half_view(c, c_offset, m, ldc, n) || m > SIZE_MAX / n || m > SIZE_MAX / k ||
+        n > SIZE_MAX / k)
         return -1;
     std::vector<float> product(m * n);
-    bool host_product = n == 1;
-#ifdef PS5_AGC_STABLE_AUDIO
-    if (!host_product)
-    {
-        const auto *ap = reinterpret_cast<const uint16_t *>(a->data) + a_offset;
-        const auto *bp = reinterpret_cast<const uint16_t *>(b->data) + b_offset;
-        const size_t ae = (m - 1) * lda + k;
-        const size_t be = transpose_b ? (n - 1) * ldb + k : (k - 1) * ldb + n;
-        if (ps5_agc_gemm_f16_f32(ap, ae, bp, be, product.data(), static_cast<uint32_t>(m),
-                                 static_cast<uint32_t>(n), static_cast<uint32_t>(k),
-                                 static_cast<uint32_t>(lda), static_cast<uint32_t>(ldb),
-                                 transpose_b) != 0)
-            return -1;
-    }
+#ifdef PROSPERO_MEDIA_VULKAN
+    std::vector<float> left(m * k), right(n * k);
+    for (size_t row = 0; row < m; ++row)
+        for (size_t inner = 0; inner < k; ++inner)
+            left[row * k + inner] = load_value(a, a_offset + row * lda + inner);
+    for (size_t column = 0; column < n; ++column)
+        for (size_t inner = 0; inner < k; ++inner)
+            right[column * k + inner] = load_value(
+                b, b_offset + (transpose_b ? column * ldb + inner : inner * ldb + column));
+    if (prospero_media_vk::matmul(left.data(), right.data(), product.data(), m, n, k))
+        return -1;
 #else
-    host_product = true;
-#endif
-    // ponytail: the current AGC shader drops single-column output; this tiny
-    // projection stays on CPU until the shader gains an N=1 lane.
-    if (host_product)
+    // Host parity tests execute the same operation on the CPU.
     {
 #ifdef PS5CL_HOST_OPENMP
 #pragma omp parallel for schedule(static)
@@ -782,6 +794,7 @@ extern "C" int ps5cl_gemm(int half_storage, int transpose_a, int transpose_b, si
                 product[row * n + column] = sum;
             }
     }
+#endif
     for (size_t row = 0; row < m; ++row)
         for (size_t column = 0; column < n; ++column)
         {
@@ -799,13 +812,34 @@ extern "C" int ps5cl_gemv(int half_storage, int transpose_a, size_t m, size_t n,
                           size_t x_offset, size_t x_inc, const void *beta_ptr, cl_mem y,
                           size_t y_offset, size_t y_inc)
 {
-    if (!half_storage || !a || !x || !y)
+    if (!half_storage || !a || !x || !y || !alpha_ptr || !beta_ptr || !m || !n || !x_inc || !y_inc)
         return -1;
     active_operation = transpose_a ? "gemv_t" : "gemv_n";
     const float alpha = half_to_float(*static_cast<const uint16_t *>(alpha_ptr));
     const float beta = half_to_float(*static_cast<const uint16_t *>(beta_ptr));
     const size_t rows = transpose_a ? n : m;
     const size_t inner_count = transpose_a ? m : n;
+    if (!half_view(a, a_offset, m, lda, n) || !half_view(x, x_offset, inner_count, x_inc, 1) ||
+        !half_view(y, y_offset, rows, y_inc, 1) || rows > SIZE_MAX / inner_count)
+        return -1;
+#ifdef PROSPERO_MEDIA_VULKAN
+    std::vector<float> matrix(rows * inner_count), vector(inner_count), product(rows);
+    for (size_t inner = 0; inner < inner_count; ++inner)
+        vector[inner] = load_value(x, x_offset + inner * x_inc);
+    for (size_t row = 0; row < rows; ++row)
+        for (size_t inner = 0; inner < inner_count; ++inner)
+            matrix[row * inner_count + inner] =
+                load_value(a, a_offset + (transpose_a ? inner * lda + row : row * lda + inner));
+    if (prospero_media_vk::matmul(matrix.data(), vector.data(), product.data(), rows, 1,
+                                  inner_count))
+        return -1;
+    for (size_t row = 0; row < rows; ++row)
+    {
+        const size_t yi = y_offset + row * y_inc;
+        store_value(y, yi, alpha * product[row] + (beta != 0 ? beta * load_value(y, yi) : 0));
+    }
+    return 0;
+#else
     for (size_t row = 0; row < rows; ++row)
     {
         float sum = 0.0f;
@@ -821,6 +855,7 @@ extern "C" int ps5cl_gemv(int half_storage, int transpose_a, size_t m, size_t n,
         store_value(y, yi, value);
     }
     return 0;
+#endif
 }
 
 namespace
@@ -831,6 +866,196 @@ cl_int run_kernel(cl_kernel kernel)
     if (!kernel)
         return CL_INVALID_KERNEL;
     const std::string &name = kernel->name;
+#ifdef PROSPERO_MEDIA_VULKAN
+    auto unary_vk = [&](prospero_media_vk::Unary operation, cl_mem input, cl_mem output, int rows,
+                        int columns, float epsilon = 0.0f)
+    {
+        if (!input || !output || rows <= 0 || columns <= 0)
+            return CL_INVALID_VALUE;
+        const size_t count = static_cast<size_t>(rows) * columns;
+        if (!span_ok(input, 0, count * 2) || !span_ok(output, 0, count * 2))
+            return CL_INVALID_VALUE;
+        std::vector<float> values(count), result(count);
+        for (size_t i = 0; i < count; ++i)
+            values[i] = load_value(input, i);
+        if (prospero_media_vk::unary(operation, values.data(), result.data(), rows, columns,
+                                     epsilon))
+            return CL_OUT_OF_RESOURCES;
+        for (size_t i = 0; i < count; ++i)
+            store_value(output, i, result[i]);
+        return CL_SUCCESS;
+    };
+    if (name == "conv_1d" || name == "conv_1d_t4x4")
+    {
+        auto *input = mem_arg(kernel, 0), *weight = mem_arg(kernel, 1), *bias = mem_arg(kernel, 2),
+             *output = mem_arg(kernel, 3);
+        const int ic = kernel_arg<int>(kernel, 4), oc = kernel_arg<int>(kernel, 5);
+        const int il = kernel_arg<int>(kernel, 6), ol = kernel_arg<int>(kernel, 7),
+                  width = kernel_arg<int>(kernel, 8);
+        const bool general = name == "conv_1d";
+        const int stride = general ? kernel_arg<int>(kernel, 9) : 1;
+        const int padding = kernel_arg<int>(kernel, general ? 10 : 9);
+        const int dilation = kernel_arg<int>(kernel, general ? 11 : 10);
+        const int biased = kernel_arg<int>(kernel, general ? 12 : 11);
+        if (ic <= 0 || oc <= 0 || il <= 0 || ol <= 0 || width <= 0 || stride <= 0 ||
+            dilation <= 0 || static_cast<size_t>(ic) > SIZE_MAX / static_cast<size_t>(width))
+            return CL_INVALID_VALUE;
+        const size_t k = static_cast<size_t>(ic) * width;
+        if (!half_view(input, 0, ic, il, il) || !half_view(weight, 0, oc, k, k) ||
+            !half_view(output, 0, oc, ol, ol) || (biased && !half_view(bias, 0, 1, oc, oc)) ||
+            k > SIZE_MAX / sizeof(float) / 256 ||
+            static_cast<size_t>(oc) > SIZE_MAX / sizeof(float) / k)
+            return CL_INVALID_VALUE;
+        std::vector<float> weights(static_cast<size_t>(oc) * k);
+        for (size_t at = 0; at < weights.size(); ++at)
+            weights[at] = load_value(weight, at);
+        // Bounded im2col staging; long audio must not allocate length*channels*width.
+        for (int base = 0; base < ol;)
+        {
+            const size_t rows = std::min(256, ol - base);
+            std::vector<float> patches(rows * k), product(rows * static_cast<size_t>(oc));
+            for (size_t row = 0; row < rows; ++row)
+                for (int channel = 0; channel < ic; ++channel)
+                    for (int tap = 0; tap < width; ++tap)
+                    {
+                        const int64_t at =
+                            (static_cast<int64_t>(base) + static_cast<int64_t>(row)) * stride +
+                            static_cast<int64_t>(tap) * dilation - padding;
+                        patches[row * k + static_cast<size_t>(channel) * width + tap] =
+                            at >= 0 && at < il
+                                ? load_value(input, static_cast<size_t>(channel) * il +
+                                                        static_cast<size_t>(at))
+                                : 0;
+                    }
+            if (prospero_media_vk::matmul(patches.data(), weights.data(), product.data(), rows, oc,
+                                          k))
+                return CL_OUT_OF_RESOURCES;
+            for (int channel = 0; channel < oc; ++channel)
+                for (size_t row = 0; row < rows; ++row)
+                    store_value(output, static_cast<size_t>(channel) * ol + base + row,
+                                product[row * oc + channel] +
+                                    (biased ? load_value(bias, channel) : 0));
+            base += static_cast<int>(rows);
+        }
+        return CL_SUCCESS;
+    }
+    if (name == "linear_apply" || name == "linear_apply_f32")
+    {
+        auto *input = mem_arg(kernel, 0), *weights = mem_arg(kernel, 1), *bias = mem_arg(kernel, 2),
+             *output = mem_arg(kernel, 3);
+        const int k = kernel_arg<int>(kernel, 4), n = kernel_arg<int>(kernel, 5),
+                  biased = kernel_arg<int>(kernel, 6);
+        if (!input || !weights || !output || k <= 0 || n <= 0 || (biased && !bias))
+            return CL_INVALID_VALUE;
+        std::vector<float> left(k), right(static_cast<size_t>(n) * k), product(n);
+        for (int d = 0; d < k; ++d)
+            left[d] = load_value(input, d);
+        for (size_t d = 0; d < right.size(); ++d)
+            right[d] = load_value(weights, d);
+        if (prospero_media_vk::matmul(left.data(), right.data(), product.data(), 1, n, k))
+            return CL_OUT_OF_RESOURCES;
+        for (int d = 0; d < n; ++d)
+        {
+            const float value = product[d] + (biased ? load_value(bias, d) : 0);
+            if (name == "linear_apply_f32")
+                store_float(output, d, value);
+            else
+                store_value(output, d, value);
+        }
+        return CL_SUCCESS;
+    }
+    if (name == "attn_scores" || name == "k_scaled_attn_scores" || name == "attn_av" ||
+        name == "k_scaled_attn_ctx")
+    {
+        const bool interleaved = name == "k_scaled_attn_scores" || name == "k_scaled_attn_ctx";
+        const bool scores = name == "attn_scores" || name == "k_scaled_attn_scores";
+        const int heads = kernel_arg<int>(kernel, interleaved ? 4 : 3);
+        const int nq = kernel_arg<int>(kernel, interleaved ? 3 : 4);
+        const int nk = interleaved ? nq : kernel_arg<int>(kernel, 5);
+        const int width = kernel_arg<int>(kernel, interleaved ? 5 : 6);
+        if (heads <= 0 || nq <= 0 || nk <= 0 || width <= 0)
+            return CL_INVALID_VALUE;
+        auto *first = mem_arg(kernel, 0), *second = mem_arg(kernel, 1),
+             *output = mem_arg(kernel, 2);
+        if (!first || !second || !output)
+            return CL_INVALID_VALUE;
+        const float scale =
+            scores ? (interleaved ? 1.0f / std::sqrt(float(width)) : kernel_arg<float>(kernel, 7))
+                   : 1;
+        const size_t reduction = scores ? width : nk, columns = scores ? nk : width;
+        std::vector<float> left(static_cast<size_t>(nq) * reduction), right(columns * reduction),
+            product(static_cast<size_t>(nq) * columns);
+        for (int head = 0; head < heads; ++head)
+        {
+            for (int row = 0; row < nq; ++row)
+                for (size_t d = 0; d < reduction; ++d)
+                {
+                    const size_t at = scores && interleaved
+                                          ? (static_cast<size_t>(row) * heads + head) * width + d
+                                          : (static_cast<size_t>(head) * nq + row) * reduction + d;
+                    left[static_cast<size_t>(row) * reduction + d] = load_value(first, at);
+                }
+            for (size_t col = 0; col < columns; ++col)
+                for (size_t d = 0; d < reduction; ++d)
+                {
+                    const size_t at =
+                        scores ? (interleaved ? (col * heads + head) * width + d
+                                              : (static_cast<size_t>(head) * nk + col) * width + d)
+                               : (interleaved ? (d * heads + head) * width + col
+                                              : (static_cast<size_t>(head) * nk + d) * width + col);
+                    right[col * reduction + d] = load_value(second, at);
+                }
+            if (prospero_media_vk::matmul(left.data(), right.data(), product.data(), nq, columns,
+                                          reduction))
+                return CL_OUT_OF_RESOURCES;
+            for (int row = 0; row < nq; ++row)
+                for (size_t col = 0; col < columns; ++col)
+                {
+                    const size_t at = !scores && interleaved
+                                          ? (static_cast<size_t>(row) * heads + head) * width + col
+                                          : (static_cast<size_t>(head) * nq + row) * columns + col;
+                    store_value(output, at,
+                                product[static_cast<size_t>(row) * columns + col] * scale);
+                }
+        }
+        return CL_SUCCESS;
+    }
+    if (name == "silu_inplace" || name == "k_gelu")
+    {
+        auto *input = mem_arg(kernel, 0);
+        const int count = kernel_arg<int>(kernel, 1);
+        return unary_vk(name == "silu_inplace" ? prospero_media_vk::Unary::Silu
+                                               : prospero_media_vk::Unary::Gelu,
+                        input, input, 1, count);
+    }
+    if (name == "softmax_rows" || name == "k_softmax_rowwise")
+    {
+        auto *input = mem_arg(kernel, 0);
+        return unary_vk(prospero_media_vk::Unary::Softmax, input, input, kernel_arg<int>(kernel, 1),
+                        kernel_arg<int>(kernel, 2));
+    }
+    if (name == "layernorm" || name == "layernorm_wg" || name == "layernorm_rowwise")
+    {
+        auto *input = mem_arg(kernel, 0), *gamma = mem_arg(kernel, 1), *bias = mem_arg(kernel, 2),
+             *output = mem_arg(kernel, 3);
+        const int rows = kernel_arg<int>(kernel, 4), width = kernel_arg<int>(kernel, 5);
+        const int result = unary_vk(prospero_media_vk::Unary::Norm, input, output, rows, width,
+                                    kernel_arg<float>(kernel, 6));
+        if (result != CL_SUCCESS)
+            return result;
+        if (!gamma || !bias || !span_ok(gamma, 0, static_cast<size_t>(width) * 2) ||
+            !span_ok(bias, 0, static_cast<size_t>(width) * 2))
+            return CL_INVALID_VALUE;
+        for (size_t i = 0; i < static_cast<size_t>(rows) * width; ++i)
+            store_value(output, i,
+                        load_value(output, i) * load_value(gamma, i % width) +
+                            load_value(bias, i % width));
+        return CL_SUCCESS;
+    }
+#endif
+#ifdef PROSPERO_MEDIA_VULKAN
+    prospero_media_vk::record_cpu_fallback();
+#endif
     if (name == "embedding_gather_nlc")
     {
         cl_mem ids = mem_arg(kernel, 0), embedding = mem_arg(kernel, 1), out = mem_arg(kernel, 2);

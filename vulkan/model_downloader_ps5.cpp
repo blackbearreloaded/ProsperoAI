@@ -30,9 +30,9 @@ int scePthreadJoin(void *, void **);
 namespace prospero_model_download {
 Fit estimate_fit(std::uint64_t file_bytes) {
     // The RADV heap is fixed (11,712 MiB reported, docs/VK_LOG.md); about 1 GiB goes to the
-    // interface and a margin, leaving roughly 10.7 GiB. Below 8 GiB a model's KV/compute
-    // overhead reliably fits in what is left (docs/PLAN_CONTEXT_MODELS_VULKAN.md's budget
-    // table); above the 10.7 GiB ceiling nothing is left for KV or compute at all.
+    // interface and a margin, leaving roughly 10.7 GiB. These file-size badges are
+    // estimates: catalog metadata cannot determine a model's KV/compute allocations
+    // or prove that a chosen model/context fits the actual RADV allocation ceiling.
     constexpr std::uint64_t kComfortableBytes = 8ULL * 1024 * 1024 * 1024;
     constexpr std::uint64_t kCeilingBytes = 10ULL * 1024 * 1024 * 1024 + 717ULL * 1024 * 1024;
     if (file_bytes < kComfortableBytes) return Fit::Fits;
@@ -475,7 +475,7 @@ void *worker_impl(void *) {
             Item item;
             item.name = entry["id"].get<std::string>();
             if (!safe_repo(item.name)) continue;
-            set_status("Checking repositories for GGUF files within the 7 GiB download limit...");
+            set_status("Checking repositories for GGUF files and memory estimates...");
             std::vector<Item> eligible;
             if (!read_catalog(item.name, &eligible)) {
                 current.store(State::Searching, std::memory_order_release);
@@ -493,7 +493,7 @@ void *worker_impl(void *) {
             std::lock_guard<std::mutex> lock(state_mutex);
             items = std::move(found);
             std::snprintf(current_status, sizeof(current_status),
-                          "%zu repositories with GGUF files up to 7 GiB found.", items.size());
+                          "%zu repositories with GGUF files found.", items.size());
         }
         current.store(State::SearchReady, std::memory_order_release);
         worker_done.store(true, std::memory_order_release);
@@ -505,10 +505,10 @@ void *worker_impl(void *) {
             std::lock_guard<std::mutex> lock(state_mutex); items=std::move(found);
             if (items.empty())
                 std::snprintf(current_status, sizeof(current_status),
-                              "No verified single GGUF files within the 7 GiB download limit.");
+                              "No verified single GGUF files found.");
             else
                 std::snprintf(current_status, sizeof(current_status),
-                              "%zu GGUF files within the 7 GiB limit.", items.size());
+                              "%zu GGUF files with memory estimates.", items.size());
             current.store(State::Ready, std::memory_order_release);
         }
         worker_done.store(true, std::memory_order_release);

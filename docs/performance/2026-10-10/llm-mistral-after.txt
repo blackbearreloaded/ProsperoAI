@@ -1,0 +1,65 @@
+BENCH START
+MODEL ready_us=3029260 id=Mistral-7B-Instruct-v0.3.Q4_0.gguf
+MEMORY reported_free=1608646656 reported_total=12280922112
+CONFIG 0 batch=256 ubatch=256 threads=4 flash=auto context_us=28211
+RESULT config=0 workload=0 round=0 cache=0 rc=0 prompt=36 generated=128 reused=0 prefill_us=133275 elapsed_us=2022752 decode_tps=67.214 match=1
+TEXT  A Graphics Processing Unit (GPU) is designed to handle large numbers of calculations simultaneously, making it ideal for matrix multiplication, a computationally intensive operation. Here's a simplified explanation of how a GPU executes matrix multiplication, focusing on threads, memory tiers, and synchronization.
+
+1. **Threads**: In a GPU, the basic execution unit is a thread. Threads are organized into blocks, and blocks into grids. Each thread operates on a specific element of the matrix or vector. For matrix multiplication, we typically have one thread per matrix element.
+
+   - **
+RESULT config=0 workload=0 round=0 cache=1 rc=0 prompt=36 generated=128 reused=35 prefill_us=11356 elapsed_us=1874882 decode_tps=68.150 match=1
+TEXT  A Graphics Processing Unit (GPU) is designed to handle large numbers of calculations simultaneously, making it ideal for matrix multiplication, a computationally intensive operation. Here's a simplified explanation of how a GPU executes matrix multiplication, focusing on threads, memory tiers, and synchronization.
+
+1. **Threads**: In a GPU, the basic execution unit is a thread. Threads are organized into blocks, and blocks into grids. Each thread operates on a specific element of the matrix or vector. For matrix multiplication, we typically have one thread per matrix element.
+
+   - **
+RESULT config=0 workload=0 round=1 cache=0 rc=0 prompt=36 generated=128 reused=0 prefill_us=173029 elapsed_us=2038542 decode_tps=68.078 match=1
+TEXT  A Graphics Processing Unit (GPU) is designed to handle large numbers of calculations simultaneously, making it ideal for matrix multiplication, a computationally intensive operation. Here's a simplified explanation of how a GPU executes matrix multiplication, focusing on threads, memory tiers, and synchronization.
+
+1. **Threads**: In a GPU, the basic execution unit is a thread. Threads are organized into blocks, and blocks into grids. Each thread operates on a specific element of the matrix or vector. For matrix multiplication, we typically have one thread per matrix element.
+
+   - **
+RESULT config=0 workload=0 round=1 cache=1 rc=0 prompt=36 generated=128 reused=35 prefill_us=11062 elapsed_us=1876363 decode_tps=68.086 match=1
+TEXT  A Graphics Processing Unit (GPU) is designed to handle large numbers of calculations simultaneously, making it ideal for matrix multiplication, a computationally intensive operation. Here's a simplified explanation of how a GPU executes matrix multiplication, focusing on threads, memory tiers, and synchronization.
+
+1. **Threads**: In a GPU, the basic execution unit is a thread. Threads are organized into blocks, and blocks into grids. Each thread operates on a specific element of the matrix or vector. For matrix multiplication, we typically have one thread per matrix element.
+
+   - **
+RESULT config=0 workload=0 round=2 cache=0 rc=0 prompt=36 generated=128 reused=0 prefill_us=173938 elapsed_us=2038671 decode_tps=68.106 match=1
+TEXT  A Graphics Processing Unit (GPU) is designed to handle large numbers of calculations simultaneously, making it ideal for matrix multiplication, a computationally intensive operation. Here's a simplified explanation of how a GPU executes matrix multiplication, focusing on threads, memory tiers, and synchronization.
+
+1. **Threads**: In a GPU, the basic execution unit is a thread. Threads are organized into blocks, and blocks into grids. Each thread operates on a specific element of the matrix or vector. For matrix multiplication, we typically have one thread per matrix element.
+
+   - **
+RESULT config=0 workload=0 round=2 cache=1 rc=0 prompt=36 generated=128 reused=35 prefill_us=11089 elapsed_us=1876580 decode_tps=68.079 match=1
+TEXT  A Graphics Processing Unit (GPU) is designed to handle large numbers of calculations simultaneously, making it ideal for matrix multiplication, a computationally intensive operation. Here's a simplified explanation of how a GPU executes matrix multiplication, focusing on threads, memory tiers, and synchronization.
+
+1. **Threads**: In a GPU, the basic execution unit is a thread. Threads are organized into blocks, and blocks into grids. Each thread operates on a specific element of the matrix or vector. For matrix multiplication, we typically have one thread per matrix element.
+
+   - **
+RESULT config=0 workload=1 round=0 cache=0 rc=0 prompt=708 generated=128 reused=0 prefill_us=1541870 elapsed_us=3558226 decode_tps=62.985 match=1
+TEXT  A GPU (Graphics Processing Unit) executes matrix multiplication by leveraging its massive parallel processing capabilities. Here's a simplified explanation of how it works, focusing on threads, memory tiers, and synchronization:
+
+1. **Threads**: A GPU consists of thousands of small, highly parallel processing units called CUDA cores (on NVIDIA GPUs) or Stream Processors (on AMD GPUs). These processing units are organized into blocks, and each block contains a number of threads. The threads are further divided into smaller units called warps or wavefronts, depending on the GPU architecture
+RESULT config=0 workload=1 round=0 cache=1 rc=0 prompt=708 generated=128 reused=707 prefill_us=13401 elapsed_us=1929329 decode_tps=66.286 match=1
+TEXT  A GPU (Graphics Processing Unit) executes matrix multiplication by leveraging its massive parallel processing capabilities. Here's a simplified explanation of how it works, focusing on threads, memory tiers, and synchronization:
+
+1. **Threads**: A GPU consists of thousands of small, highly parallel processing units called CUDA cores (on NVIDIA GPUs) or Stream Processors (on AMD GPUs). These processing units are organized into blocks, and each block contains a number of threads. The threads are further divided into smaller units called warps or wavefronts, depending on the GPU architecture
+RESULT config=0 workload=1 round=1 cache=0 rc=0 prompt=708 generated=128 reused=0 prefill_us=1543722 elapsed_us=3558652 decode_tps=63.029 match=1
+TEXT  A GPU (Graphics Processing Unit) executes matrix multiplication by leveraging its massive parallel processing capabilities. Here's a simplified explanation of how it works, focusing on threads, memory tiers, and synchronization:
+
+1. **Threads**: A GPU consists of thousands of small, highly parallel processing units called CUDA cores (on NVIDIA GPUs) or Stream Processors (on AMD GPUs). These processing units are organized into blocks, and each block contains a number of threads. The threads are further divided into smaller units called warps or wavefronts, depending on the GPU architecture
+RESULT config=0 workload=1 round=1 cache=1 rc=0 prompt=708 generated=128 reused=707 prefill_us=13623 elapsed_us=1924053 decode_tps=66.477 match=1
+TEXT  A GPU (Graphics Processing Unit) executes matrix multiplication by leveraging its massive parallel processing capabilities. Here's a simplified explanation of how it works, focusing on threads, memory tiers, and synchronization:
+
+1. **Threads**: A GPU consists of thousands of small, highly parallel processing units called CUDA cores (on NVIDIA GPUs) or Stream Processors (on AMD GPUs). These processing units are organized into blocks, and each block contains a number of threads. The threads are further divided into smaller units called warps or wavefronts, depending on the GPU architecture
+RESULT config=0 workload=1 round=2 cache=0 rc=0 prompt=708 generated=128 reused=0 prefill_us=1541040 elapsed_us=3556665 decode_tps=63.008 match=1
+TEXT  A GPU (Graphics Processing Unit) executes matrix multiplication by leveraging its massive parallel processing capabilities. Here's a simplified explanation of how it works, focusing on threads, memory tiers, and synchronization:
+
+1. **Threads**: A GPU consists of thousands of small, highly parallel processing units called CUDA cores (on NVIDIA GPUs) or Stream Processors (on AMD GPUs). These processing units are organized into blocks, and each block contains a number of threads. The threads are further divided into smaller units called warps or wavefronts, depending on the GPU architecture
+RESULT config=0 workload=1 round=2 cache=1 rc=0 prompt=708 generated=128 reused=707 prefill_us=13265 elapsed_us=1925134 decode_tps=66.427 match=1
+TEXT  A GPU (Graphics Processing Unit) executes matrix multiplication by leveraging its massive parallel processing capabilities. Here's a simplified explanation of how it works, focusing on threads, memory tiers, and synchronization:
+
+1. **Threads**: A GPU consists of thousands of small, highly parallel processing units called CUDA cores (on NVIDIA GPUs) or Stream Processors (on AMD GPUs). These processing units are organized into blocks, and each block contains a number of threads. The threads are further divided into smaller units called warps or wavefronts, depending on the GPU architecture
+BENCH COMPLETE

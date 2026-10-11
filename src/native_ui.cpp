@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "native_ui_impl.hpp"
+#include "runtime_settings.hpp"
 
 #include "debug_log.hpp"
 #if defined(PROSPERO_UI_VULKAN) && !defined(PROSPERO_HOST)
@@ -122,13 +123,31 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     keyboard_.set_bounds({360, 596, 1200, 310});
     keyboard_.on_text = [this](std::string_view value)
     {
-        search_.insert(value);
-        refresh_models();
+        if (tabs_.active() == 0)
+        {
+            session_search_.insert(value);
+            session_query_ = session_search_.text();
+            refresh_sessions();
+        }
+        else
+        {
+            search_.insert(value);
+            refresh_models();
+        }
     };
     keyboard_.on_backspace = [this]
     {
-        search_.backspace();
-        refresh_models();
+        if (tabs_.active() == 0)
+        {
+            session_search_.backspace();
+            session_query_ = session_search_.text();
+            refresh_sessions();
+        }
+        else
+        {
+            search_.backspace();
+            refresh_models();
+        }
     };
 
     form_.style.row_height = 88;
@@ -628,7 +647,19 @@ void NativeUI::Impl::handle_settings(const InputFrame &input, ui::Feedback &feed
 void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &feedback)
 {
     chat_.handle(input, feedback);
-    if (input.is_pressed(Action::west))
+    if (rail_ && (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next)))
+    {
+        session_category_ = (session_category_ + (input.is_pressed(Action::jump_next) ? 1 : 4)) % 5;
+        refresh_sessions();
+    }
+    else if (rail_ && input.is_pressed(Action::west))
+    {
+        search_open_ = true;
+        keyboard_.style.max_length = 64;
+        keyboard_.set_length(session_search_.length());
+        keyboard_.enter();
+    }
+    else if (input.is_pressed(Action::west))
     {
         if (app_.new_session())
         {
@@ -669,17 +700,17 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
             if (app_.busy())
                 feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.7f);
             else
-                open_dialog(kDeleteConversation, sessions_.focus() - 1, "Delete this conversation?",
+                open_dialog(kDeleteConversation, visible_sessions_[sessions_.focus() - 1],
+                            "Delete this conversation?",
                             "The conversation and its saved media will be removed from this "
                             "console.",
                             "Delete", true, feedback);
         }
         else if (sessions_.handle(input, feedback) == ui::Event::activated)
         {
-            const bool accepted =
-                sessions_.focus() == 0
-                    ? app_.new_session()
-                    : app_.open_session(static_cast<unsigned>(sessions_.focus() - 1));
+            const bool accepted = sessions_.focus() == 0
+                                      ? app_.new_session()
+                                      : app_.open_session(visible_sessions_[sessions_.focus() - 1]);
             if (accepted)
             {
                 rail_ = false;
@@ -768,11 +799,58 @@ void NativeUI::Impl::refresh_models()
     models_.enter();
 }
 
+void NativeUI::Impl::refresh_sessions()
+{
+    static constexpr const char *kinds[] = {"all", "text", "image", "audio", "voice"};
+    const auto &state = app_.state();
+    std::vector<ui::ListItem> rows;
+    ui::ListItem first;
+    first.title = "New conversation";
+    first.subtitle = "Start fresh";
+    rows.push_back(std::move(first));
+    visible_sessions_.clear();
+    for (unsigned i = 0; i < state.sessions.size(); ++i)
+    {
+        const auto &session = state.sessions[i];
+        if (!prospero_session::matches(session, kinds[session_category_], ""))
+            continue;
+        bool found = prospero_session::matches(session, "all", session_query_.c_str());
+        if (!found && i < state.session_search.size() && state.session_search[i].text)
+            found = prospero_session::contains(state.session_search[i].text->c_str(),
+                                               session_query_.c_str());
+        if (!found)
+            continue;
+        visible_sessions_.push_back(i);
+        ui::ListItem item;
+        item.title = session.title;
+        item.subtitle =
+            std::string(prospero_session::category(session)) + " · " + session.model_name;
+        font_set_.note(item.title);
+        rows.push_back(std::move(item));
+    }
+    bool changed = rows.size() != sessions_.items().size();
+    for (std::size_t i = 0; !changed && i < rows.size(); ++i)
+        changed = rows[i].title != sessions_.items()[i].title ||
+                  rows[i].subtitle != sessions_.items()[i].subtitle;
+    if (changed)
+    {
+        const int focus = sessions_.focus();
+        sessions_.set_items(std::move(rows));
+        sessions_.set_focus(focus);
+    }
+}
+
 void NativeUI::Impl::type(char character, ui::Feedback &feedback)
 {
     if (dialog_.is_open() || update_ui_ != UpdateUi::hidden || keyboard_pending_ || boot_ > 0.6f)
         return;
-    if (tabs_.active() == 1)
+    if (tabs_.active() == 0 && search_open_)
+    {
+        session_search_.insert(character, feedback);
+        session_query_ = session_search_.text();
+        refresh_sessions();
+    }
+    else if (tabs_.active() == 1)
     {
         search_.insert(character, feedback);
         refresh_models();
@@ -791,7 +869,13 @@ void NativeUI::Impl::backspace(ui::Feedback &feedback)
 {
     if (dialog_.is_open() || update_ui_ != UpdateUi::hidden || keyboard_pending_ || boot_ > 0.6f)
         return;
-    if (tabs_.active() == 1)
+    if (tabs_.active() == 0 && search_open_)
+    {
+        session_search_.backspace(feedback);
+        session_query_ = session_search_.text();
+        refresh_sessions();
+    }
+    else if (tabs_.active() == 1)
     {
         search_.backspace(feedback);
         refresh_models();
@@ -870,7 +954,11 @@ void NativeUI::Impl::keyboard_result(const char *value)
 
 void NativeUI::Impl::build_form()
 {
-    const auto &p = app_.state().preferences;
+    auto p = app_.state().preferences;
+    const auto runtime = prospero_settings::get();
+    p.context_length = runtime.context;
+    p.kv_cache = runtime.kv;
+    p.thinking = runtime.thinking;
     form_.clear();
     if (category_ == 0)
     {
@@ -882,8 +970,21 @@ void NativeUI::Impl::build_form()
         form_.add_choice(6, "Response style", {"Balanced", "Precise", "Creative"},
                          static_cast<int>(p.style));
         form_.add_choice(7, "Response length",
-                         {"64 tokens", "128 tokens", "192 tokens", "256 tokens"},
-                         static_cast<int>(p.output_limit / 64 - 1));
+                         {"64 tokens", "128 tokens", "192 tokens", "256 tokens", "512 tokens",
+                          "1024 tokens", "2048 tokens", "4096 tokens"},
+                         p.output_limit <= 256    ? static_cast<int>(p.output_limit / 64 - 1)
+                         : p.output_limit == 512  ? 4
+                         : p.output_limit == 1024 ? 5
+                         : p.output_limit == 2048 ? 6
+                                                  : 7);
+        constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072};
+        int selected_context = 0;
+        for (int i = 0; i < 7; ++i)
+            if (contexts[i] == p.context_length)
+                selected_context = i;
+        form_.add_choice(17, "Context length", {"Auto", "4K", "8K", "16K", "32K", "64K", "128K"},
+                         selected_context);
+        form_.add_toggle(19, "Thinking", p.thinking);
         form_.add_value(9, "Processing", "On this console");
     }
     else if (category_ == 2)
@@ -925,7 +1026,12 @@ void NativeUI::Impl::apply_form()
     else if (category_ == 1)
     {
         p.style = static_cast<unsigned>(form_.choice_index(6));
-        p.output_limit = static_cast<unsigned>(form_.choice_index(7) + 1) * 64;
+        constexpr unsigned limits[] = {64, 128, 192, 256, 512, 1024, 2048, 4096};
+        p.output_limit = limits[form_.choice_index(7)];
+        constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072};
+        p.context_length = contexts[std::clamp(form_.choice_index(17), 0, 6)];
+        p.kv_cache = 0;
+        p.thinking = form_.toggle_value(19);
     }
     else if (category_ == 2)
         p.volume = static_cast<unsigned>(form_.slider_value(3));
@@ -995,31 +1101,7 @@ void NativeUI::Impl::sync()
         refresh_models();
         build_form();
     }
-    bool sessions_changed = sessions_.items().size() != state.sessions.size() + 1;
-    if (!sessions_changed)
-        for (std::size_t i = 0; i < state.sessions.size(); ++i)
-            if (sessions_.items()[i + 1].title != state.sessions[i].title ||
-                sessions_.items()[i + 1].subtitle != state.sessions[i].model_name)
-                sessions_changed = true;
-    if (sessions_changed)
-    {
-        const int focus = sessions_.focus();
-        std::vector<ui::ListItem> rows;
-        ui::ListItem first;
-        first.title = "New conversation";
-        first.subtitle = "Start fresh";
-        rows.push_back(std::move(first));
-        for (const auto &session : state.sessions)
-        {
-            ui::ListItem item;
-            item.title = session.title;
-            item.subtitle = session.model_name;
-            font_set_.note(item.title);
-            rows.push_back(std::move(item));
-        }
-        sessions_.set_items(std::move(rows));
-        sessions_.set_focus(focus);
-    }
+    refresh_sessions();
     font_set_.note(composer_.text());
 
     const bool follow = chat_.max_y() - chat_.offset_y() < 80;
@@ -1225,7 +1307,7 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
 {
     list.line(kLeft, kFooterRule, kRight, kFooterRule, 1, palette_.line);
     const auto &state = app_.state();
-    ui::Hint hints[6];
+    ui::Hint hints[8];
     int count = 0;
     if (dialog_.is_open() || update_ui_ == UpdateUi::offer || update_ui_ == UpdateUi::failed)
     {
@@ -1302,7 +1384,9 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
         if (sessions_.focus() > 0)
             hints[count++] = {ui::Button::triangle, "Delete"};
         hints[count++] = {ui::Button::circle, "Back"};
-        hints[count++] = {ui::Button::square, "New"};
+        hints[count++] = {ui::Button::square, "Search"};
+        hints[count++] = {ui::Button::l2, "Type"};
+        hints[count++] = {ui::Button::r2, "Type"};
     }
     else
     {
@@ -1433,14 +1517,19 @@ void NativeUI::Impl::draw_search(ui::Canvas &canvas) const
     overlay.shadow({sheet.x, sheet.y + 18, sheet.w, sheet.h}, 26, 60, Color::rgb(0x000000, 0.45f));
     overlay.bordered_rect(sheet, 26, palette_.panel.with_alpha(1.0f / palette_.panel.a), 1,
                           palette_.line);
-    label(overlay, filters_.active() == 0 ? "FIND A MODEL TO DOWNLOAD" : "SEARCH YOUR MODELS", 364,
-          492, palette_.accent);
-    const bool empty = search_.text().empty();
-    text(overlay, empty ? "Type a name..." : fit(search_.text(), 32, 900).c_str(), 364, 548, 32,
+    label(overlay,
+          tabs_.active() == 0      ? "SEARCH CONVERSATIONS"
+          : filters_.active() == 0 ? "FIND A MODEL TO DOWNLOAD"
+                                   : "SEARCH YOUR MODELS",
+          364, 492, palette_.accent);
+    const auto &field = tabs_.active() == 0 ? session_search_ : search_;
+    const bool empty = field.text().empty();
+    text(overlay, empty ? "Type to search..." : fit(field.text(), 32, 900).c_str(), 364, 548, 32,
          empty ? palette_.muted : palette_.ink, !empty);
     char found[64];
-    std::snprintf(found, sizeof(found), "%zu found", visible_models_.size());
-    if (filters_.active() != 0)
+    std::snprintf(found, sizeof(found), "%zu found",
+                  tabs_.active() == 0 ? visible_sessions_.size() : visible_models_.size());
+    if (tabs_.active() == 0 || filters_.active() != 0)
         text(overlay, found, sheet.x + sheet.w - 40, 548, 22, palette_.muted, false,
              gfx::Align::right);
     keyboard_.draw(canvas);

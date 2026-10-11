@@ -337,6 +337,10 @@ def shadow_api(method, route, body=None):
 def cmd_shadow(args):
     if args.action == "info":
         code, text = shadow_api("POST", "/games/info", {"title_id": args.title_id})
+    elif args.action == "mount":
+        if not args.title_id:
+            raise SystemExit("shadow mount requires a title ID")
+        code, text = shadow_api("POST", "/games/mount", {"title_id": args.title_id})
     elif args.action == "version":
         code, text = shadow_api("GET", "/version")
     else:
@@ -409,8 +413,8 @@ def main(argv=None):
     ct = sub.add_parser("cat", help="print a file from the console (FTP)")
     ct.add_argument("remote")
     ct.add_argument("--tail", type=int, default=0, help="only the last N characters")
-    sh2 = sub.add_parser("shadow", help="ShadowMountPlus API: info, version, delete (needs --yes)")
-    sh2.add_argument("action", choices=["info", "version", "delete"])
+    sh2 = sub.add_parser("shadow", help="ShadowMountPlus API: info, mount, version, delete (needs --yes)")
+    sh2.add_argument("action", choices=["info", "mount", "version", "delete"])
     sh2.add_argument("title_id", nargs="?", default="")
     sh2.add_argument("--yes", action="store_true")
     args = parser.parse_args(argv)

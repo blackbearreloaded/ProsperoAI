@@ -174,7 +174,9 @@ void NativeUI::Impl::draw_conversation(ui::Canvas &canvas) const
          {
              panel(list, {kLeft, 196, 362, 740}, 24, rail_ ? 0.35f : 0.0f);
              label(list, "YOUR SPACE", 122, 246, palette_.muted);
-             text(list, "Conversations", 122, 292, 31, palette_.ink, true);
+             static constexpr const char *titles[] = {"All conversations", "Text", "Image", "Audio",
+                                                      "Voice"};
+             text(list, titles[session_category_], 122, 292, 31, palette_.ink, true);
              sessions_.draw(canvas);
          });
 
@@ -411,19 +413,18 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
                 if (static_cast<int>(i) == download_focus_)
                     list.circle(137, y - 7, 4, ink);
                 char row[220];
-                const char *fit_text =
-                    candidate.fit == prospero_model_download::Fit::Tight ? "  ·  tight on memory"
-                    : candidate.fit == prospero_model_download::Fit::DoesNotFit
-                        ? "  ·  will not fit"
-                        : "";
+                const char *fit_text = candidate.fit == prospero_model_download::Fit::Tight
+                                           ? "  ·  tight on memory"
+                                       : candidate.fit == prospero_model_download::Fit::DoesNotFit
+                                           ? "  ·  will not fit"
+                                           : "";
                 if (downloader_state == prospero_model_download::State::SearchReady)
                     std::snprintf(row, sizeof(row), "%s  ·  %llu downloads  ·  Cross to browse",
                                   candidate.name, static_cast<unsigned long long>(candidate.size));
                 else
-                    std::snprintf(row, sizeof(row), "%s  ·  %llu MiB%s  ·  Cross to download",
-                                  candidate.name,
-                                  static_cast<unsigned long long>(candidate.size / (1024 * 1024)),
-                                  fit_text);
+                    std::snprintf(
+                        row, sizeof(row), "%s  ·  %llu MiB%s  ·  Cross to download", candidate.name,
+                        static_cast<unsigned long long>(candidate.size / (1024 * 1024)), fit_text);
                 text(list, fit(row, 18, 1020, false), 154, y, 18, ink);
             }
         }
@@ -435,8 +436,8 @@ void NativeUI::Impl::draw_models(ui::Canvas &canvas) const
              false, gfx::Align::center);
         text(list, "added to the shared model library.", guide.cx(), 835, 20, palette_.muted, false,
              gfx::Align::center);
-        text(list, "Large files are flagged tight or will not fit; context also needs memory.", guide.cx(), 900, 17,
-             palette_.muted, false, gfx::Align::center);
+        text(list, "Large files are flagged tight or will not fit; context also needs memory.",
+             guide.cx(), 900, 17, palette_.muted, false, gfx::Align::center);
         return;
     }
     if (state.models.empty() && visible_models_.empty() && search_.text().empty())

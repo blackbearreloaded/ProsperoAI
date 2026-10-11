@@ -20,7 +20,7 @@ class HttpApiTests(unittest.TestCase):
             raise unittest.SkipTest("C++ compiler and make deps required")
         subprocess.run([compiler, "-std=c++20", "-O1", "-pthread", "-ffunction-sections", "-fdata-sections",
                         '-DPROSPERO_WEB_ASSET_ROOT="'+str(ROOT / 'assets/web')+'/"',
-                        "-Wl,--gc-sections", "-I"+str(ROOT / "vulkan"), "-I"+str(ROOT / "include"),
+                        '-DPROSPERO_SETTINGS_PATH="'+str(tmp / "runtime.cfg")+'"', "-Wl,--gc-sections", "-I"+str(ROOT / "vulkan"), "-I"+str(ROOT / "include"),
                         "-I"+str(ROOT / ".deps/llama.cpp/vendor"),
                         str(ROOT / "tests/http_api_harness.cpp"), "-o", str(cls.binary)], check=True)
 
@@ -41,6 +41,45 @@ class HttpApiTests(unittest.TestCase):
         head, data = wire.split(b"\r\n\r\n", 1)
         return head.decode(), data.decode()
 
+    def test_runtime_settings_round_trip(self):
+        config = Path(self.scratch.name) / 'runtime.cfg'
+        config.write_text('version=2\nstyle=2\ntokens=192\ntheme=1\n')
+        header, body = self.request('/api/settings/runtime', body={'context':'32k', 'kv':'auto', 'thinking':True})
+        self.assertIn('200 OK', header)
+        expected = {'context':'32k', 'kv':'auto', 'thinking':True}
+        self.assertEqual(json.loads(body), expected)
+        self.assertIn('style=2\ntokens=192\ntheme=1\n', config.read_text())
+        self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
+        for invalid in ({'context':'2k'}, {'kv':'q8_0'}, {'kv':'q2_0'}, {'thinking':'false'}, {'unknown':1}, {'context':'16k','kv':'bad'}, []):
+            self.assertIn('400 Bad Request', self.request('/api/settings/runtime', body=invalid)[0])
+            self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
+        self.assertIn('401 Unauthorized', self.request('/api/settings/runtime', key='secret')[0])
+        self.request('/api/settings/runtime', body={'context':'auto','kv':'auto','thinking':False})
+
+    def test_request_context_does_not_replace_shared_settings(self):
+        shared = {'context': '32k', 'kv': 'auto', 'thinking': True}
+        self.request('/api/settings/runtime', body=shared)
+        try:
+            for route, body in [
+                ('/v1/chat/completions', {'model': 'tiny.gguf', 'context_tokens': 16384,
+                  'messages': [{'role': 'user', 'content': 'context-settings'}]}),
+                ('/api/generate', {'model': 'tiny.gguf', 'prompt': 'context-settings',
+                  'options': {'num_ctx': 16384}}),
+                ('/api/chat', {'model': 'tiny.gguf', 'options': {'num_ctx': 16384},
+                  'messages': [{'role': 'user', 'content': 'context-settings'}]}),
+            ]:
+                _, wire = self.request(route, body)
+                data = json.loads(wire)
+                content = (data['choices'][0]['message']['content'] if 'choices' in data
+                           else data.get('response') or data['message']['content'])
+                self.assertEqual(content, '32768:16384')
+                self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), shared)
+            _, wire = self.request(body={'model': 'tiny.gguf',
+                                  'messages': [{'role': 'user', 'content': 'context-settings'}]})
+            self.assertEqual(json.loads(wire)['choices'][0]['message']['content'], '32768:0')
+        finally:
+            self.request('/api/settings/runtime', body={'context': 'auto', 'kv': 'auto', 'thinking': False})
+
     def test_models_and_selection(self):
         _, body = self.request("/v1/models")
         self.assertEqual([m["id"] for m in json.loads(body)["data"]], ["tiny.gguf", "second.gguf"])
@@ -48,6 +87,44 @@ class HttpApiTests(unittest.TestCase):
         data = json.loads(body)
         self.assertEqual(data["model"], "second.gguf")
         self.assertEqual(data["usage"]["total_tokens"], 14)
+
+    def test_ollama_uses_requested_model(self):
+        for route, body in [
+            ("/api/generate", {"model": "second.gguf", "prompt": "selected-model"}),
+            ("/api/chat", {"model": "second.gguf", "messages": [{"role": "user", "content": "selected-model"}]}),
+        ]:
+            _, response = self.request(route, body)
+            data = json.loads(response)
+            self.assertEqual(data.get("response") or data["message"]["content"], "second.gguf")
+
+    def test_extended_generation_limits(self):
+        for route in ["/api/generate", "/api/chat"]:
+            body = {"model": "tiny.gguf", "prompt": "limits",
+                    "messages": [{"role": "user", "content": "limits"}],
+                    "options": {"num_predict": 4096, "num_ctx": 16384}}
+            _, response = self.request(route, body)
+            data = json.loads(response)
+            self.assertEqual(data.get("response") or data["message"]["content"], "4096:16384")
+            body["prompt"] = "long"
+            body["messages"][0]["content"] = "long"
+            _, response = self.request(route, body)
+            data = json.loads(response)
+            self.assertEqual(len(data.get("response") or data["message"]["content"]), 24000)
+        _, response = self.request(body={"model": "tiny.gguf", "max_tokens": 4096, "context_tokens": 16384,
+                                       "messages": [{"role": "user", "content": "limits"}]})
+        self.assertEqual(json.loads(response)["choices"][0]["message"]["content"], "4096:16384")
+
+    def test_context_validation_and_preserved_defaults(self):
+        for value in [0, -1, 16385, "8192"]:
+            header, response = self.request(body={"model": "tiny.gguf", "context_tokens": value,
+                                                 "messages": [{"role": "user", "content": "limits"}]})
+            self.assertIn("400 Bad Request", header)
+            self.assertEqual(json.loads(response)["error"]["code"], "invalid_context_tokens")
+        _, response = self.request(body={"model": "tiny.gguf",
+                                       "messages": [{"role": "user", "content": "limits"}]})
+        self.assertEqual(json.loads(response)["choices"][0]["message"]["content"], "512:0")
+        _, response = self.request("/api/generate", {"model": "tiny.gguf", "prompt": "limits"})
+        self.assertEqual(json.loads(response)["response"], "512:0")
 
     def test_public_ui_preserves_private_api(self):
         header, body = self.request("/", key="private")

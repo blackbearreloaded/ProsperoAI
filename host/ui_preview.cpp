@@ -303,8 +303,12 @@ bool erase(const char *id)
 {
     return saved.erase(id) != 0;
 }
+bool archive_text(const char *, unsigned, const char *, const OutputMetadata &, char *, std::size_t)
+{
+    return true;
+}
 bool archive_media(const char *id, unsigned index, const char *kind, const char *, char *path,
-                   std::size_t capacity)
+                   std::size_t capacity, const OutputMetadata *)
 {
     std::snprintf(path, capacity, "/download0/ProsperoAI/sessions/%s/media/%s-%u.%s", id, kind,
                   index, std::strcmp(kind, "image") == 0 ? "tga" : "wav");
@@ -554,6 +558,11 @@ int main(int argc, char **argv)
     press(hui::Action::left, hui::Direction::left);
     press(hui::Action::page_next);
     capture("settings");
+    press(hui::Action::back);
+    press(hui::Action::down, hui::Direction::down);
+    capture("settings-generation");
+    press(hui::Action::up, hui::Direction::up);
+    press(hui::Action::confirm);
     press(hui::Action::right, hui::Direction::right);
     settle();
     capture("daylight");
@@ -615,6 +624,20 @@ int main(int argc, char **argv)
     press(hui::Action::left, hui::Direction::left);
     press(hui::Action::down, hui::Direction::down);
     capture("conversations");
+    press(hui::Action::jump_next);
+    capture("conversations-text");
+    press(hui::Action::west);
+    capture("conversation-search");
+    for (char value : std::string("stars")) ui.type(value, feedback);
+    capture("conversation-search-results");
+    ui.submit(feedback);
+    press(hui::Action::jump_prev);
+    capture("conversations-filtered");
+    press(hui::Action::confirm);
+    settle();
+    assert(std::strcmp(app.state().session.purpose, "text-to-text") == 0);
+    capture("filtered-conversation-open");
+    press(hui::Action::left, hui::Direction::left);
     press(hui::Action::north);
     capture("delete");
     press(hui::Action::back);

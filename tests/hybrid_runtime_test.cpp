@@ -12,9 +12,19 @@
 namespace
 {
 unsigned text_selected = 0, released = 0, stopped = 0, generated = 0;
-unsigned bundles = 0, bundle_selected = 0, bundle_released = 0, reserved = 0;
+unsigned media_released = 0;
 std::atomic<bool> block_voice{false}, voice_entered{false}, voice_release{false};
 } // namespace
+namespace prospero_media_vk
+{
+void release()
+{
+    ++media_released;
+}
+void print_stats()
+{
+}
+} // namespace prospero_media_vk
 namespace prospero_vulkan
 {
 unsigned gpt_runtime_model_count()
@@ -23,7 +33,7 @@ unsigned gpt_runtime_model_count()
 }
 const char *gpt_runtime_model_id(unsigned i)
 {
-    return i ? "text1" : "text0";
+    return i ? "text1" : "mistral-7b-instruct-v0.3-q4-0.gguf";
 }
 const char *gpt_runtime_model_name(unsigned i)
 {
@@ -53,63 +63,18 @@ int gpt_runtime_prepare()
 {
     return 0;
 }
-int gpt_runtime_generate(const gpt_runtime_message_t *, unsigned, const gpt_runtime_settings_t &,
-                         char *out, std::size_t n, gpt_runtime_stats_t *, gpt_runtime_progress_fn)
+int gpt_runtime_generate(const gpt_runtime_message_t *, unsigned,
+                         const gpt_runtime_settings_t &settings, char *out, std::size_t n,
+                         gpt_runtime_stats_t *, gpt_runtime_progress_fn)
 {
+    assert(settings.model_id &&
+           std::strcmp(settings.model_id, gpt_runtime_model_id(text_selected)) == 0);
     std::snprintf(out, n, "text%u", text_selected);
     return 0;
 }
 } // namespace prospero_vulkan
-// The AGC text runtime (model.ps5lm bundles): none at first, one later.
-namespace prospero_agc
-{
-unsigned gpt_runtime_model_count()
-{
-    return bundles;
-}
-const char *gpt_runtime_model_id(unsigned)
-{
-    return "bundle0";
-}
-const char *gpt_runtime_model_name(unsigned)
-{
-    return "Bundle";
-}
-const char *gpt_runtime_backend()
-{
-    return "AGC";
-}
-bool gpt_runtime_context_full()
-{
-    return false;
-}
-bool gpt_runtime_select_model(unsigned i)
-{
-    bundle_selected = i + 1;
-    return i < bundles;
-}
-void release_model_memory()
-{
-    ++bundle_released;
-}
-int gpt_runtime_prepare()
-{
-    return 0;
-}
-int gpt_runtime_generate(const gpt_runtime_message_t *, unsigned, const gpt_runtime_settings_t &,
-                         char *out, std::size_t n, gpt_runtime_stats_t *, gpt_runtime_progress_fn)
-{
-    std::snprintf(out, n, "bundle");
-    return 0;
-}
-} // namespace prospero_agc
 extern "C"
 {
-    int ps5_agc_backend_reserve_memory()
-    {
-        ++reserved;
-        return 0;
-    }
     std::int64_t sceKernelGetDirectMemorySize()
     {
         return 0;
@@ -130,10 +95,6 @@ extern "C"
     }
     void ps5_sd_shutdown()
     {
-    }
-    int ps5_agc_backend_release_scratch()
-    {
-        return 0;
     }
     int ps5_sd_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
                         gpt_runtime_progress_fn)
@@ -189,6 +150,9 @@ int main()
     assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
     assert(generated == 1 && stats.generated_tokens == 1 && stats.elapsed_microseconds == 123);
     assert(std::strcmp(out, "voice.wav") == 0);
+#ifdef PROSPERO_MEDIA_VULKAN
+    assert(media_released > 0);
+#endif
     block_voice.store(true);
     gpt_runtime_settings_t voice_settings{};
     voice_settings.model_id = "kokoro-82m-fp16";
@@ -211,20 +175,21 @@ int main()
     assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
     assert(std::strcmp(out, "text0") == 0);
     assert(gpt_runtime_model_count() == 3);
-    // A model.ps5lm bundle runs on the AGC text runtime: the Vulkan model leaves memory
-    // before it is loaded, and it leaves when another kind of model is chosen.
-    bundles = 1;
+    // Existing bundle IDs resolve to their equivalent GGUF on Vulkan, preserving
+    // saved conversations without linking any AGC runtime or loading the bundle.
+    const auto legacy = std::filesystem::path(prospero::model_root()) /
+                        "mistral-7b-instruct-v0.3-q4-0" / "model.ps5lm";
+    std::filesystem::create_directories(legacy.parent_path());
+    std::ofstream(legacy) << "legacy data must remain untouched";
     gpt_runtime_refresh_models();
     assert(gpt_runtime_model_count() == 4);
-    assert(std::strcmp(gpt_runtime_model_id(2), "bundle0") == 0);
+    assert(std::strcmp(gpt_runtime_model_id(2), "mistral-7b-instruct-v0.3-q4-0") == 0);
     assert(std::strcmp(gpt_runtime_model_purpose(3), "text-to-speech") == 0);
-    const unsigned released_before = released;
-    assert(gpt_runtime_select_model(2) && bundle_selected == 1);
-    assert(released > released_before);
-    assert(gpt_runtime_prepare() == 0 && reserved == 1);
-    assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
-    assert(std::strcmp(out, "bundle") == 0);
-    assert(gpt_runtime_select_model(0) && bundle_released == 1);
+    assert(gpt_runtime_select_model(2));
+    assert(std::strcmp(gpt_runtime_backend(), "Vulkan") == 0);
+    assert(gpt_runtime_prepare() == 0);
     assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
     assert(std::strcmp(out, "text0") == 0);
+    assert(std::filesystem::file_size(legacy) > 0);
+    assert(gpt_runtime_select_model(0));
 }

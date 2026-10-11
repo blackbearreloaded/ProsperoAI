@@ -145,8 +145,14 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
               : last.find("Tool result for") == 0 ? "{\"content\":\"tool result received\"}"
                                                   : "{\"tool_calls\":[{\"name\":\"lookup\","
                                                     "\"arguments\":{\"query\":\"a}b\\\"c\"}}]}"
-        : last == "echo" ? messages[0].content
-                         : "Hello čau 😀";
+        : last == "context-settings" ? std::to_string(settings.context_length) + ":" +
+                                           std::to_string(settings.context_tokens)
+        : last == "limits" ? std::to_string(settings.max_output_tokens) + ":" +
+                                 std::to_string(settings.context_tokens)
+        : last == "long"           ? std::string(24000, 'x')
+        : last == "selected-model" ? gpt_runtime_model_id(current_model)
+        : last == "echo"           ? messages[0].content
+                                   : "Hello čau 😀";
     std::snprintf(out, capacity, "%s", text.c_str());
     *stats = {};
     stats->prompt_tokens = 10;

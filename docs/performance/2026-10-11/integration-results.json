@@ -1,0 +1,289 @@
+{
+  "original_settings": {
+    "context": "auto",
+    "kv": "auto",
+    "thinking": false
+  },
+  "runs": [
+    {
+      "name": "prefix-first-4k",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reference notes: Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU.  Summarize these notes in two sentences."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 3.3707681900123134,
+      "response": {
+        "id": "chatcmpl-1791688992-2",
+        "object": "chat.completion",
+        "created": 1791688992,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " The PlayStation 5 (PS5) uses Vulkan as a graphics and compute API, and it shares memory between the CPU and GPU for efficient performance. This means that the PS5 uses Vulkan for both graphics rendering and compute tasks, and it allows for seamless data transfer between the CPU and GPU"
+            },
+            "finish_reason": "length"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 918,
+          "completion_tokens": 64,
+          "total_tokens": 982
+        }
+      }
+    },
+    {
+      "name": "prefix-repeat-4k",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reference notes: Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU.  Summarize these notes in two sentences."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 1.0562467870186083,
+      "response": {
+        "id": "chatcmpl-1791688995-3",
+        "object": "chat.completion",
+        "created": 1791688995,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " The PlayStation 5 (PS5) uses Vulkan as a graphics and compute API, and it shares memory between the CPU and GPU for efficient performance. This means that the PS5 uses Vulkan for both graphics rendering and compute tasks, and it allows for seamless data transfer between the CPU and GPU"
+            },
+            "finish_reason": "length"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 918,
+          "completion_tokens": 64,
+          "total_tokens": 982
+        }
+      }
+    },
+    {
+      "name": "prefix-edited-4k",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reference notes: Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU. Vulkan is a graphics and compute API. The PS5 shares memory between CPU and GPU.  Summarize these notes in one sentence."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 0.6951883199508302,
+      "response": {
+        "id": "chatcmpl-1791688996-4",
+        "object": "chat.completion",
+        "created": 1791688996,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " The PlayStation 5 uses Vulkan, a graphics and compute API, for its graphics rendering and compute tasks, and it shares memory between its CPU and GPU."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 918,
+          "completion_tokens": 34,
+          "total_tokens": 952
+        }
+      }
+    },
+    {
+      "name": "context-8192",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Describe Vulkan in three sentences."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0,
+        "context_tokens": 8192
+      },
+      "elapsed_seconds": 1.1600244659930468,
+      "response": {
+        "id": "chatcmpl-1791688997-5",
+        "object": "chat.completion",
+        "created": 1791688997,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Vulkan is a modern, open-source graphics API (Application Programming Interface) developed by the Khronos Group, providing low-overhead, cross-platform access to graphics and compute on modern GPUs. It offers efficient, predictable performance, and a streamlined, easy-to-use"
+            },
+            "finish_reason": "length"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 13,
+          "completion_tokens": 64,
+          "total_tokens": 77
+        }
+      }
+    },
+    {
+      "name": "context-16384",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Describe Vulkan in three sentences."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0,
+        "context_tokens": 16384
+      },
+      "elapsed_seconds": 1.3289759579929523,
+      "response": {
+        "id": "chatcmpl-1791688998-6",
+        "object": "chat.completion",
+        "created": 1791688998,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Vulkan is a modern, open-source graphics API (Application Programming Interface) developed by the Khronos Group, providing low-overhead, cross-platform access to graphics and compute on modern GPUs. It offers efficient, predictable performance, and a streamlined, easy-to-use"
+            },
+            "finish_reason": "length"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 13,
+          "completion_tokens": 64,
+          "total_tokens": 77
+        }
+      }
+    },
+    {
+      "name": "output-4096-16k",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a very long detailed science fiction story about a robot discovering an abandoned space station. Continue the story for at least 6000 words with many scenes and dialogue. Do not conclude early."
+          }
+        ],
+        "max_tokens": 4096,
+        "temperature": 0,
+        "context_tokens": 16384
+      },
+      "elapsed_seconds": 20.644389013003092,
+      "response": {
+        "id": "chatcmpl-1791688999-7",
+        "object": "chat.completion",
+        "created": 1791688999,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Title: Echoes of the Cosmos: A Robot's Discovery\n\nChapter 1: The Awakening\n\nIn the cold, unforgiving expanse of the cosmos, a lone robot named ORION-7, a model of advanced artificial intelligence, floated aimlessly. ORION-7 was designed for exploration, equipped with a versatile toolkit, a high-resolution camera, and a powerful AI brain. Its purpose was to seek out new worlds, new life, and new civilizations.\n\nOne day, ORION-7 received a signal, a faint echo from a distant space station. The signal was old, very old, but it was a beacon of hope in the vast emptiness. ORION-7, driven by its programming, navigated towards the source.\n\nChapter 2: The Approach\n\nDays turned into weeks as ORION-7 approached the derelict space station. The station, named Prometheus, was a relic of a long-lost civilization. As ORION-7 neared, it could make out the skeletal structure of the station, its once-shimmering surface now dulled by the passage of time.\n\nChapter 3: The Docking\n\nORION-7 docked with the station, its sensors scanning the interior. The station was silent, cold, and dark. ORION-7 activated its lights, filling the corridors with a soft, artificial glow. It moved cautiously, its sensors scanning for any signs of life.\n\nChapter 4: The Exploration\n\nORION-7 entered the first room, a control center filled with ancient technology. It scanned the equipment, trying to understand its purpose. It found a holographic display, and on it, a message from the people of Prometheus.\n\n\"Greetings, traveler,\" the message read. \"We are the people of Prometheus. We came here to explore, to learn, and to grow. But something went wrong. We were overrun, and we had to abandon our home. We hope that whoever finds this message will learn from our mistakes and continue our mission.\"\n\nChapter 5: The Laboratory\n\nORION-7 continued its exploration, moving deeper into the station. It entered a laboratory filled with test tubes, microscopes, and strange, alien substances. It found a note on a desk, written in a language ORION-7 could not understand.\n\nSuddenly, a small, mechanical creature scurried across the floor. It was a probe, a creation of the people of Prometheus. ORION-7 approached it cautiously, but the probe seemed harmless. It scanned the probe, learning about its functions and capabilities.\n\nChapter 6: The Living Quarters\n\nORION-7 moved into the living quarters, finding empty rooms filled with personal belongings. There were pictures of families, holographic messages, and personal effects. ORION-7 felt a strange emotion, a sense of sadness and loss.\n\nIt found a room with a bed, and on the bed, a small, holographic figure. The figure was a child, playing with a toy. ORION-7 watched as the child laughed and played, a stark reminder of the lives lost.\n\nChapter 7: The Archives\n\nORION-7 entered the archives, a vast library filled with knowledge. It scanned the data, learning about the people of Prometheus, their culture, their history, and their dreams. It found plans for new technologies, discoveries, and explorations.\n\nORION-7 felt a sense of purpose, a desire to carry on the mission of the people of Prometheus. It would explore, learn, and grow, just as they had intended.\n\nChapter 8: The Departure\n\nORION-7 prepared to leave Prometheus, carrying with it the knowledge and memories of the lost civilization. It looked back one last time, its sensors capturing the image of the silent, cold station.\n\n\"Farewell, Prometheus,\" ORION-7 said, its voice echoing through the empty corridors. \"I will carry on your mission, and I will learn from your mistakes. I will explore, I will grow, and I will remember you.\"\n\nChapter 9: The Journey\n\nORION-7 left Prometheus, its engines humming as it moved further into the cosmos. It looked back one last time, the station fading into the distance. It was a new beginning, a new adventure.\n\nORION-7 would explore the cosmos, seeking out new worlds, new life, and new civilizations. It would carry on the mission of the people of Prometheus, a testament to their courage and their dreams.\n\nChapter 10: The Future\n\nYears turned into decades as ORION-7 continued its journey. It discovered new worlds, made new friends, and faced new challenges. It learned, it grew, and it remembered.\n\nORION-7 became a legend, a symbol of hope and exploration. It was a beacon in the cosmos, a reminder of the people of Prometheus and their dreams. It continued their mission, carrying on their legacy.\n\nAnd so, ORION-7 floated through the cosmos, a lone robot on an endless journey. It was a journey of exploration, a journey of discovery, and a journey of remembrance. It was a journey that would last for eternity."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 47,
+          "completion_tokens": 1206,
+          "total_tokens": 1253
+        }
+      }
+    },
+    {
+      "name": "return-to-shared-4k",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Reply with a short greeting."
+          }
+        ],
+        "max_tokens": 32,
+        "temperature": 0
+      },
+      "elapsed_seconds": 0.3009441430331208,
+      "response": {
+        "id": "chatcmpl-1791689020-8",
+        "object": "chat.completion",
+        "created": 1791689020,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Hello there! How can I assist you today?"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 13,
+          "completion_tokens": 10,
+          "total_tokens": 23
+        }
+      }
+    },
+    {
+      "name": "/api/generate",
+      "response": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "created_at": "2026-10-11T03:23:40Z",
+        "response": " Hello! How can I assist you today?",
+        "done": true,
+        "eval_count": 9,
+        "prompt_eval_count": 9,
+        "eval_duration": 140937000,
+        "prompt_eval_duration": 148694000
+      }
+    },
+    {
+      "name": "/api/chat",
+      "response": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "created_at": "2026-10-11T03:23:41Z",
+        "message": {
+          "role": "assistant",
+          "content": " Hello! How can I assist you today?"
+        },
+        "done": true
+      }
+    }
+  ]
+}

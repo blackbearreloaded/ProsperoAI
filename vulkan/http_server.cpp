@@ -14,6 +14,7 @@
 #include "model_paths.hpp"
 
 #include "gpt_runtime.hpp"
+#include "runtime_settings.hpp"
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
 #include "model_downloader_ps5.hpp"
 #endif
@@ -88,8 +89,8 @@ constexpr int kSoReuseAddr = 0x0004;
 constexpr int kNetPoolSize = 4 * 1024 * 1024;
 constexpr int kListenBacklog = 4;
 constexpr std::size_t kRequestCapacity = 256 * 1024;
-constexpr std::size_t kResponseTextCapacity = 4096;
-constexpr std::size_t kResponseCapacity = 8192;
+constexpr std::size_t kResponseTextCapacity = 32768;
+constexpr std::size_t kResponseCapacity = 6 * kResponseTextCapacity + 4096;
 unsigned short kHttpServerPort = 11434;
 
 // FreeBSD sockaddr_in layout: 1-byte length, 1-byte family, big-endian
@@ -311,10 +312,16 @@ void iso8601_now(char *output, std::size_t capacity)
 
 bool run_generation(const gpt_runtime_message_t *messages, unsigned message_count,
                     char *response_text, std::size_t response_capacity, unsigned max_tokens = 512,
-                    gpt_runtime_stats_t *reported_stats = nullptr)
+                    gpt_runtime_stats_t *reported_stats = nullptr, const char *model_id = nullptr, unsigned context_tokens = 0)
 {
     pthread_mutex_lock(&generation_mutex);
-    const gpt_runtime_settings_t settings{0, max_tokens};
+    gpt_runtime_settings_t settings{0, max_tokens};
+    const auto runtime = prospero_settings::get();
+    settings.context_length = runtime.context;
+    settings.kv_cache = prospero_settings::kv_name(runtime.kv);
+    settings.thinking = runtime.thinking;
+    settings.model_id = model_id;
+    settings.context_tokens = context_tokens;
     gpt_runtime_stats_t stats{};
     const int result = gpt_runtime_generate(messages, message_count, settings, response_text,
                                             response_capacity, &stats, nullptr);
@@ -504,10 +511,19 @@ void handle_get_tags(const NetApi &api, int sock)
     send_json(api, sock, body);
 }
 
+unsigned request_option(const char *body, const char *key, unsigned fallback, unsigned maximum) {
+    const char *options = json_value_start(body, "options");
+    const char *value = options ? json_value_start(options, key) : nullptr;
+    if (!value) return fallback;
+    char *end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    return end != value && parsed > 0 && parsed <= maximum ? static_cast<unsigned>(parsed) : fallback;
+}
+
 void handle_generate(const NetApi &api, int sock, const char *request_body)
 {
     char model[128] = {};
-    char prompt[3072] = {};
+    char prompt[65536] = {};
     json_find_string(request_body, "model", model, sizeof(model));
     if (!json_find_string(request_body, "prompt", prompt, sizeof(prompt)))
     {
@@ -517,19 +533,11 @@ void handle_generate(const NetApi &api, int sock, const char *request_body)
     }
     const gpt_runtime_message_t messages[1] = {{"user", prompt}};
     char response_text[kResponseTextCapacity] = {};
-    unsigned max_tokens = 512;
-    const char *options = json_value_start(request_body, "options");
-    const char *prediction = options ? json_value_start(options, "num_predict") : nullptr;
-    if (prediction)
-    {
-        char *end = nullptr;
-        const long value = std::strtol(prediction, &end, 10);
-        if (end != prediction && value > 0 && value <= 512)
-            max_tokens = static_cast<unsigned>(value);
-    }
+    const unsigned max_tokens = request_option(request_body, "num_predict", 512, 4096);
+    const unsigned context_tokens = request_option(request_body, "num_ctx", 0, 16384);
     gpt_runtime_stats_t stats{};
     const bool ok =
-        run_generation(messages, 1, response_text, sizeof(response_text), max_tokens, &stats);
+        run_generation(messages, 1, response_text, sizeof(response_text), max_tokens, &stats, model, context_tokens);
 
     char created_at[32];
     iso8601_now(created_at, sizeof(created_at));
@@ -559,7 +567,7 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
     const char *messages_array = json_value_start(request_body, "messages");
     gpt_runtime_message_t messages[16];
     char roles[16][32];
-    char contents[16][2048];
+    char contents[16][32768];
     unsigned message_count = 0;
     if (messages_array != nullptr)
     {
@@ -581,7 +589,8 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
     }
 
     char response_text[kResponseTextCapacity] = {};
-    const bool ok = run_generation(messages, message_count, response_text, sizeof(response_text));
+    const bool ok = run_generation(messages, message_count, response_text, sizeof(response_text), request_option(request_body, "num_predict", 512, 4096),
+                                   nullptr, model, request_option(request_body, "num_ctx", 0, 16384));
 
     char created_at[32];
     iso8601_now(created_at, sizeof(created_at));
@@ -868,6 +877,31 @@ std::size_t read_request(const NetApi &api, int sock, char *buffer, std::size_t 
     return wanted;
 }
 
+void handle_runtime_settings(const NetApi &api, int sock, const char *body = nullptr)
+{
+    std::lock_guard<std::mutex> lock(prospero_settings::mutex);
+    auto p = prospero_settings::read_unlocked();
+    if (body) {
+        const auto j = nlohmann::json::parse(body, nullptr, false);
+        if (!j.is_object()) { openai_error(api, sock, "400 Bad Request", "invalid_settings", "Expected a settings object."); return; }
+        constexpr const char *contexts[] = {"auto", "4k", "8k", "16k", "32k", "64k", "128k"};
+        constexpr unsigned values[] = {0, 4096, 8192, 16384, 32768, 65536, 131072};
+        for (auto it = j.begin(); it != j.end(); ++it) {
+            bool valid = false;
+            if (it.key() == "context" && it.value().is_string()) {
+                for (unsigned i = 0; i < 7; ++i) if (it.value() == contexts[i]) { p.context = values[i]; valid = true; }
+            } else if (it.key() == "kv" && it.value().is_string()) {
+                if (it.value() == "auto") { p.kv = 0; valid = true; }
+            } else if (it.key() == "thinking" && it.value().is_boolean()) { p.thinking = it.value().get<bool>(); valid = true; }
+            if (!valid) { openai_error(api, sock, "400 Bad Request", "invalid_settings", "Invalid runtime setting."); return; }
+        }
+        if (!prospero_settings::set_unlocked(p)) { openai_error(api, sock, "500 Internal Server Error", "settings_write_failed", "Could not save runtime settings."); return; }
+    }
+    const std::string context = p.context ? std::to_string(p.context / 1024) + "k" : "auto";
+    const auto response = nlohmann::json{{"context", context}, {"kv", prospero_settings::kv_name(p.kv)}, {"thinking", p.thinking}}.dump();
+    send_json(api, sock, response.c_str());
+}
+
 void handle_connection(const NetApi &api, int sock)
 {
     auto storage = std::make_unique<char[]>(kRequestCapacity);
@@ -902,6 +936,10 @@ void handle_connection(const NetApi &api, int sock)
         handle_openai_chat(api, sock, body);
 #endif
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+    else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/settings/runtime") == 0)
+        handle_runtime_settings(api, sock);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/settings/runtime") == 0)
+        handle_runtime_settings(api, sock, body);
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/presets") == 0)
         handle_model_presets(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/presets") == 0)

@@ -18,7 +18,7 @@ document.querySelector('.brand').onclick = e => { e.preventDefault(); showWelcom
 function showWelcome(){if(controller){$('feedback').textContent='Stop the current response before leaving this conversation.';return;}current=null;page('workspace');$('chat').hidden=true;$('welcome').hidden=false;renderHistory();}
 $('workspace-back').onclick=showWelcome;
 function applyPreferences() { document.body.classList.toggle('daylight', preferences.theme === 'daylight'); document.body.dataset.accent = preferences.accent; document.body.classList.toggle('large', preferences.size === 'large'); document.body.classList.toggle('reduce-motion', preferences.motion); document.body.classList.toggle('contrast', preferences.contrast); drawSculpture(0); }
-for (const [id, prop] of [['theme','theme'],['accent','accent'],['text-size','size'],['motion','motion'],['contrast','contrast'],['temperature','temperature'],['length','length'],['sounds','sounds'],['volume','volume']]) { const el = $(id); if (el.type === 'checkbox') el.checked = Boolean(preferences[prop]); else el.value = preferences[prop]; el.onchange = () => { preferences[prop] = el.type === 'checkbox' ? el.checked : ['temperature','length','volume'].includes(prop) ? Number(el.value) : el.value; $('temperature-value').textContent = preferences.temperature; save('prospero-preferences',preferences); applyPreferences(); }; }
+for (const [id, prop] of [['theme','theme'],['accent','accent'],['text-size','size'],['motion','motion'],['contrast','contrast'],['temperature','temperature'],['length','length'],['sounds','sounds'],['volume','volume']]) { const el = $(id); if (el.type === 'checkbox') el.checked = Boolean(preferences[prop]); else el.value = preferences[prop]; el.onchange = () => { preferences[prop] = el.type === 'checkbox' ? el.checked : ['temperature','length','context','volume'].includes(prop) ? Number(el.value) : el.value; $('temperature-value').textContent = preferences.temperature; save('prospero-preferences',preferences); applyPreferences(); }; }
 $('temperature-value').textContent = preferences.temperature;
 function drawMark() { const svg = document.querySelector('.mark'); for (let i=0;i<4;i++) { const r=10+i*3, start=-0.4+i*0.24,end=start+4.7; const p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('d',`M ${25+r*Math.cos(start)} ${25+r*Math.sin(start)} A ${r} ${r} 0 1 1 ${25+r*Math.cos(end)} ${25+r*Math.sin(end)}`);p.setAttribute('fill','none');p.setAttribute('stroke','currentColor');p.setAttribute('stroke-width','1.4');svg.append(p); } }
 function drawSculpture(time) { const ctx=$('sculpture').getContext('2d'), size=300,cx=360,cy=360,turn=0.46+0.025*Math.sin(time*0.35);ctx.clearRect(0,0,720,720);ctx.lineWidth=1.25;const color=getComputedStyle(document.body).getPropertyValue('--accent').trim(); for(let band=0;band<40;band++){const v=band*2*Math.PI/40;let lx,ly;for(let step=0;step<=72;step++){const u=step*2*Math.PI/72,r=size*(0.70+0.24*Math.cos(v)),x=r*Math.cos(u),y=r*Math.sin(u),z=size*0.24*Math.sin(v),ty=y*0.62-z*0.78,depth=y*0.78+z*0.62,px=cx+x*Math.cos(turn)-ty*Math.sin(turn),py=cy+x*Math.sin(turn)+ty*Math.cos(turn);if(step){ctx.globalAlpha=0.22+0.70*(depth/size+1)*0.5;ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(px,py);ctx.stroke();}lx=px;ly=py;}}ctx.globalAlpha=1; }
@@ -38,6 +38,7 @@ async function refreshModels(){
             $(id).textContent=count?`${count} ${count===1?'model':'models'} installed`:'No model yet';
         }
         renderModels();
+        renderHistory();
         $('model-chip').textContent=current?.model||selectedModel||'Choose a model';
     }catch(error){$('status').textContent='PS5 · Disconnected';$('feedback').textContent=error.message;}
 }
@@ -86,7 +87,7 @@ async function downloadPreset(index){
 }
 async function browseRepository(repository){$('download-status').textContent='Loading GGUF files…';try{await api('/api/models/browse',{method:'POST',body:JSON.stringify({repository})});await pollDownloads();}catch(error){$('download-status').textContent=error.message;}}
 $('download-repo').onsubmit=async event=>{event.preventDefault();const query=$('model-query').value.trim();$('download-status').textContent='Searching public repositories…';$('browse-models').disabled=true;$('download-list').replaceChildren();try{await api('/api/models/search',{method:'POST',body:JSON.stringify({query})});await pollDownloads();}catch(error){$('download-status').textContent=error.message;}finally{$('browse-models').disabled=false;}};
-function renderDownloadItems(data){const list=$('download-list');list.replaceChildren();for(let index=0;index<(data.items||[]).length;index++){const item=data.items[index],row=document.createElement('div');row.className='download-item';const detail=document.createElement('div'),name=document.createElement('strong'),size=document.createElement('small'),button=document.createElement('button');name.textContent=item.name;if(data.state==='search_ready'){size.textContent=`${Number(item.downloads||0).toLocaleString()} downloads`;button.textContent='Browse files';button.disabled=false;button.onclick=()=>browseRepository(item.name);}else{size.textContent=`${(item.size/1073741824).toFixed(2)} GiB`;button.textContent='Download';button.disabled=data.state!=='ready';button.onclick=()=>startModelDownload(index);}button.className='primary';detail.append(name,size);row.append(detail,button);list.append(row);}}
+function renderDownloadItems(data){const list=$('download-list');list.replaceChildren();for(let index=0;index<(data.items||[]).length;index++){const item=data.items[index],row=document.createElement('div');row.className='download-item';const detail=document.createElement('div'),name=document.createElement('strong'),size=document.createElement('small'),button=document.createElement('button');name.textContent=item.name;if(data.state==='search_ready'){size.textContent=`${Number(item.downloads||0).toLocaleString()} downloads`;button.textContent='Browse files';button.disabled=false;button.onclick=()=>browseRepository(item.name);}else{size.textContent=`${(item.size/1073741824).toFixed(2)} GiB · ${item.fit === "tight" ? "tight on memory (estimate)" : item.fit === "does_not_fit" ? "will not fit (estimate)" : "fits (estimate)"}`;button.textContent='Download';button.disabled=data.state!=='ready';button.onclick=()=>startModelDownload(index);}button.className='primary';detail.append(name,size);row.append(detail,button);list.append(row);}}
 $('download-cancel').onclick=async()=>{
     if(!confirm('Cancel this download? What has been downloaded so far is removed.'))return;
     try{await api('/api/models/download',{method:'DELETE'});await pollDownloads();}
@@ -111,7 +112,15 @@ async function startModelDownload(index){$('download-status').textContent='Start
 $('search').oninput=renderModels;$('model-chip').onclick=()=>page('models');$('model-dialog').addEventListener('close',()=>{if($('model-dialog').returnValue==='use'){selectedModel=pendingModel;newConversation();renderModels();}});
 function renderHistory(){
     const list=$('history');list.replaceChildren();
-    for(const conversation of conversations){
+    const kind=$('history-kind').value, query=$('history-search').value.trim().toLocaleLowerCase();
+    const shown=conversations.filter(conversation=>{
+        const model=models.find(model=>model.id===conversation.model);
+        const purpose=conversation.purpose||(model ? model.purpose||'text-to-text' : 'other');
+        const searchable=[conversation.title,conversation.model,conversation.modelName,model?.name,...conversation.messages.map(message=>message?.content||'')].join('\n').toLocaleLowerCase();
+        return (kind==='all'||purpose===kind)&&searchable.includes(query);
+    });
+    $('history-count').textContent=`${shown.length} of ${conversations.length} conversations`;
+    for(const conversation of shown){
         const row=document.createElement('div');row.className='history-row';
         const open=document.createElement('button');open.textContent=conversation.title||'New conversation';open.classList.toggle('selected',conversation===current);
         open.onclick=()=>{if(controller){$('feedback').textContent='Stop the current response before switching conversations.';return;}current=conversation;openChat();renderMessages();renderHistory();$('chat').classList.remove('show-history');$('history-toggle').setAttribute('aria-expanded','false');};
@@ -129,7 +138,14 @@ $('delete-dialog').addEventListener('close',()=>{
     renderHistory();
 });
 function openChat(){page('workspace');$('welcome').hidden=true;$('chat').hidden=false;$('chat-title').textContent=current?.title||'A little room for big ideas.';$('model-chip').textContent=current?.model||selectedModel||'Choose a model';}
-function newConversation(){if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}current={id:globalThis.crypto?.randomUUID?.()||String(Date.now()),title:'New conversation',model:selectedModel,messages:[]};conversations.unshift(current);openChat();renderMessages();renderHistory();$('prompt').focus();}
+$('history-kind').onchange=renderHistory;
+$('history-search').oninput=renderHistory;
+function newConversation(){
+    if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}
+    const model=models.find(model=>model.id===selectedModel);
+    current={id:globalThis.crypto?.randomUUID?.()||String(Date.now()),title:'New conversation',model:selectedModel,modelName:model?.name||selectedModel,purpose:model ? model.purpose||'text-to-text' : 'other',messages:[]};
+    conversations.unshift(current);openChat();renderMessages();renderHistory();$('prompt').focus();
+}
 function startKind(kind){if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}const candidates=models.filter(model=>modelKind(model)===kind);if(!candidates.length){modelFilter=String(kind);$('search').value='';for(const tab of document.querySelectorAll('[data-kind]'))tab.classList.toggle('selected',tab.dataset.kind===modelFilter);page('models');renderModels();return;}selectedModel=candidates.find(model=>model.id===selectedModel)?.id||candidates[0].id;newConversation();}
 $('start').onclick=()=>startKind(0);for(const [kind,id] of ['converse','imagine','compose','speak'].entries())$(id).onclick=()=>startKind(kind);$('new').onclick=newConversation;$('history-toggle').onclick=()=>{$('chat').classList.toggle('show-history');$('history-toggle').setAttribute('aria-expanded',String($('chat').classList.contains('show-history')));};
 function addMessage(message){const el=document.createElement('div');el.className=`message ${message.role==='user'?'user':'assistant'}`;el.textContent=message.content||'';$('messages').append(el);return el;}
@@ -147,3 +163,21 @@ let audioContext;function sound(){if(!preferences.sounds)return;try{audioContext
 document.addEventListener('click',e=>{if(e.target.closest('button'))sound();});
 for(const button of document.querySelectorAll('[data-category]'))button.onclick=()=>{for(const b of document.querySelectorAll('[data-category]')){const chosen=b===button;b.classList.toggle('selected',chosen);b.setAttribute('aria-selected',String(chosen));$('setting-'+b.dataset.category).hidden=!chosen;}};
 $('preview-send').onclick=()=>{newConversation();$('prompt').value='Tell me a story.';$('prompt').focus();};
+
+async function runtimeSettings(change) {
+  const controls = ['runtime-context','runtime-thinking'].map($);
+  controls.forEach(el => el.disabled = true);
+  try {
+    const response = await api('/api/settings/runtime', change ? {method:'POST',body:JSON.stringify(change)} : {});
+    if (!response.ok) throw new Error('Could not save or load runtime settings.');
+    const settings = await response.json();
+    $('runtime-context').value = settings.context;
+    $('runtime-thinking').checked = settings.thinking;
+    $('runtime-feedback').textContent = '';
+  } catch (error) { $('runtime-feedback').textContent = error.message; }
+  finally { controls.forEach(el => el.disabled = false); }
+}
+for (const [id,key] of [['runtime-context','context'],['runtime-thinking','thinking']]) {
+  $(id).onchange = () => runtimeSettings({[key]:key === 'thinking' ? $(id).checked : $(id).value});
+}
+document.querySelector('[data-page="settings"]').addEventListener('click', () => runtimeSettings());

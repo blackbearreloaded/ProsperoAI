@@ -56,12 +56,14 @@ void line(const char *, const char *, ...)
 
 int main()
 {
-    using prospero_model_download::Fit;
     using prospero_model_download::estimate_fit;
+    using prospero_model_download::Fit;
     assert(estimate_fit(0) == Fit::Fits);
-    assert(estimate_fit(3ULL * 1024 * 1024 * 1024) == Fit::Fits);          // Mistral Q4_0-sized
-    assert(estimate_fit(8ULL * 1024 * 1024 * 1024) == Fit::Tight);         // spec's Q2_g64 7.59 GB plus margin
+    assert(estimate_fit(3ULL * 1024 * 1024 * 1024) == Fit::Fits); // Mistral Q4_0-sized
+    assert(estimate_fit(8ULL * 1024 * 1024 * 1024) ==
+           Fit::Tight); // spec's Q2_g64 7.59 GB plus margin
     assert(estimate_fit(10ULL * 1024 * 1024 * 1024) == Fit::Tight);
-    assert(estimate_fit(11ULL * 1024 * 1024 * 1024) == Fit::DoesNotFit);   // above the 10.7 GiB ceiling
-    assert(estimate_fit(~0ULL) == Fit::DoesNotFit);                        // no overflow/UB at the top of the range
+    assert(estimate_fit(11ULL * 1024 * 1024 * 1024) ==
+           Fit::DoesNotFit);                        // above the 10.7 GiB ceiling
+    assert(estimate_fit(~0ULL) == Fit::DoesNotFit); // no overflow/UB at the top of the range
 }

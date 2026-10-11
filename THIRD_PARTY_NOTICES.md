@@ -14,6 +14,13 @@ remains for media and system helpers. Model runtimes incorporate work from
 [Stable Audio Open Small](https://huggingface.co/stabilityai/stable-audio-open-small),
 and [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M).
 
+The shared-Vulkan SD compile probe fetches stable-diffusion.cpp (MIT) at
+`f89d9b13d730eabeede7314ce49dacd18d3c90c2`, pinned in `tools/deps.json`.
+The experimental shared folder builds this source against llama's ggml; default
+release packaging retains the previously shipped media runtime until console gates pass.
+Host-only recursive PickleValue adaptation and constant-initialized TLS declarations
+are maintained in `tools/shared-vulkan/`; the pinned source checkout is unchanged.
+
 ProsperoAI is built on the
 [PS5 Native App Boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate)
 and uses the public [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk).
@@ -94,3 +101,22 @@ endorsed by Sony Interactive Entertainment or the model authors.
 The PS5 ELF converter and FSELF writer in `tooling/native/` are derived from
 [SharpProspero](https://github.com/SvenGDK/SharpProspero), Copyright (C) 2026
 SvenGDK, GPL-3.0, and were translated to C++ and modified by BlackBearReloaded.
+
+## MiniCPM5 chat template
+
+`tests/fixtures/minicpm5-chat.jinja` is OpenBMB's chat template extracted from
+the official MiniCPM5-2B Q8_0 GGUF at revision
+`2079a22f3beaa4e306449978533478fe0522f4b3`. It is used as the formatter test oracle.
+MiniCPM5 is published under Apache-2.0; see `third_party/minicpm5/LICENSE`.
+The optional model preset downloads weights from OpenBMB when requested.
+
+## Experimental Bonsai 2 text runtime
+
+The isolated Bonsai 2 build uses [PrismML-Eng/llama.cpp](https://github.com/PrismML-Eng/llama.cpp)
+at `e8fd209c975c80aa7fb36a8423571ff3b1b7e955` (MIT), release
+`prism-b10772-e8fd209`. It provides private PTQ1_0/PQ2_0 quantization and Hadamard
+kernels. Its verified source archive is pinned in `tools/deps.json`; guarded PS5
+positional-read adapters are applied by `tools/prepare-llama-ps5-io.py`.
+This is a separately built text experiment, not an unverified replacement of the
+shared media ggml ABI. The Prism source licence remains in the dependency tree.
+The optional Ternary Bonsai 2 checkpoint is Apache-2.0 and is not bundled.

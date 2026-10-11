@@ -1,0 +1,321 @@
+{
+  "original_settings": {
+    "context": "auto",
+    "kv": "auto",
+    "thinking": false
+  },
+  "runs": [
+    {
+      "name": "arithmetic-0",
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Give a one-word answer."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 5.772171477030497,
+      "response": {
+        "id": "chatcmpl-1791692366-1",
+        "object": "chat.completion",
+        "created": 1791692366,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Four"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 24,
+          "completion_tokens": 1,
+          "total_tokens": 25
+        }
+      }
+    },
+    {
+      "name": "arithmetic-1",
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Give a one-word answer."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 0.8097497510025278,
+      "response": {
+        "id": "chatcmpl-1791692372-2",
+        "object": "chat.completion",
+        "created": 1791692372,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Four"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 24,
+          "completion_tokens": 1,
+          "total_tokens": 25
+        }
+      }
+    },
+    {
+      "name": "arithmetic-2",
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Give a one-word answer."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 0.8132638619863428,
+      "response": {
+        "id": "chatcmpl-1791692372-3",
+        "object": "chat.completion",
+        "created": 1791692372,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Four"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 24,
+          "completion_tokens": 1,
+          "total_tokens": 25
+        }
+      }
+    },
+    {
+      "name": "explanation-4k",
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Explain why the sky appears blue during the day in three concise sentences."
+          }
+        ],
+        "max_tokens": 256,
+        "temperature": 0
+      },
+      "elapsed_seconds": 9.119265037996229,
+      "response": {
+        "id": "chatcmpl-1791692373-4",
+        "object": "chat.completion",
+        "created": 1791692373,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Sunlight contains all colors of the visible spectrum, but the atmosphere scatters shorter wavelengths, such as blue and violet, much more strongly than longer wavelengths like red. Although violet light is scattered even more than blue, our eyes are more sensitive to blue and the sun emits less violet light, so we perceive the sky as blue. This phenomenon, known as Rayleigh scattering, occurs because air molecules are small enough to interact with and deflect these shorter wavelengths in all directions."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 27,
+          "completion_tokens": 94,
+          "total_tokens": 121
+        }
+      }
+    },
+    {
+      "name": "thinking-4k",
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "context": "4k",
+      "thinking": true,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "A box has three red balls and two blue balls. What fraction of the balls is blue? Explain briefly."
+          }
+        ],
+        "max_tokens": 1024,
+        "temperature": 0
+      },
+      "elapsed_seconds": 12.802090490004048,
+      "response": {
+        "id": "chatcmpl-1791692382-5",
+        "object": "chat.completion",
+        "created": 1791692382,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "<think>\n\n</think>\n\nTo find the fraction of blue balls, follow these steps:\n\n1.  **Count the blue balls:** There are **2** blue balls.\n2.  **Count the total number of balls:** There are 3 red balls + 2 blue balls = **5** total balls.\n3.  **Write the fraction:** The fraction of blue balls is the number of blue balls divided by the total number of balls.\n\n$$ \\frac{\\text{Blue Balls}}{\\text{Total Balls}} = \\frac{2}{5} $$\n\n**Answer:** The fraction of the balls that is blue is **2/5**."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 30,
+          "completion_tokens": 135,
+          "total_tokens": 165
+        }
+      }
+    },
+    {
+      "name": "context-16k",
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "context": "16k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Write a short greeting."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 1.5948036210029386,
+      "response": {
+        "id": "chatcmpl-1791692395-6",
+        "object": "chat.completion",
+        "created": 1791692395,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Hello! How can I help you today?"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 17,
+          "completion_tokens": 9,
+          "total_tokens": 26
+        }
+      }
+    },
+    {
+      "name": "switch-minicpm",
+      "model": "minicpm5-2b-q8-0.gguf",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "minicpm5-2b-q8-0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 2.3663134810049087,
+      "response": {
+        "id": "chatcmpl-1791692397-7",
+        "object": "chat.completion",
+        "created": 1791692397,
+        "model": "minicpm5-2b-q8-0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 22,
+          "completion_tokens": 2,
+          "total_tokens": 24
+        }
+      }
+    },
+    {
+      "name": "return-bonsai2",
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "max_tokens": 64,
+        "temperature": 0
+      },
+      "elapsed_seconds": 5.500624253007118,
+      "response": {
+        "id": "chatcmpl-1791692399-8",
+        "object": "chat.completion",
+        "created": 1791692399,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "4"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 21,
+          "completion_tokens": 1,
+          "total_tokens": 22
+        }
+      }
+    }
+  ]
+}

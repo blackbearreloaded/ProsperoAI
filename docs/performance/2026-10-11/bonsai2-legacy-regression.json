@@ -1,0 +1,124 @@
+{
+  "runs": [
+    {
+      "model": "mistral-7b-instruct-v0.3-q4-0",
+      "request": {
+        "model": "mistral-7b-instruct-v0.3-q4-0",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 64
+      },
+      "response": {
+        "id": "chatcmpl-1791693578-1",
+        "object": "chat.completion",
+        "created": 1791693578,
+        "model": "mistral-7b-instruct-v0.3-q4-0",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 14,
+          "completion_tokens": 3,
+          "total_tokens": 17
+        }
+      },
+      "http_seconds": 2.334104957000818
+    },
+    {
+      "model": "kokoro-82m-fp16",
+      "request": {
+        "model": "kokoro-82m-fp16",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello from Prospero AI."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 64
+      },
+      "response": {
+        "id": "chatcmpl-1791693580-2",
+        "object": "chat.completion",
+        "created": 1791693580,
+        "model": "kokoro-82m-fp16",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Speech generated locally: /download0/prosperoai-audio.wav"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 1,
+          "total_tokens": 1
+        }
+      },
+      "http_seconds": 85.62969870696543,
+      "wav": {
+        "channels": 1,
+        "rate": 24000,
+        "width": 2,
+        "frames": 52200,
+        "peak": 9600
+      }
+    },
+    {
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 64
+      },
+      "response": {
+        "id": "chatcmpl-1791693666-3",
+        "object": "chat.completion",
+        "created": 1791693666,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "4"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 21,
+          "completion_tokens": 1,
+          "total_tokens": 22
+        }
+      },
+      "http_seconds": 5.533144555985928
+    }
+  ],
+  "restored_settings": {
+    "context": "auto",
+    "kv": "auto",
+    "thinking": false
+  }
+}

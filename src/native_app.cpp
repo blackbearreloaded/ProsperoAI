@@ -1,6 +1,7 @@
 // ProsperoAI native application controller.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_app.hpp"
+#include "runtime_settings.hpp"
 
 #include "debug_log.hpp"
 #ifdef PS5_LLAMA_VULKAN
@@ -20,7 +21,6 @@
 #ifndef PROSPERO_HOST
 extern "C" int scePthreadCreate(void **, const void *, void *(*)(void *), void *, const char *);
 extern "C" int scePthreadJoin(void *, void **);
-extern "C" int ps5_agc_backend_reserve();
 #endif
 #ifdef PS5_MEDIA_AUDIO
 extern "C" int ps5_media_play_wav(const char *);
@@ -68,8 +68,12 @@ prospero_session::Message message(const char *role, const std::string &text)
 void validate(Preferences &p)
 {
     p.style = std::min(p.style, 2U);
+    if (!prospero_settings::valid_context(p.context_length))
+        p.context_length = 0;
+    p.kv_cache = 0; // Cache precision is always automatic.
     if (p.output_limit != 64 && p.output_limit != 128 && p.output_limit != 192 &&
-        p.output_limit != 256)
+        p.output_limit != 256 && p.output_limit != 512 && p.output_limit != 1024 &&
+        p.output_limit != 2048 && p.output_limit != 4096)
         p.output_limit = 128;
     p.theme = std::min(p.theme, 1U);
     p.accent = std::min(p.accent, 2U);
@@ -114,6 +118,12 @@ void load_preferences(Preferences &p, const std::vector<Model> &models)
                 p.style = number;
             else if (std::strcmp(key, "tokens") == 0)
                 p.output_limit = number;
+            else if (std::strcmp(key, "context") == 0)
+                p.context_length = number;
+            else if (std::strcmp(key, "kv") == 0)
+                p.kv_cache = number;
+            else if (std::strcmp(key, "thinking") == 0)
+                p.thinking = number != 0;
             else if (std::strcmp(key, "theme") == 0)
                 p.theme = number;
             else if (std::strcmp(key, "accent") == 0)
@@ -134,16 +144,19 @@ void load_preferences(Preferences &p, const std::vector<Model> &models)
 
 bool save_preferences(const Preferences &p)
 {
+    std::lock_guard<std::mutex> lock(prospero_settings::mutex);
+    const auto runtime = prospero_settings::read_unlocked();
     constexpr const char *temporary = PROSPERO_SETTINGS_PATH ".tmp";
     std::FILE *file = std::fopen(temporary, "wb");
     if (!file)
         return false;
-    const int bytes =
-        std::fprintf(file,
-                     "version=2\nmodel=%s\nstyle=%u\ntokens=%u\ntheme=%u\naccent=%u\nvolume=%"
-                     "u\ntext_size=%u\nreduced_motion=%u\nhigh_contrast=%u\n",
-                     p.model_id.c_str(), p.style, p.output_limit, p.theme, p.accent, p.volume,
-                     p.text_size, p.reduced_motion ? 1U : 0U, p.high_contrast ? 1U : 0U);
+    const int bytes = std::fprintf(
+        file,
+        "version=2\nmodel=%s\nstyle=%u\ntokens=%u\ntheme=%u\naccent=%u\nvolume=%"
+        "u\ntext_size=%u\nreduced_motion=%u\nhigh_contrast=%u\ncontext=%u\nkv=%u\nthinking=%u\n",
+        p.model_id.c_str(), p.style, p.output_limit, p.theme, p.accent, p.volume, p.text_size,
+        p.reduced_motion ? 1U : 0U, p.high_contrast ? 1U : 0U, runtime.context, runtime.kv,
+        runtime.thinking ? 1U : 0U);
     const int closed = std::fclose(file);
     if (bytes < 0 || closed != 0 || std::rename(temporary, PROSPERO_SETTINGS_PATH) != 0)
     {
@@ -450,6 +463,12 @@ bool App::retry()
 void App::set_preferences(Preferences preferences)
 {
     validate(preferences);
+    if (!prospero_settings::set(
+            {preferences.context_length, preferences.kv_cache, preferences.thinking}))
+    {
+        state_.status = "Could not save runtime settings.";
+        return;
+    }
     preferences.model_id = state_.preferences.model_id;
     state_.preferences = std::move(preferences);
     preferences_dirty_ = true;
@@ -487,6 +506,37 @@ void App::refresh_sessions()
     result_.sessions.resize(prospero_session::CatalogCapacity);
     result_.sessions.resize(prospero_session::scan(result_.sessions.data(),
                                                    static_cast<unsigned>(result_.sessions.size())));
+    // Build content search on the worker, never while rendering. Unchanged histories
+    // share their immutable text across state snapshots instead of copying it.
+    std::vector<SessionSearch> search;
+    search.reserve(result_.sessions.size());
+    for (const auto &record : result_.sessions)
+    {
+        const auto cached =
+            std::find_if(result_.session_search.begin(), result_.session_search.end(),
+                         [&](const auto &entry)
+                         {
+                             return entry.id == record.id &&
+                                    entry.updated_us == record.updated_us &&
+                                    entry.message_count == record.message_count;
+                         });
+        if (cached != result_.session_search.end())
+        {
+            search.push_back(*cached);
+            continue;
+        }
+        auto text = std::make_shared<std::string>();
+        std::vector<prospero_session::Message> messages(prospero_session::MessageCapacity);
+        prospero_session::Record loaded{};
+        if (prospero_session::load(record.id, &loaded, messages.data(), messages.size()))
+            for (unsigned i = 0; i < loaded.message_count; ++i)
+            {
+                text->append(messages[i].content);
+                text->push_back('\n');
+            }
+        search.push_back({record.id, record.updated_us, record.message_count, std::move(text)});
+    }
+    result_.session_search = std::move(search);
 }
 
 void App::refresh_images()
@@ -499,6 +549,7 @@ void App::refresh_images()
         const auto path = media_path(message.content, ".tga");
         if (path.empty() || path.find("..") != std::string::npos ||
             (path.find("/download0/ProsperoAI/sessions/") != 0 &&
+             path.find("/download0/ProsperoAI/work/image/") != 0 &&
              path.find("/download0/prosperoai-image-") != 0))
             continue;
         const auto cached = std::find_if(result_.images.begin(), result_.images.end(),
@@ -571,9 +622,6 @@ void App::work()
         break;
     }
     case Job::Select:
-#if !defined(PROSPERO_HOST) && !defined(PS5_LLAMA_VULKAN)
-        ps5_agc_backend_reserve();
-#endif
         result_.ready = gpt_runtime_select_model(argument_) && gpt_runtime_prepare() == 0;
         result_.selected_model = static_cast<int>(gpt_runtime_selected_model());
         result_.preferences.model_id =
@@ -730,17 +778,24 @@ void App::generate()
         result_.status = "Could not save your message. Check available storage, then retry.";
         return;
     }
-    char response[4096]{};
+    char response[prospero_session::MessageBytes]{};
     result_.unsaved = false;
     int status = 1;
+    const auto runtime = prospero_settings::get();
     do
     {
         std::vector<gpt_runtime_message_t> context{{"system", kPrompts[result_.preferences.style]}};
         for (std::size_t i = result_.session.context_start; i < result_.messages.size(); ++i)
             context.push_back({result_.messages[i].role, result_.messages[i].content});
-        status = gpt_runtime_generate(context.data(), static_cast<unsigned>(context.size()),
-                                      {result_.preferences.style, result_.preferences.output_limit},
-                                      response, sizeof(response), &result_.stats, stream_callback);
+        auto settings =
+            gpt_runtime_settings_t{result_.preferences.style, result_.preferences.output_limit};
+        settings.context_length = runtime.context;
+        settings.kv_cache = prospero_settings::kv_name(runtime.kv);
+        settings.thinking = runtime.thinking;
+        settings.model_id = result_.preferences.model_id.c_str();
+        status =
+            gpt_runtime_generate(context.data(), static_cast<unsigned>(context.size()), settings,
+                                 response, sizeof(response), &result_.stats, stream_callback);
         if (!status || !gpt_runtime_context_full() ||
             result_.session.context_start + 2 >= result_.messages.size())
             break;
@@ -755,8 +810,23 @@ void App::generate()
         refresh_sessions();
         return;
     }
+    prospero_session::OutputMetadata metadata;
+    metadata.model_id = model.id.c_str();
+    metadata.model_name = model.name.c_str();
+    metadata.prompt = result_.messages.back().content;
+    metadata.response_style = result_.preferences.style;
+    metadata.output_limit = result_.preferences.output_limit;
+    metadata.requested_context = runtime.context;
+    metadata.thinking = runtime.thinking;
+    metadata.seed = model.capability == Capability::Image ? 42 : -1;
     bool archived = true;
-    if (model.capability != Capability::Text)
+    if (model.capability == Capability::Text)
+    {
+        char path[320]{};
+        archived = prospero_session::archive_text(result_.session.id, result_.messages.size(),
+                                                  response, metadata, path, sizeof(path));
+    }
+    else
     {
         const bool image = model.capability == Capability::Image;
         const auto source =
@@ -765,7 +835,10 @@ void App::generate()
         archived = !source.empty() &&
                    prospero_session::archive_media(
                        result_.session.id, static_cast<unsigned>(result_.messages.size()),
-                       image ? "image" : "audio", source.c_str(), path, sizeof(path));
+                       image                                   ? "image"
+                       : model.capability == Capability::Voice ? "voice"
+                                                               : "audio",
+                       source.c_str(), path, sizeof(path), &metadata);
         if (archived)
             std::snprintf(response, sizeof(response), "%s generated locally.\n%s",
                           image ? "Image" : "Audio", path);
@@ -782,8 +855,7 @@ void App::generate()
                      : model.capability == Capability::Text ? Notice::ReplyReady
                                                             : Notice::MediaReady;
     result_.status = !saved ? "Response is shown, but could not be saved. Check available storage."
-                     : !archived ? "Created, but the media could not be archived. It may be "
-                                   "replaced by the next generation."
+                     : !archived ? "Response saved, but its work export could not be archived."
                                  : "Saved on your console";
     refresh_sessions();
 }

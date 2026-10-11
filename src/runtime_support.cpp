@@ -9,7 +9,6 @@
 #include <pthread.h>
 extern "C" int sceKernelUsleep(std::uint32_t microseconds);
 extern "C" int sceKernelDebugOutText(int channel, const char *text);
-extern "C" int ps5_agc_backend_reserve(void);
 extern "C" int sceSystemServiceHideSplashScreen(void);
 extern "C" void *mmap(void *address, std::size_t length, int protection, int flags, int descriptor,
                       long offset);

@@ -1,0 +1,52 @@
+[
+  {
+    "thinking": false,
+    "seconds": 2.3015663099940866,
+    "response": {
+      "id": "chatcmpl-1791689875-6",
+      "object": "chat.completion",
+      "created": 1791689875,
+      "model": "minicpm5-2b-q8-0.gguf",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Four."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 24,
+        "completion_tokens": 2,
+        "total_tokens": 26
+      }
+    }
+  },
+  {
+    "thinking": true,
+    "seconds": 0.3343950000125915,
+    "response": {
+      "id": "chatcmpl-1791689877-7",
+      "object": "chat.completion",
+      "created": 1791689877,
+      "model": "minicpm5-2b-q8-0.gguf",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "<think>\nFirst, I need to make sure that the answer is short.\nNext, I have to make sure that I give the correct answer.\n</think>\n\nFour."
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 20,
+        "completion_tokens": 33,
+        "total_tokens": 53
+      }
+    }
+  }
+]

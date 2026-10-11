@@ -1,0 +1,321 @@
+{
+  "inputs": [
+    "docs/performance/2026-10-11/media-agc.json",
+    "docs/performance/2026-10-11/media-vulkan.json"
+  ],
+  "fixtures": {
+    "sd": {
+      "width": 512,
+      "height": 512,
+      "steps": 1,
+      "seed": 42,
+      "cfg": 1
+    },
+    "audio": {
+      "latent_length": 256,
+      "expected_rate": 44100
+    },
+    "tts": {
+      "expected_rate": 24000
+    }
+  },
+  "limitations": [
+    "End-to-end builds, not isolated kernel benchmarks.",
+    "SD repeats retain context; audio/TTS entrypoints may reload weights. OS caches are uncontrolled.",
+    "Artifact metrics do not establish perceptual quality.",
+    "Peak memory and sustained thermals are not measured."
+  ],
+  "models": {
+    "sd-turbo-fp16": {
+      "agc": {
+        "initial_http_seconds": 73.48178390599787,
+        "repeat_http_seconds": [
+          46.08591434895061,
+          46.04381211299915,
+          46.04846440197434
+        ],
+        "median_repeat_http_seconds": 46.04846440197434
+      },
+      "vulkan": {
+        "initial_http_seconds": 30.045152629027143,
+        "repeat_http_seconds": [
+          1.0474796469788998,
+          1.0005156570114195,
+          0.9908272220054641
+        ],
+        "median_repeat_http_seconds": 1.0005156570114195
+      },
+      "speedup_agc_over_vulkan": 46.02473142651556,
+      "artifact_pairs": [
+        {
+          "phase": "initial",
+          "shape": [
+            512,
+            512,
+            3
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 2.753594716389974,
+          "rmse": 5.577050426995497,
+          "normalized_rmse": 0.021870785988217633,
+          "psnr_db": 33.2027121817603,
+          "correlation": 0.9925118720910718
+        },
+        {
+          "phase": "repeat-1",
+          "shape": [
+            512,
+            512,
+            3
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 2.753594716389974,
+          "rmse": 5.577050426995497,
+          "normalized_rmse": 0.021870785988217633,
+          "psnr_db": 33.2027121817603,
+          "correlation": 0.9925118720910718
+        },
+        {
+          "phase": "repeat-2",
+          "shape": [
+            512,
+            512,
+            3
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 2.753594716389974,
+          "rmse": 5.577050426995497,
+          "normalized_rmse": 0.021870785988217633,
+          "psnr_db": 33.2027121817603,
+          "correlation": 0.9925118720910718
+        },
+        {
+          "phase": "repeat-3",
+          "shape": [
+            512,
+            512,
+            3
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 2.753594716389974,
+          "rmse": 5.577050426995497,
+          "normalized_rmse": 0.021870785988217633,
+          "psnr_db": 33.2027121817603,
+          "correlation": 0.9925118720910718
+        }
+      ],
+      "agc_model_reported_seconds": [
+        46.074498,
+        46.034357,
+        46.038233
+      ],
+      "agc_median_model_reported_seconds": 46.038233,
+      "vulkan_model_reported_seconds": [
+        1.031631,
+        0.985287,
+        0.97535
+      ],
+      "vulkan_median_model_reported_seconds": 0.985287
+    },
+    "stable-audio-open-small": {
+      "agc": {
+        "initial_http_seconds": 396.04376980901,
+        "repeat_http_seconds": [
+          368.1100338540273,
+          367.4164619030198,
+          368.1027960649808
+        ],
+        "median_repeat_http_seconds": 368.1027960649808
+      },
+      "vulkan": {
+        "initial_http_seconds": 152.79582240397576,
+        "repeat_http_seconds": [
+          123.13887591700768,
+          124.15825726103503,
+          124.10648173798108
+        ],
+        "median_repeat_http_seconds": 124.10648173798108
+      },
+      "speedup_agc_over_vulkan": 2.9660239409746154,
+      "artifact_pairs": [
+        {
+          "phase": "initial",
+          "shape": [
+            2,
+            44100,
+            524288
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 3.165607452392578,
+          "rmse": 7.422555221706816,
+          "normalized_rmse": 0.0002265253218697719,
+          "psnr_db": 72.8976648766752,
+          "correlation": 0.9999753978400121
+        },
+        {
+          "phase": "repeat-1",
+          "shape": [
+            2,
+            44100,
+            524288
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 3.165607452392578,
+          "rmse": 7.422555221706816,
+          "normalized_rmse": 0.0002265253218697719,
+          "psnr_db": 72.8976648766752,
+          "correlation": 0.9999753978400121
+        },
+        {
+          "phase": "repeat-2",
+          "shape": [
+            2,
+            44100,
+            524288
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 3.165607452392578,
+          "rmse": 7.422555221706816,
+          "normalized_rmse": 0.0002265253218697719,
+          "psnr_db": 72.8976648766752,
+          "correlation": 0.9999753978400121
+        },
+        {
+          "phase": "repeat-3",
+          "shape": [
+            2,
+            44100,
+            524288
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 3.165607452392578,
+          "rmse": 7.422555221706816,
+          "normalized_rmse": 0.0002265253218697719,
+          "psnr_db": 72.8976648766752,
+          "correlation": 0.9999753978400121
+        }
+      ],
+      "agc_model_reported_seconds": [
+        368.085842,
+        367.393246,
+        368.079748
+      ],
+      "agc_median_model_reported_seconds": 368.079748,
+      "vulkan_model_reported_seconds": [
+        123.116415,
+        124.135291,
+        124.081301
+      ],
+      "vulkan_median_model_reported_seconds": 124.081301,
+      "output_seconds": 11.888616780045352,
+      "agc_real_time_factor": 30.96262608807688,
+      "vulkan_real_time_factor": 10.43910187653535
+    },
+    "kokoro-82m-fp16": {
+      "agc": {
+        "initial_http_seconds": 88.99205058300868,
+        "repeat_http_seconds": [
+          84.73999654699583,
+          84.74049072299385,
+          84.86192939896137
+        ],
+        "median_repeat_http_seconds": 84.74049072299385
+      },
+      "vulkan": {
+        "initial_http_seconds": 89.22289149998687,
+        "repeat_http_seconds": [
+          85.23347994196229,
+          85.11634221498389,
+          85.1515314260032
+        ],
+        "median_repeat_http_seconds": 85.1515314260032
+      },
+      "speedup_agc_over_vulkan": 0.9951728325242566,
+      "artifact_pairs": [
+        {
+          "phase": "initial",
+          "shape": [
+            1,
+            24000,
+            52200
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 44.78201149425287,
+          "rmse": 122.60036337473416,
+          "normalized_rmse": 0.0037415803514125236,
+          "psnr_db": 48.538898475073815,
+          "correlation": 0.9966373110037555
+        },
+        {
+          "phase": "repeat-1",
+          "shape": [
+            1,
+            24000,
+            52200
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 44.78201149425287,
+          "rmse": 122.60036337473416,
+          "normalized_rmse": 0.0037415803514125236,
+          "psnr_db": 48.538898475073815,
+          "correlation": 0.9966373110037555
+        },
+        {
+          "phase": "repeat-2",
+          "shape": [
+            1,
+            24000,
+            52200
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 44.78201149425287,
+          "rmse": 122.60036337473416,
+          "normalized_rmse": 0.0037415803514125236,
+          "psnr_db": 48.538898475073815,
+          "correlation": 0.9966373110037555
+        },
+        {
+          "phase": "repeat-3",
+          "shape": [
+            1,
+            24000,
+            52200
+          ],
+          "file_sha256_equal": false,
+          "sample_equal": false,
+          "mean_absolute_error": 44.78201149425287,
+          "rmse": 122.60036337473416,
+          "normalized_rmse": 0.0037415803514125236,
+          "psnr_db": 48.538898475073815,
+          "correlation": 0.9966373110037555
+        }
+      ],
+      "agc_model_reported_seconds": [
+        84.734459,
+        84.736026,
+        84.855008
+      ],
+      "agc_median_model_reported_seconds": 84.736026,
+      "vulkan_model_reported_seconds": [
+        85.228043,
+        85.111051,
+        85.143326
+      ],
+      "vulkan_median_model_reported_seconds": 85.143326,
+      "output_seconds": 2.175,
+      "agc_real_time_factor": 38.96114515999718,
+      "vulkan_real_time_factor": 39.15012939126584
+    }
+  }
+}

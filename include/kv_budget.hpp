@@ -3,6 +3,9 @@
 #include <cstdint>
 
 namespace prospero_kv {
+constexpr std::uint64_t validated_free_bytes(std::uint64_t free_bytes, std::uint64_t total_bytes) {
+    return total_bytes && free_bytes <= total_bytes ? free_bytes : 0;
+}
 enum class KvType { F16, Q8_0, Q4_0 };
 struct ModelKvShape {
     unsigned kv_layers;
@@ -17,5 +20,6 @@ struct KvChoice {
 };
 std::uint64_t kv_bytes_per_token(const ModelKvShape &shape, KvType type);
 KvChoice choose_auto(const ModelKvShape &shape, std::uint64_t weights_bytes,
-                      std::uint64_t compute_reserve_bytes, std::uint64_t free_bytes);
+                      std::uint64_t compute_reserve_bytes, std::uint64_t free_bytes,
+                      const KvType *fixed_type = nullptr);
 }

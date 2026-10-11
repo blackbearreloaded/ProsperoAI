@@ -12,7 +12,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-PlayStation%205-003791?logo=playstation&amp;logoColor=white" alt="PlayStation 5">
-  <img src="https://img.shields.io/badge/compute-Vulkan%20%2B%20AGC%20GPU-5BBEFF" alt="Vulkan and native AGC GPU">
+  <img src="https://img.shields.io/badge/compute-vulkan--runtime-5BBEFF" alt="vulkan-runtime">
   <img src="https://img.shields.io/badge/models-text%20%7C%20image%20%7C%20audio%20%7C%20speech-5DDFA4" alt="Text, image, audio, and speech">
   <img src="https://img.shields.io/badge/status-alpha-EF8354" alt="Alpha">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later"></a>
@@ -30,16 +30,17 @@ how it is built, and what a run on a console showed.
 > on the PS5 GPU. It is not production software.
 
 > [!NOTE]
-> Text inference and the native interface use Vulkan on RADV; prepared `.ps5lm` text
-> bundles and media generation use the AGC backend in the same application. Text, image,
-> audio and voice generation, and switching between them, have been run on a PS5 with
-> system software 6.02; voice generation and switching back to text also on 12.70. See
-> [current status](docs/VK_ACTIVE.md) and [build instructions](docs/BUILDING.md).
+> `vulkan-runtime` uses one pinned Prism ggml/Vulkan runtime for GGUF text,
+> SD-Turbo images, Stable Audio and Kokoro voice on RADV. The dedicated AGC inference
+> backend is removed. CPU operations still handle remaining media kernels; RADV
+> continues to use the platform GPU driver. See [current status](docs/VK_ACTIVE.md),
+> [media comparison](docs/MEDIA_VULKAN_COMPARISON.md) and [build instructions](docs/BUILDING.md).
+
 
 ## Highlights
 
 - Runs supported models locally without an account, cloud API, or conversation upload.
-- Uses Vulkan for text and native PS5 AGC for media compute.
+- Uses `vulkan-runtime` for text and media compute, including exact Ternary Bonsai 2 27B.
 - Searches and filters installed text, image, audio, and speech models in a scrolling library.
 - Uses stable model IDs for selection and saved conversations, with no eight-model catalog limit.
 - Offers Midnight and Daylight themes, a living backdrop, interface sounds, notices, reduced motion,
@@ -82,8 +83,10 @@ rename or mix their internal files.
 
 ### Legacy AGC text model preparation
 
-The hybrid release reads text GGUF files directly; these conversion tools apply to
-the legacy AGC-only text build.
+The current release reads GGUF directly. These historical conversion tools are for
+older releases and are not needed by `vulkan-runtime`. Install the equivalent GGUF
+from Models before migrating a `.ps5lm` bundle. Known installed legacy Mistral/Qwen
+IDs remain aliases to their GGUF models; the old bundle files are left untouched.
 
 The open-source [model preparation tools](model-tools/) convert a supported
 single-file GGUF into ProsperoAI's deterministic `model.ps5lm`,
@@ -139,8 +142,8 @@ generation. Both are functional demonstrations rather than real-time paths.
    `/data/prosperoai/models/`.
 
 The browser interface is at `http://<PS5-IP>:11434/`. Both interfaces show verified
-preset downloads and progress. Text inference uses Vulkan (GGUF) or AGC (prepared
-`.ps5lm` bundles); image, audio and voice use AGC.
+preset downloads and progress. Text and media inference use `vulkan-runtime`; text models use GGUF.
+Prepared legacy `.ps5lm` bundles require their equivalent GGUF for migration.
 
 Everything the app keeps is under `/data/prosperoai/`:
 
@@ -378,7 +381,7 @@ nothing; a build on `main` is started by hand (**Run workflow**). It:
 1. restores dependency and ccache data;
 2. validates source, metadata, presentation assets, and the executable writer;
 3. reproduces and verifies the clean-room runtime shim;
-4. builds pinned RADV and llama.cpp inputs, then the hybrid model-free folder and
+4. builds pinned RADV and llama.cpp inputs, then the vulkan-runtime model-free folder and
    `PPSA99004.zip` with Ninja;
 5. rejects an artifact containing model data;
 6. writes `SHA256SUMS` and uploads both release files; and
@@ -401,7 +404,7 @@ see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md).
 
 ```text
 src/                 ProsperoAI UI, sessions, model routing, and GPU runtimes
-src/backends/        Mistral and Qwen architecture-specific AGC programs
+vulkan/              Shared GGUF/media inference and RADV interface
 include/             Application interfaces
 assets/              The last-resort bitmap font (other fonts and sounds come from the kit)
 ui-kit/              Which sources of the fetched interface kit are compiled
@@ -424,7 +427,7 @@ tools/               Build, dependency, validation, packaging, and deploy script
 | Title ID | `PPSA99004` |
 | Current app version | `01.003.000` |
 | Writable data | `/data/prosperoai` (the app's sandbox without storage access) |
-| Compute backend | Native PS5 AGC GPU |
+| Compute backend | `vulkan-runtime` on RADV, with documented CPU media operations |
 
 <!-- bbr-footer:start -->
 <!-- Generated by ps5-homebrew-dev-protocol/scripts/readme-footer. Edit the template there, not here. -->

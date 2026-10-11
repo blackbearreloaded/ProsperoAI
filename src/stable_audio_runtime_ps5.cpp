@@ -1,4 +1,4 @@
-#include "ps5_agc_backend.h"
+#include "media_vulkan.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -33,7 +33,7 @@ extern "C" int ps5_stable_audio_generate(const char *prompt, char *response,
                       PS5_STABLE_AUDIO_LATENT_LENGTH * 2048.0 / 44100.0);
         progress(status);
     }
-    if (ps5_agc_backend_reserve() != 0)
+    if (prospero_media_vk_reserve() != 0)
     {
         std::snprintf(response, response_capacity,
                       "Could not reserve PS5 GPU memory for Stable Audio.");
@@ -63,13 +63,7 @@ extern "C" int ps5_stable_audio_generate(const char *prompt, char *response,
     const std::uint64_t elapsed = sceKernelGetProcessTime() - start;
     if (elapsed_microseconds)
         *elapsed_microseconds = elapsed;
-    ps5_agc_backend_print_stats();
-    const int scratch_result = ps5_agc_backend_release_scratch();
-    char scratch_log[80];
-    std::snprintf(scratch_log, sizeof(scratch_log),
-                  "[prosperoai] stable_audio_scratch_released=%u rc=%08X\n",
-                  scratch_result == 0 ? 1U : 0U, static_cast<unsigned>(scratch_result));
-    sceKernelDebugOutText(0, scratch_log);
+    prospero_media_vk::print_stats();
 
     const bool renamed = result == 0 && std::rename(generated, output) == 0;
     std::remove("/download0/stable-audio-f32.bin");

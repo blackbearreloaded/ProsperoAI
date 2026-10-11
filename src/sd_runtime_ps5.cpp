@@ -1,4 +1,5 @@
-#include "ps5_agc_backend.h"
+#include "ggml-vulkan.h"
+static_assert(GGML_MAX_NAME == 160, "SD and llama must share the tensor ABI");
 #include "stable-diffusion.h"
 
 #include "ggml-backend.h"
@@ -13,7 +14,6 @@ extern "C"
 {
     int sceKernelDebugOutText(int, const char *);
     std::uint64_t sceKernelGetProcessTime(void);
-    bool ps5SdReleaseDirectArenaIfEmpty(void);
 }
 
 namespace
@@ -112,11 +112,7 @@ void release_context()
         context = nullptr;
         context_root[0] = '\0';
     }
-    const bool scratch_released = ps5_agc_backend_release_scratch() == 0;
-    const bool arena_released = ps5SdReleaseDirectArenaIfEmpty();
-    log_line("[prosperoai] sd_context_released=1 scratch_released=%d "
-             "arena_released=%d\n",
-             scratch_released, arena_released);
+    log_line("[prosperoai] sd_context_released=1\n");
 }
 
 bool ensure_context(const char *root)
@@ -126,7 +122,9 @@ bool ensure_context(const char *root)
     release_context();
     if (!backend_registered)
     {
-        ggml_backend_register(ggml_backend_ps5agc_reg());
+        if (ggml_backend_vk_get_device_count() == 0)
+            return false;
+        ggml_backend_register(ggml_backend_vk_reg());
         backend_registered = true;
     }
     sd_set_log_callback(sd_log, nullptr);
@@ -143,8 +141,8 @@ bool ensure_context(const char *root)
     parameters.eager_load = false;
     parameters.diffusion_conv_direct = false;
     parameters.vae_conv_direct = false;
-    parameters.backend = "CPU,diffusion=PS5AGC0,vae=PS5AGC0";
-    parameters.params_backend = "PS5AGC0";
+    parameters.backend = "CPU,diffusion=Vulkan0,vae=Vulkan0";
+    parameters.params_backend = "Vulkan0";
     context = new_sd_ctx(&parameters);
     if (!context || !sd_ctx_supports_image_generation(context))
     {
@@ -203,7 +201,6 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
                          write_ppm(oracle_output, images[0]) &&
                          write_tga(display_output, images[0]);
     free_sd_images(images, image_count);
-    ps5_agc_backend_print_stats();
     const std::uint64_t elapsed = sceKernelGetProcessTime() - start;
     if (elapsed_microseconds)
         *elapsed_microseconds = elapsed;

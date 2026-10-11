@@ -6,7 +6,9 @@
 
 #include <dirent.h>
 #include <cstdio>
+#include <cerrno>
 #include <cstring>
+#include <initializer_list>
 #include <sys/time.h>
 
 extern "C"
@@ -27,9 +29,11 @@ namespace
 #if defined(PROSPERO_SESSION_TEST)
 constexpr const char *kBase = "/tmp/prosperoai-session-test";
 constexpr const char *kRoot = "/tmp/prosperoai-session-test/sessions";
+constexpr const char *kWork = "/tmp/prosperoai-session-test/work";
 #else
 constexpr const char *kBase = "/download0/ProsperoAI";
 constexpr const char *kRoot = "/download0/ProsperoAI/sessions";
+constexpr const char *kWork = "/download0/ProsperoAI/work";
 #endif
 alignas(16) char directory_entries[0x10000];
 
@@ -73,6 +77,13 @@ void ensure_roots()
 {
     sceKernelMkdir(kBase, 0777);
     sceKernelMkdir(kRoot, 0777);
+    sceKernelMkdir(kWork, 0777);
+    for (const char *kind : {"text", "image", "audio", "voice", "tmp"})
+    {
+        char path[256];
+        std::snprintf(path, sizeof(path), "%s/%s", kWork, kind);
+        sceKernelMkdir(path, 0777);
+    }
 }
 
 bool read_file(const char *path, char *output, std::size_t capacity)
@@ -146,7 +157,7 @@ bool json_u64(const char *json, const char *key, std::uint64_t *value)
     return true;
 }
 
-void write_json_string(std::FILE *file, const char *value)
+void write_json_string(std::FILE *file, const char *value, bool preserve_controls = false)
 {
     std::fputc('"', file);
     for (const unsigned char *at = reinterpret_cast<const unsigned char *>(value ? value : ""); *at;
@@ -158,6 +169,8 @@ void write_json_string(std::FILE *file, const char *value)
             std::fputc(*at, file);
         else if (*at == '\n')
             std::fputs("\\n", file);
+        else if (preserve_controls)
+            std::fprintf(file, "\\u%04x", static_cast<unsigned>(*at));
     }
     std::fputc('"', file);
 }
@@ -307,6 +320,94 @@ bool remove_tree(const char *path, unsigned depth)
             return false;
     }
     return sceKernelRmdir(path) == 0;
+}
+
+// Create uniquely and exclusively: never truncate a prior result, even if the clock
+// moves backwards or another process creates the same filename.
+std::FILE *open_output(const char *id, unsigned index, const char *kind, const char *extension,
+                       char *output, std::size_t capacity)
+{
+    ensure_roots();
+    char directory[256];
+    std::snprintf(directory, sizeof(directory), "%s/%s/%s", kWork, kind, id);
+    sceKernelMkdir(directory, 0777);
+    static std::uint64_t last_export = 0;
+    std::uint64_t suffix = now_microseconds();
+    if (suffix <= last_export)
+        suffix = last_export + 1;
+    for (unsigned attempts = 0; attempts < 32; ++attempts, ++suffix)
+    {
+        const int length = std::snprintf(output, capacity, "%s/%03u-%llu%s", directory, index,
+                                         static_cast<unsigned long long>(suffix), extension);
+        if (length < 0 || static_cast<std::size_t>(length) >= capacity)
+            return nullptr;
+        std::FILE *file = std::fopen(output, "wbx");
+        if (file)
+        {
+            last_export = suffix;
+            return file;
+        }
+        if (errno != EEXIST)
+            return nullptr;
+    }
+    return nullptr;
+}
+
+bool save_output_metadata(const char *id, unsigned index, const char *kind, const char *output,
+                          const OutputMetadata &metadata)
+{
+    char path[384];
+    std::snprintf(path, sizeof(path), "%s.json", output);
+    std::FILE *file = std::fopen(path, "wbx");
+    if (!file)
+        return false;
+    std::fputs("{\n  \"schema\": 1,\n  \"session_id\": ", file);
+    write_json_string(file, id);
+    std::fputs(",\n  \"kind\": ", file);
+    write_json_string(file, kind);
+    std::fputs(",\n  \"output\": ", file);
+    write_json_string(file, output);
+    std::fputs(",\n  \"model_id\": ", file);
+    write_json_string(file, metadata.model_id);
+    std::fputs(",\n  \"model_name\": ", file);
+    write_json_string(file, metadata.model_name);
+    std::fputs(",\n  \"prompt\": ", file);
+    write_json_string(file, metadata.prompt, true);
+    std::fprintf(file,
+                 ",\n  \"message_index\": %u,\n  \"response_style\": %u,\n"
+                 "  \"output_limit\": %u,\n  \"requested_context\": %u,\n"
+                 "  \"thinking\": %s,\n  \"seed\": ",
+                 index, metadata.response_style, metadata.output_limit, metadata.requested_context,
+                 metadata.thinking ? "true" : "false");
+    if (metadata.seed < 0)
+        std::fputs("null", file);
+    else
+        std::fprintf(file, "%lld", static_cast<long long>(metadata.seed));
+    std::fputs("\n}\n", file);
+    bool ok = std::ferror(file) == 0;
+    ok = std::fclose(file) == 0 && ok;
+    if (!ok)
+    {
+        std::remove(path);
+        return false;
+    }
+    // A separate reference preserves plain text responses and existing session schema.
+    char reference[256], temporary[272], leaf[48];
+    std::snprintf(leaf, sizeof(leaf), "output-%03u.txt", index);
+    make_path(reference, sizeof(reference), id, leaf);
+    std::snprintf(temporary, sizeof(temporary), "%s.tmp", reference);
+    file = std::fopen(temporary, "wb");
+    ok = file && std::fprintf(file, "%s\n", output) > 0;
+    if (file)
+        ok = std::fclose(file) == 0 && ok;
+    if (ok)
+        ok = std::rename(temporary, reference) == 0;
+    if (!ok)
+    {
+        std::remove(temporary);
+        std::remove(path);
+    }
+    return ok;
 }
 
 } // namespace
@@ -462,25 +563,41 @@ bool erase(const char *id)
     if (!valid_id(id))
         return false;
     char path[256];
+    bool ok = true;
+    for (const char *kind : {"text", "image", "audio", "voice"})
+    {
+        std::snprintf(path, sizeof(path), "%s/%s/%s", kWork, kind, id);
+        const int directory = sceKernelOpen(path, 0, 0);
+        if (directory >= 0)
+        {
+            sceKernelClose(directory);
+            ok = remove_tree(path, 0) && ok;
+        }
+    }
+    if (!ok)
+        return false;
     make_path(path, sizeof(path), id);
     return remove_tree(path, 0);
 }
 
 bool archive_media(const char *id, unsigned message_index, const char *kind, const char *source,
-                   char *output, std::size_t output_capacity)
+                   char *output, std::size_t output_capacity, const OutputMetadata *metadata)
 {
     if (!valid_id(id) || message_index >= MessageCapacity || !kind ||
-        (std::strcmp(kind, "image") != 0 && std::strcmp(kind, "audio") != 0) || !source ||
-        !output || output_capacity < 2)
+        (std::strcmp(kind, "image") != 0 && std::strcmp(kind, "audio") != 0 &&
+         std::strcmp(kind, "voice") != 0) ||
+        !source || !output || output_capacity < 2)
         return false;
     const char *extension = std::strrchr(source, '.');
     if (!extension || std::strlen(extension) > 8)
         return false;
-    char leaf[64];
-    std::snprintf(leaf, sizeof(leaf), "media/%s-%03u%s", kind, message_index, extension);
-    make_path(output, output_capacity, id, leaf);
+    if ((std::strcmp(kind, "image") == 0 && std::strcmp(extension, ".tga") != 0 &&
+         std::strcmp(extension, ".ppm") != 0 && std::strcmp(extension, ".png") != 0) ||
+        (std::strcmp(kind, "image") != 0 && std::strcmp(extension, ".wav") != 0))
+        return false;
     std::FILE *input = std::fopen(source, "rb");
-    std::FILE *destination = input ? std::fopen(output, "wb") : nullptr;
+    std::FILE *destination =
+        input ? open_output(id, message_index, kind, extension, output, output_capacity) : nullptr;
     if (!input || !destination)
     {
         if (input)
@@ -503,7 +620,30 @@ bool archive_media(const char *id, unsigned message_index, const char *kind, con
             break;
         }
     }
-    ok = std::fclose(input) == 0 && std::fclose(destination) == 0 && ok;
+    const bool input_closed = std::fclose(input) == 0;
+    const bool output_closed = std::fclose(destination) == 0;
+    ok = input_closed && output_closed && ok;
+    if (ok && metadata)
+        ok = save_output_metadata(id, message_index, kind, output, *metadata);
+    if (!ok)
+        std::remove(output);
+    return ok;
+}
+
+bool archive_text(const char *id, unsigned message_index, const char *text,
+                  const OutputMetadata &metadata, char *output, std::size_t output_capacity)
+{
+    if (!valid_id(id) || message_index >= MessageCapacity || !text || !output ||
+        output_capacity < 2)
+        return false;
+    std::FILE *file = open_output(id, message_index, "text", ".txt", output, output_capacity);
+    if (!file)
+        return false;
+    const std::size_t size = std::strlen(text);
+    bool ok = std::fwrite(text, 1, size, file) == size;
+    ok = std::fclose(file) == 0 && ok;
+    if (ok)
+        ok = save_output_metadata(id, message_index, "text", output, metadata);
     if (!ok)
         std::remove(output);
     return ok;

@@ -29,7 +29,6 @@
 
 void prospero_setup_sdl_memory();
 extern "C" void ps5SetInterfaceThread() noexcept;
-extern "C" int ps5_agc_backend_reserve_memory(void);
 
 namespace
 {
@@ -129,16 +128,6 @@ int main()
                           storage.access, storage.route, storage.app_dir.c_str(),
                           storage.data_root.c_str(), storage.model_root.c_str(),
                           storage.moved_models);
-#endif
-    // This thread's large allocations stay out of the model runtimes' arena, and the
-    // inference scratch takes its address range before the OpenGL runtime maps anything.
-#ifndef PROSPERO_UI_VULKAN
-    ps5SetInterfaceThread();
-    if (ps5_agc_backend_reserve_memory() != 0)
-        hui::sys::log("[prosperoai] the inference scratch could not be reserved");
-#elif defined(PROSPERO_HYBRID_MEDIA)
-    if (ps5_agc_backend_reserve_memory() != 0)
-        hui::sys::log("[prosperoai] the media inference scratch could not be reserved");
 #endif
     prospero_setup_sdl_memory();
     SDL_Init(0); // Existing media decoder, clock and IME helpers; no SDL video.

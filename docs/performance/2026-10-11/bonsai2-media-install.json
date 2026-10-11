@@ -1,0 +1,647 @@
+{
+  "installations": [
+    {
+      "preset": {
+        "id": "sd-turbo-fp16",
+        "index": 2,
+        "installed": false,
+        "kind": 1,
+        "name": "SD-Turbo FP16",
+        "size": 2580079090,
+        "source_filename": ""
+      },
+      "states": [
+        {
+          "state": "downloading",
+          "status": "Downloading: 134 / 2460 MiB (5%)",
+          "completed": 141158025,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 147 / 2460 MiB (5%)",
+          "completed": 154412681,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 159 / 2460 MiB (6%)",
+          "completed": 167618185,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 172 / 2460 MiB (7%)",
+          "completed": 180856457,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 183 / 2460 MiB (7%)",
+          "completed": 192669321,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 196 / 2460 MiB (7%)",
+          "completed": 205907593,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 208 / 2460 MiB (8%)",
+          "completed": 219145865,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 221 / 2460 MiB (9%)",
+          "completed": 232400521,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 234 / 2460 MiB (9%)",
+          "completed": 245622409,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 245 / 2460 MiB (9%)",
+          "completed": 257304201,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 257 / 2460 MiB (10%)",
+          "completed": 270526089,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 270 / 2460 MiB (10%)",
+          "completed": 283764361,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 283 / 2460 MiB (11%)",
+          "completed": 296986249,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 295 / 2460 MiB (12%)",
+          "completed": 310191753,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 308 / 2460 MiB (12%)",
+          "completed": 323462793,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 319 / 2460 MiB (12%)",
+          "completed": 335226505,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 332 / 2460 MiB (13%)",
+          "completed": 348513929,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 344 / 2460 MiB (14%)",
+          "completed": 361752201,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 356 / 2460 MiB (14%)",
+          "completed": 373466761,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 368 / 2460 MiB (14%)",
+          "completed": 386672265,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 381 / 2460 MiB (15%)",
+          "completed": 399959689,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 394 / 2460 MiB (16%)",
+          "completed": 413345417,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 406 / 2460 MiB (16%)",
+          "completed": 426583689,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 419 / 2460 MiB (17%)",
+          "completed": 439821961,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 432 / 2460 MiB (17%)",
+          "completed": 453060233,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 443 / 2460 MiB (18%)",
+          "completed": 464856713,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 455 / 2460 MiB (18%)",
+          "completed": 478094985,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 468 / 2460 MiB (19%)",
+          "completed": 491333257,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 481 / 2460 MiB (19%)",
+          "completed": 504505993,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 492 / 2460 MiB (20%)",
+          "completed": 516368009,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 505 / 2460 MiB (20%)",
+          "completed": 529606281,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 517 / 2460 MiB (21%)",
+          "completed": 542877321,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 530 / 2460 MiB (21%)",
+          "completed": 556148361,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 543 / 2460 MiB (22%)",
+          "completed": 569386633,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 555 / 2460 MiB (22%)",
+          "completed": 582608521,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 566 / 2460 MiB (23%)",
+          "completed": 594290313,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 579 / 2460 MiB (23%)",
+          "completed": 607561353,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 592 / 2460 MiB (24%)",
+          "completed": 620816009,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 604 / 2460 MiB (24%)",
+          "completed": 634070665,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 617 / 2460 MiB (25%)",
+          "completed": 647308937,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 629 / 2460 MiB (25%)",
+          "completed": 660530825,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 642 / 2460 MiB (26%)",
+          "completed": 673785481,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 649 / 2460 MiB (26%)",
+          "completed": 680839012,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 661 / 2460 MiB (26%)",
+          "completed": 693224450,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 673 / 2460 MiB (27%)",
+          "completed": 706462722,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 686 / 2460 MiB (27%)",
+          "completed": 719700994,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 698 / 2460 MiB (28%)",
+          "completed": 732939266,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 711 / 2460 MiB (28%)",
+          "completed": 746112002,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 722 / 2460 MiB (29%)",
+          "completed": 757908482,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 735 / 2460 MiB (29%)",
+          "completed": 771113986,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 748 / 2460 MiB (30%)",
+          "completed": 784368642,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 760 / 2460 MiB (30%)",
+          "completed": 797623298,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 773 / 2460 MiB (31%)",
+          "completed": 810861570,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 785 / 2460 MiB (31%)",
+          "completed": 824099842,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 798 / 2460 MiB (32%)",
+          "completed": 837338114,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 811 / 2460 MiB (32%)",
+          "completed": 850576386,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 822 / 2460 MiB (33%)",
+          "completed": 862290946,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 834 / 2460 MiB (33%)",
+          "completed": 875512834,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 847 / 2460 MiB (34%)",
+          "completed": 888718338,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 860 / 2460 MiB (34%)",
+          "completed": 901989378,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 872 / 2460 MiB (35%)",
+          "completed": 915194882,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 884 / 2460 MiB (35%)",
+          "completed": 927122434,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 896 / 2460 MiB (36%)",
+          "completed": 940229634,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 909 / 2460 MiB (36%)",
+          "completed": 953467906,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 921 / 2460 MiB (37%)",
+          "completed": 966706178,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 934 / 2460 MiB (37%)",
+          "completed": 979928066,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 945 / 2460 MiB (38%)",
+          "completed": 991675394,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 958 / 2460 MiB (38%)",
+          "completed": 1004913666,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 970 / 2460 MiB (39%)",
+          "completed": 1018151938,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        },
+        {
+          "state": "downloading",
+          "status": "Downloading: 983 / 2460 MiB (39%)",
+          "completed": 1031422978,
+          "total": 2580079090,
+          "active_preset": 2,
+          "cancelling": false,
+          "items": []
+        }
+      ]
+    }
+  ]
+}

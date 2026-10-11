@@ -275,3 +275,241 @@ PPSA99004 changes. Migration stages are documented in VK_UI_MIGRATION.md.
   connection/send failure cleanup and storage-readiness tests. Lint/native build succeeded.
 - Release-preparation CI at 9782055 succeeded in 14m17s, building RADV from pinned
   sources and the hybrid app. Production PPSA99004 has not been deployed on the console.
+
+
+## 2026-10-10 — PR #15 host-only context / automatic KV continuation
+
+Implemented native/web context and Thinking settings, persisted authenticated runtime
+settings API, Auto budgeting and context-only recreation, transformer prefix reuse and
+file-size fit badges. User clarified that only context is manually selectable; KV precision
+remains automatic. Hybrid/recurrent prefix reuse remains disabled. Download fit is a rough
+catalog-size estimate, not a measured allocation guarantee.
+
+Host evidence: 35 tests passed with clang++-18 (ASan/UBSan controller included); HTTP covers
+persistent settings, bad-value rejection and auth. Native Generation preview rendered and
+inspected; JS syntax passed. `make app-vulkan-folder` built/signed PPSA99023, entry 0x120,
+14 program headers. Compared with build/prospero-vulkan/eboot.elf, no new PRX dependency
+was added; libSceHttp2, libSceSsl and libkernel_sys are absent from the new NEEDED list.
+Changes are local and unpushed. No console access/deployment, launch code, klog or hardware
+screenshot exists for this continuation; all hardware gates remain pending. Completed and
+unfinished items are listed in PLAN_CONTEXT_MODELS_VULKAN.md and VK_ACTIVE.md.
+
+## 2026-10-10 — host media migration attempt and final runtime goal
+
+User clarified that the final target is one shared Vulkan/ggml runtime if faster, with dual
+runtime only during comparison. Updated static gates and continuation plan accordingly.
+Lapy remains pinned to release 01.003.000 source/SDK/protocol; test helper SHA-256 matches
+previous test build: `7336b7c9ac15d7b6a6bd02eec1b953355c87d8b7019e0f146846a9f2643ff69a`.
+
+Experimental audio/TTS bridge uses shared Vulkan for matrix products, attention, linear and
+selected unary kernels. Remaining CPU kernels and legacy SD remain. Host real-Vulkan parity
+passed 22 graphs on llvmpipe; full suite passed 36 tests (`build/media-migration-full-tests.log`).
+`make app-vulkan-media-folder` built/signed (`build/media-vulkan-build-final.log`), entry
+0x120, 14 program headers and unchanged baseline NEEDED dependencies. No PS5 speed evidence.
+
+Pinned SD source `f89d9b13d730eabeede7314ce49dacd18d3c90c2` compile probe fails honestly:
+`GGML_MAX_NAME >= 160` versus shared ggml 64 (`build/sd-vulkan-probe-final.log`). Tensor
+layout changes, so an SD-only macro override is unsafe; shared producers/consumers must be
+rebuilt with a common ABI. Pocket TTS archive/source migration remains unproved.
+
+No console connection/deployment, registration change, commit or push in this continuation.
+
+The default `make app-vulkan-folder` also rebuilt/signed successfully after the media
+changes (`build/media-baseline-regression.log`), confirming the feature-off build still links.
+
+## 2026-10-10 — shared SD/llama ABI and additional audio convolution work
+
+Host-only continuation resolves the earlier SD 64-vs-160 tensor ABI blocker with a new
+isolated CMake stack: llama, ggml-base/CPU/Vulkan, SD and consumers all use 160. The shared
+native folder uses source SD on Vulkan0 and omits private SD/tts ggml archives. Its AGC
+adapter compiles direct-only for legacy text, not as a ggml backend. Default packaging
+still retains the comparison paths until console gates pass.
+
+`BUILD_JOBS=2 make app-vulkan-shared-folder` built and signed PPSA99023
+(`build/shared-vulkan-app-build-final.log`). ELF entry 0x120, 14 program headers, identical
+baseline NEEDED dependencies, one defined ggml_init, no private ggml/PS5AGC backend symbols
+(`build/shared-vulkan-elf-validation.log`). Default folder rebuilt and signed after changes
+(`build/shared-vulkan-baseline-regression.log`). Lapy helper remains byte-identical to the
+previous test helper (SHA-256 recorded above).
+
+The PS5 loader initially rejected optional unresolved TLS init hooks for SD's executor
+pointer/active flag. C++20 constinit declarations suppress those hooks for upstream's
+nullptr/false initialization while retaining upstream per-thread storage. Host libstdc++
+also needed recursive PickleValue special members defined after class completion; a
+generated host-only patch keeps the pinned checkout immutable. SD reports its exact source
+commit rather than the parent app's Git commit. See tools/shared-vulkan and VK_MEDIA_MIGRATION.
+
+Audio/TTS conv_1d and conv_1d_t4x4 now use Vulkan matrix products with bounded CPU im2col
+staging (256 positions), preserving stride/padding/dilation/bias and channel-first output.
+Numerical parity covers two tiles and both bias states: 30 real Vulkan graphs pass.
+Shared host checks also passed long tensor names, SD device discovery, thread-local
+executor behavior, torch state-dict metadata/truncation parsing and actual tiny GGUF
+Vulkan decode with finite logits (`build/shared-vulkan-host-validation.log`). Vulkan uses
+llvmpipe; no PS5 GPU speed claim or full SD image/end-to-end waveform validation.
+
+`TMPDIR="$PWD/build/context-validation-tmp" HOST_CXX=clang++-18 make test`: 37 tests passed
+in 92.761 s (`build/shared-vulkan-full-tests.log`). Host shared build verified separately
+(`build/shared-vulkan-host-build-verified.log`). No console connection/deployment, title
+registration, release-version change, commit or push. PR #15 summary updated separately.
+
+
+## 2026-10-10 — Six follow-up improvements added to the plan
+
+Added six explicitly pending tasks: media buffer/graph optimization, Auto context
+allocation recovery, persistent outputs with metadata, generation limits/status,
+download resilience and mandatory shared Vulkan CI. Host priority is outputs,
+downloads and CI, then media overhead; hardware acceptance gates remain unchanged.
+Updated the detailed plan and active summary, and prepared the same checklist for
+PR #15. This entry records planning only: no implementation, console access, commit
+or push.
+
+## 2026-10-11 — Upstream integration and live test-title validation
+
+Integrated merged #19 with safer prefix reuse from #17 and optional MiniCPM5 support
+from #18 into the local continuation. Changes remain uncommitted/unpushed. PR #15 was
+updated and marked ready at the user's request; #17 currently conflicts with main.
+
+Final host suite: 49 tests, one opt-in skipped; actual llama prefix regression separately
+passed under ASan/UBSan. Lint and both normal/shared signed folder builds passed.
+
+On FW 12.70, PPSA99023 normal/shared builds booted. Mistral repeated 918-token prompt
+prefill improved from 2320.505 ms to 13.118 ms with matching greedy outputs; edited
+prefix, 8K/16K contexts, retained weights on context recreation and both Ollama routes
+passed. A max_tokens=4096 request ended naturally at 1206 tokens. Shared text/Kokoro/text
+passed; WAV was non-silent mono 24 kHz, 52200 frames. This is functional evidence,
+not perceptual parity or controlled performance acceptance. MiniCPM download resumed
+from approximately 421 MB after intentionally stopping/replacing the test build.
+Evidence: docs/performance/2026-10-11/integration-results.json and integration-runtime.txt.
+PPSA99004 was untouched; no reboot. Full SD/audio and fresh repeated AGC comparisons remain.
+
+Researched AirLLM at pinned commit 8df7eebe974a2c7cd120b334cd211cd25624cfdc.
+Kept resident GGUF/Vulkan primary and revised Phase 4c to measured native streaming
+feasibility gates; removed unsupported speed assumptions. See AIRLLM_PS5_RESEARCH.md.
+
+MiniCPM download completed: pinned SHA verified and installed, 2679710688 bytes.
+Console inference returned Four with Thinking off, and a reasoning block plus Four
+with Thinking on. Restored Auto context/thinking off afterwards. Evidence:
+performance/2026-10-11/minicpm-console-results.json.
+
+PR #17 reconciled with merged main/#19 in isolated WIP worktree. Commit d5e2d87
+was pushed without force to the original codex/vulkan-prefill branch. Preserved both
+cache safety and #19 model/context/output API behavior. Lint, 35 host tests (one opt-in
+skipped), actual llama ASan/UBSan cache regression and signed native Vulkan/AGC folder
+build passed. GitHub reports MERGEABLE; CI was queued at verification. Updated both
+#17 and #15 descriptions. Our broader working tree remains uncommitted/unpushed.
+
+PR #17 merged upstream as bdef791. Reconciled PR #18 against this main in isolated
+WIP worktree and pushed a6b9b0b to original codex/minicpm5-q8 without force. Kept
+MiniCPM explicit BOS in both tokenization passes and main cache/model/context/output
+behavior. Lint, 39 host tests (one opt-in cache skipped), all four MiniCPM tests
+including official Jinja oracle, separate actual llama ASan/UBSan cache regression,
+and native Vulkan/AGC folder cross-build/signing/framing passed. GitHub MERGEABLE;
+new CI running. Updated #18 and #15 descriptions. No console deployment for this
+standalone reconciliation, and no change to the broader unpushed continuation.
+
+
+## 2026-10-11 — Exact Ternary Bonsai 2 native baseline and preset
+
+- User's top-priority model is prism-ml/Ternary-Bonsai-2-27B-gguf PTQ1_0,
+  revision b072e1d3b35a0a630cece372c2127528e0994386. Host SHA256 and full 5.947 GB
+  console FTP readback match 53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3.
+- Stock types do not describe Prism private types 142/143 or Hadamard graph ops.
+  Build the complete pinned Prism runtime e8fd209, guarded PS5 I/O hooks, separate
+  experimental app folder and runtime-gated pinned preset. Preserve existing
+  GGUF/AGC bundles and media. Final eboot SHA256 is
+  1abdea8e26b8446b44f145218aae4fbc0cc6dc0d7e54420d9c7e10ef895380f9;
+  entry 0x120, 14 PH, same 15 NEEDED as working stock build. Use app-bonsai-folder.
+- First native generation succeeded. Final build adds correct Qwen Thinking suffix
+  and displayed opening marker (without extra generation/KV accounting), conservative
+  Auto fallback for unsigned-wrapped Vulkan free reports, and the Vulkan audio bridge
+  with Prism's older mul-mat precision API. 4K/16K and Thinking off/on pass.
+- Controlled resident decode: three identical greedy 94-token outputs at 4K/f16,
+  11.207590 / 11.209078 / 11.206914 tokens/s, median 11.207590. HTTP times 9.115 /
+  9.119 / 9.123 s, cold one-word 5.634 s. The ~15 tokens/s target remains unmet.
+- Mistral GGUF, MiniCPM5 Q8, Qwen3.5 9B Q4 and return to Bonsai pass. Qwen source
+  hash and console file size verified; do not confuse this with Bonsai's full readback.
+  Legacy AGC Mistral → Kokoro → Bonsai passes in the same final build. Kokoro WAV:
+  non-silent mono 24 kHz, 52200 frames; 85.630 s functional request. Earlier legacy
+  voice also generated a valid WAV (93.160 s); the first FTP test used an unexpanded
+  /download0 alias. Actual WAV is mapped into /data/prosperoai/work/tmp.
+- 54 host tests complete (one opt-in skipped), lint passes, actual Prism cache test
+  passes ASan/UBSan, and Prism/llvmpipe media numerical parity passes (30 GPU calls).
+  Stock build and conditional preset catalogs compile. Full host CLI build was not
+  established; host static libraries are the cache/numerical-test reference.
+- Native AirLLM/Strata S0 parser and 16 MiB disk probe pass. Bonsai layers 5.379 GB,
+  pair of largest slots 169.822 MB, resident nonlayer 556.257 MB. Uncontrolled-cache
+  disk-only median 1.384/1.778 GB/s serial/four workers. ~0.33 tokens/s I/O-only full
+  layer streaming bound; no upload or streamed-inference claim. S1 remains pending.
+- PPSA99023 remains running; saved settings restored Auto/Auto/Thinking off.
+  PPSA99004 untouched, no reboot. Image/audio models not installed: those paths,
+  perceptual parity, larger context, sustained performance and streaming remain gates.
+  Raw evidence: performance/2026-10-11/bonsai2-*.json and streaming-bonsai2-*.json.
+
+## 2026-10-11 — installed media and comparison launch recovery
+
+- SD-Turbo (8 files) and Stable Audio (73 files) installed with pinned revision,
+  per-file host SHA256 and complete console readback; all 81 passed. Receipt:
+  performance/2026-10-11/bonsai2-media-install-verified.json.
+- Prism initial smoke: SD 73.085 s, coherent 512×512 apple image; Stable Audio
+  152.424 s, stereo 44.1 kHz PCM16, 524288 frames, non-silent, zero clipped samples.
+  Actual outputs downloaded and checked. Text return to Bonsai answered 4.
+  These are functional initial timings; SD uses AGC in this Prism build.
+- After eboot replacement, launch refused 0x80940033 and UI CE-105773-3.
+  klog LNC_CHECK reported m_is_pkg=false. Registered test slot was unmounted.
+  Restored known-good Prism also refused. Explicit ShadowMountPlus /games/mount
+  resolved it; Prism launched 0x0000e018. AGC comparison then launched 0x00000018.
+  No reboot, no new title IDs, PPSA99004 untouched. Benchmark underway.
+- Final goal remains one Vulkan inference runtime for all supported models.
+  Remove dedicated AGC inference after media parity/performance/memory gates;
+  unify exact Prism Bonsai and shared media on one ABI before claiming one runtime.
+
+## 2026-10-11 — AGC versus shared Vulkan media measurements
+
+| Model | AGC initial s | Vulkan initial s | AGC repeat median s | Vulkan repeat median s | Speedup |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| SD-Turbo | 73.482 | 30.045 | 46.048 | 1.001 | 46.025× |
+| Stable Audio | 396.044 | 152.796 | 368.103 | 124.106 | 2.966× |
+| Kokoro | 88.992 | 89.223 | 84.740 | 85.152 | 0.995× |
+
+- All three models: initial + three repeats, artifacts validated, text return after
+  each group. All pass; settings restored Auto/Auto/Thinking off.
+- SD correlation 0.992512, MAE 2.754/255; inspected both apple images. Audio
+  correlation 0.999975; Kokoro 0.996637; correct PCM rates/frames, no clipping.
+- Kokoro has no speedup (~0.5% slower); peak memory and extended switching unmeasured.
+  Performance compares complete builds, with prebuilt legacy versus pinned source SD.
+- Common Prism/shared media ABI and legacy text migration still required before AGC
+  retirement. Raw records: performance/2026-10-11/media-{agc,vulkan,comparison}.json;
+  methodology: MEDIA_VULKAN_COMPARISON.md. Restoring verified Prism test build next.
+
+## 2026-10-11 — final console state after media comparison
+
+- Restored verified Prism eboot in unmounted PPSA99023; chmod, shadow mount and
+  launch passed (0x00004018). Exact Bonsai returned 4 after restoration.
+- Settings Auto/Auto/Thinking off; SD/audio/voice/Bonsai/old model installations
+  remain available. Receipt: performance/2026-10-11/media-final-return-bonsai.json.
+- Added ps5ctl shadow mount command and standing test-deployment authorization
+  to AGENTS.md. Final lint passes; changes remain local/uncommitted/unpushed.
+- PPSA99004 untouched; no reboot.
+
+## 2026-10-11 — unified vulkan-runtime and PR scope split
+
+User authorized AGC inference retirement, runtime naming and publishing verified code
+in PR #15, with remaining planned work in a separate draft. Built complete Prism/SD
+against GGML_MAX_NAME=160; removed private ggml and AGC inference/scratch/routing.
+RADV platform AGC imports remain necessary. Signed test eboot 10758bc079a5895f558c6b1362a047cdca14c5e2df32d6d89712d2e11d26873f;
+entry 0x120, 14 program headers, working 15 NEEDED, one ggml_init, no AGC inference
+or private ggml symbols. Test23 stopped, mounted:false verified, eboot uploaded, chmod,
+explicit shadow mount, launch result 0x00006018. No UI confirmation or reboot required.
+
+Bonsai warm median 11.202328 t/s; Thinking/4K/16K and Mistral/MiniCPM/Qwen regressions
+pass. SD 29.787 s, Audio 153.245 s, voice 89.337 s initial requests including load;
+outputs byte-identical to prior Vulkan comparison and text switches pass. Settings
+restored Auto/Auto/Thinking off. PPSA99004 untouched; models remain installed.
+Common-ABI host Vulkan decode/parity, real-model ASan/UBSan prefix tests, complete host
+regressions and lint pass. Release folder/ZIP builds. Sandboxed full-suite attempts
+were blocked by LSAN ptrace/local socket fixtures; clean execution outside that
+restriction passes, without disabling sanitizer in the final full-suite run.
+
+Records: performance/2026-10-11/vulkan-runtime-{build,bonsai,media,legacy-alias}.json.
+Voice speedup, peak memory/thermals and streaming are not claimed. These and S1
+bounded residency move to the subsequent draft PR.

@@ -1,0 +1,122 @@
+[
+  {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ],
+    "expected": "<s><|im_start|>user\nHello<|im_end|>\n<|im_start|>assistant\n"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": "Answer briefly."
+      },
+      {
+        "role": "user",
+        "content": "你好"
+      }
+    ],
+    "expected": "<s><|im_start|>system\nAnswer briefly.<|im_end|>\n<|im_start|>user\n你好<|im_end|>\n<|im_start|>assistant\n"
+  },
+  {
+    "messages": [
+      {
+        "role": "user",
+        "content": "First"
+      },
+      {
+        "role": "assistant",
+        "content": "\nAnswer"
+      },
+      {
+        "role": "user",
+        "content": "Next"
+      }
+    ],
+    "expected": "<s><|im_start|>user\nFirst<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\nAnswer<|im_end|>\n<|im_start|>user\nNext<|im_end|>\n<|im_start|>assistant\n"
+  },
+  {
+    "messages": [
+      {
+        "role": "user",
+        "content": "First"
+      },
+      {
+        "role": "assistant",
+        "content": "<think>\nReason\n</think>\n\nAnswer"
+      },
+      {
+        "role": "user",
+        "content": "Next"
+      }
+    ],
+    "expected": "<s><|im_start|>user\nFirst<|im_end|>\n<|im_start|>assistant\n<think>\nReason\n</think>\n\nAnswer<|im_end|>\n<|im_start|>user\nNext<|im_end|>\n<|im_start|>assistant\n"
+  },
+  {
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "<think>\n\n</think>\n\nAnswer"
+      },
+      {
+        "role": "user",
+        "content": "Next"
+      }
+    ],
+    "expected": "<s><|im_start|>assistant\n<think>\n\n</think>\n\nAnswer<|im_end|>\n<|im_start|>user\nNext<|im_end|>\n<|im_start|>assistant\n"
+  },
+  {
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "prefix<think>\nA\n</think>\nB</think>\nAnswer"
+      },
+      {
+        "role": "user",
+        "content": "Next"
+      }
+    ],
+    "expected": "<s><|im_start|>assistant\n<think>\nA\n</think>\n\nAnswer<|im_end|>\n<|im_start|>user\nNext<|im_end|>\n<|im_start|>assistant\n"
+  },
+  {
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "<think>unfinished"
+      },
+      {
+        "role": "user",
+        "content": "Next"
+      }
+    ],
+    "expected": "<s><|im_start|>assistant\n<think>unfinished<|im_end|>\n<|im_start|>user\nNext<|im_end|>\n<|im_start|>assistant\n"
+  },
+  {
+    "messages": [
+      {
+        "role": "system",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": ""
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "system",
+        "content": "New instruction"
+      },
+      {
+        "role": "user",
+        "content": "Next"
+      }
+    ],
+    "expected": "<s><|im_start|>system\n<|im_end|>\n<|im_start|>user\n<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n<|im_end|>\n<|im_start|>system\nNew instruction<|im_end|>\n<|im_start|>user\nNext<|im_end|>\n<|im_start|>assistant\n"
+  }
+]

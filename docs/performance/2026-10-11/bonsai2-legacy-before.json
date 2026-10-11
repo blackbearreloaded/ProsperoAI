@@ -1,0 +1,89 @@
+{
+  "runs": [
+    {
+      "model": "mistral-7b-instruct-v0.3-q4-0",
+      "request": {
+        "model": "mistral-7b-instruct-v0.3-q4-0",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 64
+      },
+      "response": {
+        "id": "chatcmpl-1791693246-1",
+        "object": "chat.completion",
+        "created": 1791693246,
+        "model": "mistral-7b-instruct-v0.3-q4-0",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 14,
+          "completion_tokens": 3,
+          "total_tokens": 17
+        }
+      },
+      "http_seconds": 1.9943996439687908
+    },
+    {
+      "model": "kokoro-82m-fp16",
+      "request": {
+        "model": "kokoro-82m-fp16",
+        "messages": [
+          {
+            "role": "user",
+            "content": "Hello from Prospero AI."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 64
+      },
+      "response": {
+        "id": "chatcmpl-1791693248-2",
+        "object": "chat.completion",
+        "created": 1791693248,
+        "model": "kokoro-82m-fp16",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Speech generated locally: /download0/prosperoai-audio.wav"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 1,
+          "total_tokens": 1
+        }
+      },
+      "http_seconds": 93.15960843802895,
+      "wav": {
+        "channels": 1,
+        "rate": 24000,
+        "width": 2,
+        "frames": 52200,
+        "peak": 9595
+      }
+    }
+  ],
+  "restored_settings": {
+    "context": "auto",
+    "kv": "auto",
+    "thinking": false
+  },
+  "note": "Initial isolated Prism build with legacy audio path. WAV exists at /data/prosperoai/work/tmp/prosperoai-audio.wav; original FTP check incorrectly used unexpanded sandbox alias. Text-return check follows in final media-enabled build."
+}

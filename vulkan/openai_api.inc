@@ -86,6 +86,7 @@ struct ApiChatRequest {
     std::string forced_tool;
     bool stream = false, include_usage = false, structured = false, required = false;
     unsigned max_tokens = 512;
+    unsigned context_tokens = 0;
     float temperature = 0;
     bool parallel_tools = true;
 };
@@ -104,7 +105,13 @@ ApiChatRequest parse_api_chat(const ApiJson &body) {
     const auto limit = body.contains("max_completion_tokens") ? body["max_completion_tokens"] : body.value("max_tokens", ApiJson(512));
     if (!limit.is_number_integer() || limit.get<long long>() <= 0)
         throw ApiError("400 Bad Request", "invalid_max_tokens", "max_tokens must be a positive integer.");
-    result.max_tokens = static_cast<unsigned>(std::min<long long>(512, limit.get<long long>()));
+    result.max_tokens = static_cast<unsigned>(std::min<long long>(4096, limit.get<long long>()));
+    if (body.contains("context_tokens")) {
+        const auto &context = body["context_tokens"];
+        if (!context.is_number_integer() || context.get<long long>() < 512 || context.get<long long>() > 16384)
+            throw ApiError("400 Bad Request", "invalid_context_tokens", "context_tokens must be between 512 and 16384.");
+        result.context_tokens = static_cast<unsigned>(context.get<long long>());
+    }
     if (body.contains("n") && body["n"] != 1)
         throw ApiError("400 Bad Request", "unsupported_n", "Only n=1 is supported.");
     if (body.contains("response_format") && !body["response_format"].is_null() &&
@@ -309,8 +316,13 @@ void handle_openai_chat(const NetApi &api, int sock, const char *body) {
         std::vector<char> output(65536);
         gpt_runtime_stats_t stats{};
         gpt_runtime_settings_t settings{0, request.max_tokens};
+        const auto runtime = prospero_settings::get();
+        settings.context_length = runtime.context;
+        settings.kv_cache = prospero_settings::kv_name(runtime.kv);
+        settings.thinking = runtime.thinking;
         settings.model_id = request.model.c_str();
         settings.temperature = request.temperature;
+        settings.context_tokens = request.context_tokens;
         const std::string grammar = request.structured ? api_tool_grammar(request) : "";
         settings.grammar = request.structured ? grammar.c_str() : nullptr;
         active_api_stream = request.stream && !request.structured ? &stream : nullptr;

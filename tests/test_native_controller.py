@@ -23,18 +23,19 @@ class NativeController(unittest.TestCase):
             models = directory / "models"
             models.mkdir()
             for index in range(24):
-                model = models / f"variant-{index:02d}"
-                model.mkdir()
-                (model / "model.ps5lm").write_bytes(struct.pack(
-                    "<4s11I", b"P5LM", 1, 256, 128, 1, 32, 2048, 4096, 14336, 32, 8, 32768))
-                (model / "tokenizer.ps5tok").write_bytes(b"fixture")
-                (model / "model.json").write_text(json.dumps({"name": f"Local variation {index}"}))
+                (models / f"variant-{index:02d}.gguf").write_bytes(b"fixture")
+            (models / ".hidden.gguf").write_bytes(b"fixture")
+            (models / "interrupted.gguf.part").write_bytes(b"fixture")
+            (models / "model.ps5lm").write_bytes(b"legacy bundle")
             binary = directory / "catalog-test"
             subprocess.run([os.environ.get("HOST_CXX", "clang++"), "-std=c++20", "-O1",
                             "-fsanitize=address,undefined", "-ffunction-sections", "-fdata-sections",
-                            "-Wl,--gc-sections", "-Wl,--wrap=fopen", "-I" + str(ROOT / "include"),
+                            "-Wl,--gc-sections", "-DPS5_LLAMA_VULKAN", "-DPROSPERO_PRISM_RUNTIME",
+                            "-I" + str(ROOT / "build/prism-llama-source/include"),
+                            "-I" + str(ROOT / "build/prism-llama-source/ggml/include"),
+                            "-I" + str(ROOT / "include"),
                             "-I" + str(ROOT / "src"), str(ROOT / "tests/native_catalog_test.cpp"),
-                            str(ROOT / "src/gpt_runtime.cpp"), "-o", str(binary)], check=True)
+                            str(ROOT / "vulkan/gpt_runtime_vulkan.cpp"), "-o", str(binary)], check=True)
             subprocess.run([str(binary), str(models)], check=True, timeout=15)
 
     def test_allocator_realloc(self):

@@ -1,0 +1,173 @@
+BENCH START
+MODEL ready_us=4153978 id=Qwen3.5-9B-Q4_0.gguf
+MEMORY reported_free=18446744070849822720 reported_total=12280922112
+CONFIG 0 batch=256 ubatch=256 threads=4 flash=auto context_us=25892
+RESULT config=0 workload=0 round=0 cache=0 rc=0 prompt=40 generated=128 reused=0 prefill_us=137897 elapsed_us=2614773 decode_tps=51.274 match=1
+TEXT <think>
+This is a great technical question about GPU architecture and matrix multiplication. I'll provide a comprehensive explanation covering:
+
+1. GPU architecture basics (hierarchy of threads)
+2. How matrix multiplication is mapped to GPU
+3. Memory hierarchy and data movement
+4. Synchronization mechanisms
+5. Common optimization techniques
+
+Let me structure this in detail with clear explanations of each component.
+</think>
+
+# GPU Matrix Multiplication: A Detailed Explanation
+
+Matrix multiplication on a GPU is a classic example of how parallel computing architectures are optimized for high-performance linear algebra. Below is a comprehensive breakdown of how GPUs execute this operation, covering thread
+RESULT config=0 workload=0 round=0 cache=1 rc=0 prompt=40 generated=128 reused=0 prefill_us=177659 elapsed_us=2630333 decode_tps=51.780 match=1
+TEXT <think>
+This is a great technical question about GPU architecture and matrix multiplication. I'll provide a comprehensive explanation covering:
+
+1. GPU architecture basics (hierarchy of threads)
+2. How matrix multiplication is mapped to GPU
+3. Memory hierarchy and data movement
+4. Synchronization mechanisms
+5. Common optimization techniques
+
+Let me structure this in detail with clear explanations of each component.
+</think>
+
+# GPU Matrix Multiplication: A Detailed Explanation
+
+Matrix multiplication on a GPU is a classic example of how parallel computing architectures are optimized for high-performance linear algebra. Below is a comprehensive breakdown of how GPUs execute this operation, covering thread
+RESULT config=0 workload=0 round=1 cache=0 rc=0 prompt=40 generated=128 reused=0 prefill_us=178267 elapsed_us=2633290 decode_tps=51.731 match=1
+TEXT <think>
+This is a great technical question about GPU architecture and matrix multiplication. I'll provide a comprehensive explanation covering:
+
+1. GPU architecture basics (hierarchy of threads)
+2. How matrix multiplication is mapped to GPU
+3. Memory hierarchy and data movement
+4. Synchronization mechanisms
+5. Common optimization techniques
+
+Let me structure this in detail with clear explanations of each component.
+</think>
+
+# GPU Matrix Multiplication: A Detailed Explanation
+
+Matrix multiplication on a GPU is a classic example of how parallel computing architectures are optimized for high-performance linear algebra. Below is a comprehensive breakdown of how GPUs execute this operation, covering thread
+RESULT config=0 workload=0 round=1 cache=1 rc=0 prompt=40 generated=128 reused=0 prefill_us=176562 elapsed_us=2624764 decode_tps=51.875 match=1
+TEXT <think>
+This is a great technical question about GPU architecture and matrix multiplication. I'll provide a comprehensive explanation covering:
+
+1. GPU architecture basics (hierarchy of threads)
+2. How matrix multiplication is mapped to GPU
+3. Memory hierarchy and data movement
+4. Synchronization mechanisms
+5. Common optimization techniques
+
+Let me structure this in detail with clear explanations of each component.
+</think>
+
+# GPU Matrix Multiplication: A Detailed Explanation
+
+Matrix multiplication on a GPU is a classic example of how parallel computing architectures are optimized for high-performance linear algebra. Below is a comprehensive breakdown of how GPUs execute this operation, covering thread
+RESULT config=0 workload=0 round=2 cache=0 rc=0 prompt=40 generated=128 reused=0 prefill_us=177772 elapsed_us=2632142 decode_tps=51.744 match=1
+TEXT <think>
+This is a great technical question about GPU architecture and matrix multiplication. I'll provide a comprehensive explanation covering:
+
+1. GPU architecture basics (hierarchy of threads)
+2. How matrix multiplication is mapped to GPU
+3. Memory hierarchy and data movement
+4. Synchronization mechanisms
+5. Common optimization techniques
+
+Let me structure this in detail with clear explanations of each component.
+</think>
+
+# GPU Matrix Multiplication: A Detailed Explanation
+
+Matrix multiplication on a GPU is a classic example of how parallel computing architectures are optimized for high-performance linear algebra. Below is a comprehensive breakdown of how GPUs execute this operation, covering thread
+RESULT config=0 workload=0 round=2 cache=1 rc=0 prompt=40 generated=128 reused=0 prefill_us=177959 elapsed_us=2630785 decode_tps=51.777 match=1
+TEXT <think>
+This is a great technical question about GPU architecture and matrix multiplication. I'll provide a comprehensive explanation covering:
+
+1. GPU architecture basics (hierarchy of threads)
+2. How matrix multiplication is mapped to GPU
+3. Memory hierarchy and data movement
+4. Synchronization mechanisms
+5. Common optimization techniques
+
+Let me structure this in detail with clear explanations of each component.
+</think>
+
+# GPU Matrix Multiplication: A Detailed Explanation
+
+Matrix multiplication on a GPU is a classic example of how parallel computing architectures are optimized for high-performance linear algebra. Below is a comprehensive breakdown of how GPUs execute this operation, covering thread
+RESULT config=0 workload=1 round=0 cache=0 rc=0 prompt=615 generated=128 reused=0 prefill_us=1405228 elapsed_us=3937845 decode_tps=50.146 match=1
+TEXT <think>
+
+</think>
+
+Executing a matrix multiplication (GEMM) on a GPU is a highly parallelized process that leverages the architecture's specific design to maximize throughput. Unlike a CPU, which typically executes instructions sequentially or with limited parallelism, a GPU executes thousands of threads concurrently to handle massive data loads.
+
+Here is a detailed breakdown of how a GPU executes matrix multiplication, covering **threads**, **memory tiers**, and **synchronization**.
+
+### 1. The Hierarchy of Execution: Threads and Blocks
+
+The fundamental unit of work in a GPU is the **Thread**. However, threads do not run in isolation; they are
+RESULT config=0 workload=1 round=0 cache=1 rc=0 prompt=615 generated=128 reused=0 prefill_us=1405281 elapsed_us=3938204 decode_tps=50.140 match=1
+TEXT <think>
+
+</think>
+
+Executing a matrix multiplication (GEMM) on a GPU is a highly parallelized process that leverages the architecture's specific design to maximize throughput. Unlike a CPU, which typically executes instructions sequentially or with limited parallelism, a GPU executes thousands of threads concurrently to handle massive data loads.
+
+Here is a detailed breakdown of how a GPU executes matrix multiplication, covering **threads**, **memory tiers**, and **synchronization**.
+
+### 1. The Hierarchy of Execution: Threads and Blocks
+
+The fundamental unit of work in a GPU is the **Thread**. However, threads do not run in isolation; they are
+RESULT config=0 workload=1 round=1 cache=0 rc=0 prompt=615 generated=128 reused=0 prefill_us=1408020 elapsed_us=3939456 decode_tps=50.169 match=1
+TEXT <think>
+
+</think>
+
+Executing a matrix multiplication (GEMM) on a GPU is a highly parallelized process that leverages the architecture's specific design to maximize throughput. Unlike a CPU, which typically executes instructions sequentially or with limited parallelism, a GPU executes thousands of threads concurrently to handle massive data loads.
+
+Here is a detailed breakdown of how a GPU executes matrix multiplication, covering **threads**, **memory tiers**, and **synchronization**.
+
+### 1. The Hierarchy of Execution: Threads and Blocks
+
+The fundamental unit of work in a GPU is the **Thread**. However, threads do not run in isolation; they are
+RESULT config=0 workload=1 round=1 cache=1 rc=0 prompt=615 generated=128 reused=0 prefill_us=1409381 elapsed_us=3940528 decode_tps=50.175 match=1
+TEXT <think>
+
+</think>
+
+Executing a matrix multiplication (GEMM) on a GPU is a highly parallelized process that leverages the architecture's specific design to maximize throughput. Unlike a CPU, which typically executes instructions sequentially or with limited parallelism, a GPU executes thousands of threads concurrently to handle massive data loads.
+
+Here is a detailed breakdown of how a GPU executes matrix multiplication, covering **threads**, **memory tiers**, and **synchronization**.
+
+### 1. The Hierarchy of Execution: Threads and Blocks
+
+The fundamental unit of work in a GPU is the **Thread**. However, threads do not run in isolation; they are
+RESULT config=0 workload=1 round=2 cache=0 rc=0 prompt=615 generated=128 reused=0 prefill_us=1407357 elapsed_us=3939181 decode_tps=50.161 match=1
+TEXT <think>
+
+</think>
+
+Executing a matrix multiplication (GEMM) on a GPU is a highly parallelized process that leverages the architecture's specific design to maximize throughput. Unlike a CPU, which typically executes instructions sequentially or with limited parallelism, a GPU executes thousands of threads concurrently to handle massive data loads.
+
+Here is a detailed breakdown of how a GPU executes matrix multiplication, covering **threads**, **memory tiers**, and **synchronization**.
+
+### 1. The Hierarchy of Execution: Threads and Blocks
+
+The fundamental unit of work in a GPU is the **Thread**. However, threads do not run in isolation; they are
+RESULT config=0 workload=1 round=2 cache=1 rc=0 prompt=615 generated=128 reused=0 prefill_us=1405792 elapsed_us=3935798 decode_tps=50.198 match=1
+TEXT <think>
+
+</think>
+
+Executing a matrix multiplication (GEMM) on a GPU is a highly parallelized process that leverages the architecture's specific design to maximize throughput. Unlike a CPU, which typically executes instructions sequentially or with limited parallelism, a GPU executes thousands of threads concurrently to handle massive data loads.
+
+Here is a detailed breakdown of how a GPU executes matrix multiplication, covering **threads**, **memory tiers**, and **synchronization**.
+
+### 1. The Hierarchy of Execution: Threads and Blocks
+
+The fundamental unit of work in a GPU is the **Thread**. However, threads do not run in isolation; they are
+BENCH COMPLETE
