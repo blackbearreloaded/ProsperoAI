@@ -323,6 +323,12 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
                             : Rect{796, 392, 964, 60});
     const bool was_generating = app_.generating();
     app_.poll();
+    session_sync_age_ += dt;
+    if (session_sync_age_ >= 4.0f)
+    {
+        session_sync_age_ = 0;
+        app_.sync_sessions();
+    }
     if (!welcomed_)
     {
         welcomed_ = true;

@@ -10,6 +10,8 @@
 #include <cstring>
 #include <initializer_list>
 #include <sys/time.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 extern "C"
 {
@@ -277,49 +279,38 @@ bool remove_tree(const char *path, unsigned depth)
 {
     if (!path || depth > 3)
         return false;
-    const int directory = sceKernelOpen(path, 0, 0);
-    if (directory >= 0)
+    DIR *directory = opendir(path);
+    if (!directory)
+        return errno == ENOENT;
+    bool ok = true;
+    while (const dirent *entry = readdir(directory))
     {
-        char entries[4096];
-        bool ok = true;
-        for (;;)
+        if (std::strcmp(entry->d_name, ".") == 0 || std::strcmp(entry->d_name, "..") == 0)
+            continue;
+        char child[320];
+        const int length = std::snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
+        if (length < 0 || static_cast<std::size_t>(length) >= sizeof(child))
         {
-            const int bytes = sceKernelGetdents(directory, entries, sizeof(entries));
-            if (bytes <= 0)
-            {
-                if (bytes < 0)
-                    ok = false;
-                break;
-            }
-            int offset = 0;
-            while (offset + static_cast<int>(offsetof(dirent, d_name)) + 1 <= bytes)
-            {
-                const auto *entry = reinterpret_cast<const dirent *>(entries + offset);
-                if (entry->d_reclen <= offsetof(dirent, d_name) || offset + entry->d_reclen > bytes)
-                {
-                    ok = false;
-                    break;
-                }
-                if (std::strcmp(entry->d_name, ".") != 0 && std::strcmp(entry->d_name, "..") != 0)
-                {
-                    char child[320];
-                    std::snprintf(child, sizeof(child), "%s/%s", path, entry->d_name);
-                    if (sceKernelUnlink(child) != 0 && !remove_tree(child, depth + 1))
-                    {
-                        ok = false;
-                        break;
-                    }
-                }
-                offset += entry->d_reclen;
-            }
-            if (!ok)
-                break;
+            ok = false;
+            break;
         }
-        sceKernelClose(directory);
+        struct stat info
+        {
+        };
+        if (lstat(child, &info) != 0)
+        {
+            if (errno != ENOENT)
+                ok = false;
+        }
+        else if (S_ISDIR(info.st_mode))
+            ok = remove_tree(child, depth + 1) && ok;
+        else if (unlink(child) != 0 && errno != ENOENT)
+            ok = false;
         if (!ok)
-            return false;
+            break;
     }
-    return sceKernelRmdir(path) == 0;
+    closedir(directory);
+    return ok && (rmdir(path) == 0 || errno == ENOENT);
 }
 
 // Create uniquely and exclusively: never truncate a prior result, even if the clock
@@ -427,11 +418,24 @@ bool create(Record *record, const char *model_id, const char *model_name, const 
 {
     if (!record || !model_id || !model_name || !purpose)
         return false;
+    char id[48];
+    std::snprintf(id, sizeof(id), "session-%llu",
+                  static_cast<unsigned long long>(now_microseconds()));
+    return create_with_id(record, id, model_id, model_name, purpose);
+}
+
+bool create_with_id(Record *record, const char *id, const char *model_id, const char *model_name,
+                    const char *purpose)
+{
+    if (!record || !valid_id(id) || !model_id || !*model_id || !model_name || !purpose ||
+        std::strlen(model_id) >= sizeof(Record{}.model_id) ||
+        std::strlen(model_name) >= sizeof(Record{}.model_name) ||
+        std::strlen(purpose) >= sizeof(Record{}.purpose))
+        return false;
     ensure_roots();
     Record created{};
     created.created_us = created.updated_us = now_microseconds();
-    std::snprintf(created.id, sizeof(created.id), "session-%llu",
-                  static_cast<unsigned long long>(created.created_us));
+    std::snprintf(created.id, sizeof(created.id), "%s", id);
     std::snprintf(created.title, sizeof(created.title), "New conversation");
     std::snprintf(created.model_id, sizeof(created.model_id), "%s", model_id);
     std::snprintf(created.model_name, sizeof(created.model_name), "%s", model_name);
@@ -563,21 +567,59 @@ bool erase(const char *id)
     if (!valid_id(id))
         return false;
     char path[256];
-    bool ok = true;
+    Record record{};
+    if (!read_metadata(id, &record))
+        return false;
+
+    make_path(path, sizeof(path), id, "media");
+    if (!remove_tree(path, 0))
+        return false;
+
+    // A session contains one metadata file and a bounded set of message files. Remove
+    // those explicitly: using directory enumeration here fails on some PS5 filesystem
+    // mounts even though the files themselves are readable and unlinkable.
+    for (unsigned index = 0; index < MessageCapacity; ++index)
+    {
+        char leaf[40];
+        std::snprintf(leaf, sizeof(leaf), "message-%03u.txt", index);
+        make_path(path, sizeof(path), id, leaf);
+        if (std::remove(path) != 0 && errno != ENOENT)
+            return false;
+        const int length = std::snprintf(leaf, sizeof(leaf), "message-%03u.txt.tmp", index);
+        if (length < 0 || static_cast<std::size_t>(length) >= sizeof(leaf))
+            return false;
+        make_path(path, sizeof(path), id, leaf);
+        if (std::remove(path) != 0 && errno != ENOENT)
+            return false;
+        const int output_length = std::snprintf(leaf, sizeof(leaf), "output-%03u.txt", index);
+        if (output_length < 0 || static_cast<std::size_t>(output_length) >= sizeof(leaf))
+            return false;
+        make_path(path, sizeof(path), id, leaf);
+        if (std::remove(path) != 0 && errno != ENOENT)
+            return false;
+        const int output_tmp_length =
+            std::snprintf(leaf, sizeof(leaf), "output-%03u.txt.tmp", index);
+        if (output_tmp_length < 0 || static_cast<std::size_t>(output_tmp_length) >= sizeof(leaf))
+            return false;
+        make_path(path, sizeof(path), id, leaf);
+        if (std::remove(path) != 0 && errno != ENOENT)
+            return false;
+    }
+    make_path(path, sizeof(path), id, "session.json.tmp");
+    if (std::remove(path) != 0 && errno != ENOENT)
+        return false;
+
     for (const char *kind : {"text", "image", "audio", "voice"})
     {
         std::snprintf(path, sizeof(path), "%s/%s/%s", kWork, kind, id);
-        const int directory = sceKernelOpen(path, 0, 0);
-        if (directory >= 0)
-        {
-            sceKernelClose(directory);
-            ok = remove_tree(path, 0) && ok;
-        }
+        if (!remove_tree(path, 0))
+            return false;
     }
-    if (!ok)
+    make_path(path, sizeof(path), id, "session.json");
+    if (std::remove(path) != 0 && errno != ENOENT)
         return false;
     make_path(path, sizeof(path), id);
-    return remove_tree(path, 0);
+    return sceKernelRmdir(path) == 0;
 }
 
 bool archive_media(const char *id, unsigned message_index, const char *kind, const char *source,

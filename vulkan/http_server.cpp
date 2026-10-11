@@ -15,6 +15,7 @@
 
 #include "gpt_runtime.hpp"
 #include "runtime_settings.hpp"
+#include "session_store.hpp"
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
 #include "model_downloader_ps5.hpp"
 #endif
@@ -312,7 +313,8 @@ void iso8601_now(char *output, std::size_t capacity)
 
 bool run_generation(const gpt_runtime_message_t *messages, unsigned message_count,
                     char *response_text, std::size_t response_capacity, unsigned max_tokens = 512,
-                    gpt_runtime_stats_t *reported_stats = nullptr, const char *model_id = nullptr, unsigned context_tokens = 0)
+                    gpt_runtime_stats_t *reported_stats = nullptr, const char *model_id = nullptr,
+                    unsigned context_tokens = 0)
 {
     pthread_mutex_lock(&generation_mutex);
     gpt_runtime_settings_t settings{0, max_tokens};
@@ -511,13 +513,16 @@ void handle_get_tags(const NetApi &api, int sock)
     send_json(api, sock, body);
 }
 
-unsigned request_option(const char *body, const char *key, unsigned fallback, unsigned maximum) {
+unsigned request_option(const char *body, const char *key, unsigned fallback, unsigned maximum)
+{
     const char *options = json_value_start(body, "options");
     const char *value = options ? json_value_start(options, key) : nullptr;
-    if (!value) return fallback;
+    if (!value)
+        return fallback;
     char *end = nullptr;
     const long parsed = std::strtol(value, &end, 10);
-    return end != value && parsed > 0 && parsed <= maximum ? static_cast<unsigned>(parsed) : fallback;
+    return end != value && parsed > 0 && parsed <= maximum ? static_cast<unsigned>(parsed)
+                                                           : fallback;
 }
 
 void handle_generate(const NetApi &api, int sock, const char *request_body)
@@ -536,8 +541,8 @@ void handle_generate(const NetApi &api, int sock, const char *request_body)
     const unsigned max_tokens = request_option(request_body, "num_predict", 512, 4096);
     const unsigned context_tokens = request_option(request_body, "num_ctx", 0, 16384);
     gpt_runtime_stats_t stats{};
-    const bool ok =
-        run_generation(messages, 1, response_text, sizeof(response_text), max_tokens, &stats, model, context_tokens);
+    const bool ok = run_generation(messages, 1, response_text, sizeof(response_text), max_tokens,
+                                   &stats, model, context_tokens);
 
     char created_at[32];
     iso8601_now(created_at, sizeof(created_at));
@@ -589,8 +594,9 @@ void handle_chat(const NetApi &api, int sock, const char *request_body)
     }
 
     char response_text[kResponseTextCapacity] = {};
-    const bool ok = run_generation(messages, message_count, response_text, sizeof(response_text), request_option(request_body, "num_predict", 512, 4096),
-                                   nullptr, model, request_option(request_body, "num_ctx", 0, 16384));
+    const bool ok = run_generation(messages, message_count, response_text, sizeof(response_text),
+                                   request_option(request_body, "num_predict", 512, 4096), nullptr,
+                                   model, request_option(request_body, "num_ctx", 0, 16384));
 
     char created_at[32];
     iso8601_now(created_at, sizeof(created_at));
@@ -665,8 +671,9 @@ void handle_model_download_status(const NetApi &api, int sock)
         std::strncat(body, item, sizeof(body) - std::strlen(body) - 1);
         json_append_escaped(body, sizeof(body), candidate.name);
         const char *fit_text = candidate.fit == prospero_model_download::Fit::Fits ? "fits"
-                               : candidate.fit == prospero_model_download::Fit::Tight ? "tight"
-                                                                                       : "does_not_fit";
+                               : candidate.fit == prospero_model_download::Fit::Tight
+                                   ? "tight"
+                                   : "does_not_fit";
         std::snprintf(item, sizeof(item),
                       prospero_model_download::state() ==
                               prospero_model_download::State::SearchReady
@@ -881,25 +888,250 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
 {
     std::lock_guard<std::mutex> lock(prospero_settings::mutex);
     auto p = prospero_settings::read_unlocked();
-    if (body) {
+    if (body)
+    {
         const auto j = nlohmann::json::parse(body, nullptr, false);
-        if (!j.is_object()) { openai_error(api, sock, "400 Bad Request", "invalid_settings", "Expected a settings object."); return; }
+        if (!j.is_object())
+        {
+            openai_error(api, sock, "400 Bad Request", "invalid_settings",
+                         "Expected a settings object.");
+            return;
+        }
         constexpr const char *contexts[] = {"auto", "4k", "8k", "16k", "32k", "64k", "128k"};
         constexpr unsigned values[] = {0, 4096, 8192, 16384, 32768, 65536, 131072};
-        for (auto it = j.begin(); it != j.end(); ++it) {
+        for (auto it = j.begin(); it != j.end(); ++it)
+        {
             bool valid = false;
-            if (it.key() == "context" && it.value().is_string()) {
-                for (unsigned i = 0; i < 7; ++i) if (it.value() == contexts[i]) { p.context = values[i]; valid = true; }
-            } else if (it.key() == "kv" && it.value().is_string()) {
-                if (it.value() == "auto") { p.kv = 0; valid = true; }
-            } else if (it.key() == "thinking" && it.value().is_boolean()) { p.thinking = it.value().get<bool>(); valid = true; }
-            if (!valid) { openai_error(api, sock, "400 Bad Request", "invalid_settings", "Invalid runtime setting."); return; }
+            if (it.key() == "context" && it.value().is_string())
+            {
+                for (unsigned i = 0; i < 7; ++i)
+                    if (it.value() == contexts[i])
+                    {
+                        p.context = values[i];
+                        valid = true;
+                    }
+            }
+            else if (it.key() == "kv" && it.value().is_string())
+            {
+                if (it.value() == "auto")
+                {
+                    p.kv = 0;
+                    valid = true;
+                }
+            }
+            else if (it.key() == "thinking" && it.value().is_boolean())
+            {
+                p.thinking = it.value().get<bool>();
+                valid = true;
+            }
+            if (!valid)
+            {
+                openai_error(api, sock, "400 Bad Request", "invalid_settings",
+                             "Invalid runtime setting.");
+                return;
+            }
         }
-        if (!prospero_settings::set_unlocked(p)) { openai_error(api, sock, "500 Internal Server Error", "settings_write_failed", "Could not save runtime settings."); return; }
+        if (!prospero_settings::set_unlocked(p))
+        {
+            openai_error(api, sock, "500 Internal Server Error", "settings_write_failed",
+                         "Could not save runtime settings.");
+            return;
+        }
     }
     const std::string context = p.context ? std::to_string(p.context / 1024) + "k" : "auto";
-    const auto response = nlohmann::json{{"context", context}, {"kv", prospero_settings::kv_name(p.kv)}, {"thinking", p.thinking}}.dump();
+    const auto response = nlohmann::json{
+        {"context", context},
+        {"kv", prospero_settings::kv_name(p.kv)},
+        {"thinking",
+         p.thinking}}.dump();
     send_json(api, sock, response.c_str());
+}
+
+bool handle_conversations(const NetApi &api, int sock, const char *method, const char *path,
+                          const char *body)
+{
+    constexpr const char *collection = "/api/conversations";
+    const std::string route(path);
+    const bool is_collection = route == collection;
+    const std::string prefix = std::string(collection) + "/";
+    if (!is_collection && route.compare(0, prefix.size(), prefix) != 0)
+        return false;
+
+    if (is_collection && std::strcmp(method, "GET") == 0)
+    {
+        prospero_session::Record records[prospero_session::CatalogCapacity]{};
+        const unsigned count = prospero_session::scan(records, prospero_session::CatalogCapacity);
+        nlohmann::json data = nlohmann::json::array();
+        for (unsigned i = 0; i < count; ++i)
+        {
+            const auto &record = records[i];
+            data.push_back({{"id", record.id},
+                            {"title", record.title},
+                            {"model", record.model_id},
+                            {"modelName", record.model_name},
+                            {"purpose", record.purpose},
+                            {"message_count", record.message_count},
+                            {"created_us", record.created_us},
+                            {"updated_us", record.updated_us}});
+        }
+        const auto response = nlohmann::json{{"data", std::move(data)}}.dump();
+        send_json(api, sock, response.c_str());
+        return true;
+    }
+
+    if (is_collection && std::strcmp(method, "POST") == 0)
+    {
+        const auto request = nlohmann::json::parse(body, nullptr, false);
+        if (!request.is_object())
+        {
+            send_status(api, sock, "400 Bad Request", "application/json",
+                        "{\"error\":\"Expected a conversation object.\"}");
+            return true;
+        }
+        const auto string_field = [&](const char *name, const char *fallback = "") -> std::string
+        {
+            const auto at = request.find(name);
+            if (at == request.end())
+                return fallback;
+            return at->is_string() ? at->get<std::string>() : std::string();
+        };
+        const std::string id = string_field("id");
+        const std::string title = string_field("title", "New conversation");
+        const std::string model = string_field("model");
+        const std::string model_name = string_field("modelName", model.c_str());
+        const std::string purpose = string_field("purpose", "text-to-text");
+        if (!prospero_session::valid_id(id.c_str()) || model.empty() || title.empty() ||
+            title.size() >= sizeof(prospero_session::Record{}.title) ||
+            model.size() >= sizeof(prospero_session::Record{}.model_id) || model_name.empty() ||
+            model_name.size() >= sizeof(prospero_session::Record{}.model_name) || purpose.empty() ||
+            purpose.size() >= sizeof(prospero_session::Record{}.purpose))
+        {
+            send_status(api, sock, "400 Bad Request", "application/json",
+                        "{\"error\":\"Invalid conversation identity or metadata.\"}");
+            return true;
+        }
+
+        prospero_session::Record record{};
+        std::vector<prospero_session::Message> messages(prospero_session::MessageCapacity);
+        const bool exists = prospero_session::load(id.c_str(), &record, messages.data(),
+                                                   static_cast<unsigned>(messages.size()));
+        if (!exists && !prospero_session::create_with_id(&record, id.c_str(), model.c_str(),
+                                                         model_name.c_str(), purpose.c_str()))
+        {
+            send_status(api, sock, "500 Internal Server Error", "application/json",
+                        "{\"error\":\"Could not create the saved conversation.\"}");
+            return true;
+        }
+        std::snprintf(record.title, sizeof(record.title), "%s", title.c_str());
+        std::snprintf(record.model_id, sizeof(record.model_id), "%s", model.c_str());
+        std::snprintf(record.model_name, sizeof(record.model_name), "%s", model_name.c_str());
+        std::snprintf(record.purpose, sizeof(record.purpose), "%s", purpose.c_str());
+        if (request.contains("messages"))
+        {
+            const auto &items = request["messages"];
+            if (!items.is_array() || items.size() > prospero_session::MessageCapacity)
+            {
+                send_status(api, sock, "400 Bad Request", "application/json",
+                            "{\"error\":\"Conversation has too many messages.\"}");
+                return true;
+            }
+            messages.clear();
+            for (const auto &item : items)
+            {
+                if (!item.is_object() || !item.value("role", nlohmann::json()).is_string() ||
+                    !item.value("content", nlohmann::json()).is_string())
+                {
+                    send_status(api, sock, "400 Bad Request", "application/json",
+                                "{\"error\":\"Each message needs a role and content string.\"}");
+                    return true;
+                }
+                const std::string role = item["role"].get<std::string>();
+                const std::string content = item["content"].get<std::string>();
+                if ((role != "user" && role != "assistant") ||
+                    content.size() >= sizeof(prospero_session::Message{}.content))
+                {
+                    send_status(api, sock, "400 Bad Request", "application/json",
+                                "{\"error\":\"Message role or content length is invalid.\"}");
+                    return true;
+                }
+                prospero_session::Message message{};
+                std::snprintf(message.role, sizeof(message.role), "%s", role.c_str());
+                std::snprintf(message.timestamp, sizeof(message.timestamp), "00:00");
+                std::memcpy(message.content, content.data(), content.size());
+                messages.push_back(message);
+            }
+        }
+        if (!prospero_session::save(&record, messages.data(),
+                                    static_cast<unsigned>(messages.size())))
+        {
+            send_status(api, sock, "500 Internal Server Error", "application/json",
+                        "{\"error\":\"Could not save the conversation on the console.\"}");
+            return true;
+        }
+        const auto response = nlohmann::json{
+            {"id", record.id},
+            {"title", record.title},
+            {"model", record.model_id},
+            {"modelName", record.model_name},
+            {"purpose", record.purpose},
+            {"message_count", record.message_count},
+            {"created_us", record.created_us},
+            {"updated_us",
+             record.updated_us}}.dump();
+        send_status(api, sock, exists ? "200 OK" : "201 Created", "application/json",
+                    response.c_str());
+        return true;
+    }
+
+    const std::string id = route.substr(prefix.size());
+    if (!prospero_session::valid_id(id.c_str()))
+    {
+        send_status(api, sock, "400 Bad Request", "application/json",
+                    "{\"error\":\"Invalid conversation ID.\"}");
+        return true;
+    }
+    if (std::strcmp(method, "DELETE") == 0)
+    {
+        if (!prospero_session::erase(id.c_str()))
+        {
+            send_status(api, sock, "404 Not Found", "application/json",
+                        "{\"error\":\"Conversation not found.\"}");
+            return true;
+        }
+        send_status(api, sock, "200 OK", "application/json", "{\"deleted\":true}");
+        return true;
+    }
+    if (std::strcmp(method, "GET") == 0)
+    {
+        prospero_session::Record record{};
+        std::vector<prospero_session::Message> messages(prospero_session::MessageCapacity);
+        if (!prospero_session::load(id.c_str(), &record, messages.data(),
+                                    static_cast<unsigned>(messages.size())))
+        {
+            send_status(api, sock, "404 Not Found", "application/json",
+                        "{\"error\":\"Conversation not found.\"}");
+            return true;
+        }
+        nlohmann::json items = nlohmann::json::array();
+        for (unsigned i = 0; i < record.message_count; ++i)
+            items.push_back({{"role", messages[i].role}, {"content", messages[i].content}});
+        const auto response = nlohmann::json{
+            {"id", record.id},
+            {"title", record.title},
+            {"model", record.model_id},
+            {"modelName", record.model_name},
+            {"purpose", record.purpose},
+            {"message_count", record.message_count},
+            {"created_us", record.created_us},
+            {"updated_us", record.updated_us},
+            {"messages",
+             std::move(items)}}.dump();
+        send_json(api, sock, response.c_str());
+        return true;
+    }
+    send_status(api, sock, "405 Method Not Allowed", "application/json",
+                "{\"error\":\"method not allowed\"}");
+    return true;
 }
 
 void handle_connection(const NetApi &api, int sock)
@@ -936,6 +1168,9 @@ void handle_connection(const NetApi &api, int sock)
         handle_openai_chat(api, sock, body);
 #endif
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+    else if (std::strncmp(path, "/api/conversations", 18) == 0 &&
+             handle_conversations(api, sock, method, path, body))
+        ;
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/settings/runtime") == 0)
         handle_runtime_settings(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/settings/runtime") == 0)

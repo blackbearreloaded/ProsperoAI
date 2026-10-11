@@ -99,6 +99,7 @@ class App
     App &operator=(const App &) = delete;
     bool initialize();
     bool refresh_models();
+    bool sync_sessions();
     void poll();
     void shutdown();
     const State &state() const
@@ -134,7 +135,8 @@ class App
         Generate,
         Save,
         Preferences,
-        Play
+        Play,
+        SyncSessions
     };
     bool start(Job job);
     static void *worker(void *context);

@@ -655,9 +655,11 @@ void NativeUI::Impl::draw_settings(ui::Canvas &canvas) const
                  label(list, "THOUGHT, TAKING SHAPE", card.cx(), card.y + 356, palette_.accent,
                        gfx::Align::center);
                  ui::paragraph(list, fonts_.regular,
-                               "Models run on this console's own hardware. No account, no cloud, "
-                               "nothing uploaded.",
+                               "Models run on this console's own hardware. No account or cloud "
+                               "uploads.",
                                card.x + 30, card.y + 420, 22, card.w - 60, 32, palette_.muted, 4);
+                 label(list, "MADE BY QUATRIXONE", card.cx(), card.y + 530, palette_.accent,
+                       gfx::Align::center);
              }
              else
              {

@@ -7,6 +7,8 @@ import { test } from 'node:test';
 const source = readFileSync(new URL('../assets/web/app.js', import.meta.url), 'utf8');
 const historyCode = source.slice(source.indexOf('function renderHistory(){'), source.indexOf('function openChat(){'));
 const createCode = source.slice(source.indexOf('function newConversation(){'), source.indexOf('function startKind('));
+const syncStart = source.indexOf('async function persistConversation(');
+const syncCode = source.slice(syncStart, source.indexOf("$('delete-dialog').addEventListener", syncStart));
 function element() {
     return { value: '', textContent: '', children: [], events: {},
         classList: { toggle() {}, remove() {} }, setAttribute() {}, focus() {},
@@ -28,12 +30,14 @@ function fixture() {
         ],
         models: [{ id: 'text', purpose: 'text-to-text', name: 'Text model' }, { id: 'image', purpose: 'text-to-image', name: 'Image model' }],
         current: null, controller: null, pendingDelete: '', selectedModel: 'image',
+        api() { return Promise.resolve({}); },
+        persistConversation() { return Promise.resolve(); },
         save(key, value) { context.saved = { key, value }; },
         showWelcome() { context.current = null; }, openChat() {}, renderMessages() {} };
     runInNewContext(historyCode + createCode, context);
     return { context, lookup, rows: () => lookup('history').children };
 }
-test('category, content/model search and filtered open/delete keep conversation identity', () => {
+test('category, content/model search and filtered open/delete keep conversation identity', async () => {
     const { context: c, lookup: $, rows } = fixture();
     c.renderHistory(); assert.equal(rows().length, 4);
     $('history-search').value = 'STARS'; c.renderHistory();
@@ -41,7 +45,7 @@ test('category, content/model search and filtered open/delete keep conversation 
     $('history-kind').value = 'text-to-speech'; $('history-search').value = 'SAVED VOICE'; c.renderHistory();
     assert.equal(rows().length, 1); rows()[0].children[0].onclick(); assert.equal(c.current.id, 'voice');
     rows()[0].children[1].onclick(); assert.equal(c.pendingDelete, 'voice');
-    $('delete-dialog').returnValue = 'delete'; $('delete-dialog').events.close();
+    $('delete-dialog').returnValue = 'delete'; await $('delete-dialog').events.close();
     assert.equal(c.conversations.length, 3); assert.ok(!c.conversations.some(x => x.id === 'voice'));
     assert.equal(c.saved.value.length, 3);
     $('history-kind').value = 'other'; $('history-search').value = ''; c.renderHistory();
@@ -55,4 +59,34 @@ test('new conversations retain model type/name after the installed catalog chang
     const id = c.current.id; c.models = [];
     $('history-kind').value = 'text-to-image'; c.renderHistory();
     assert.equal(rows().length, 1); rows()[0].children[0].onclick(); assert.equal(c.current.id, id);
+});
+test('browser history migrates to the console and receives native conversations', async () => {
+    const native = { id: 'session-native-1', title: 'From PS5', model: 'text', modelName: 'Text model',
+        purpose: 'text-to-text', messages: [{ role: 'user', content: 'Saved on console' }],
+        updated_us: 3000000, message_count: 1 };
+    const local = { id: 'browser-1', title: 'From web', model: 'text', modelName: 'Text model',
+        purpose: 'text-to-text', messages: [{ role: 'user', content: 'Saved in browser' }], updatedAt: 1000 };
+    const server = new Map([[native.id, native]]);
+    const saved = {};
+    const context = { conversations: [local], conversationSyncReady: false, conversationSyncBusy: false,
+        controller: null, current: null, document: { visibilityState: 'visible' },
+        save(key, value) { saved[key] = value; }, renderHistory() {}, renderMessages() {}, openChat() {},
+        $(id) { return { textContent: '' }; },
+        async api(path, options = {}) {
+            if (path === '/api/conversations' && options.method === 'POST') {
+                const item = JSON.parse(options.body), updated_us = 4000000;
+                server.set(item.id, { ...item, updated_us, message_count: item.messages.length });
+                return { json: async () => ({ ...server.get(item.id) }) };
+            }
+            if (path === '/api/conversations')
+                return { json: async () => ({ data: [...server.values()].map(({ messages, ...item }) => item) }) };
+            const id = decodeURIComponent(path.split('/').at(-1));
+            return { json: async () => ({ ...server.get(id) }) };
+        }
+    };
+    await runInNewContext(syncCode + '\nsyncConversations()', context);
+    assert.ok(server.has(local.id));
+    assert.equal(context.conversations.find(item => item.id === local.id).messages[0].content, 'Saved in browser');
+    assert.equal(context.conversations.find(item => item.id === native.id).messages[0].content, 'Saved on console');
+    assert.equal(saved['prospero-sync-initialized'], true);
 });

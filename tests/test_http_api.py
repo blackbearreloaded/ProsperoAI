@@ -19,10 +19,12 @@ class HttpApiTests(unittest.TestCase):
         if not compiler or not (ROOT / ".deps/llama.cpp/vendor/nlohmann/json.hpp").exists():
             raise unittest.SkipTest("C++ compiler and make deps required")
         subprocess.run([compiler, "-std=c++20", "-O1", "-pthread", "-ffunction-sections", "-fdata-sections",
+                        "-DPROSPERO_SESSION_TEST",
                         '-DPROSPERO_WEB_ASSET_ROOT="'+str(ROOT / 'assets/web')+'/"',
                         '-DPROSPERO_SETTINGS_PATH="'+str(tmp / "runtime.cfg")+'"', "-Wl,--gc-sections", "-I"+str(ROOT / "vulkan"), "-I"+str(ROOT / "include"),
                         "-I"+str(ROOT / ".deps/llama.cpp/vendor"),
-                        str(ROOT / "tests/http_api_harness.cpp"), "-o", str(cls.binary)], check=True)
+                        str(ROOT / "tests/http_api_harness.cpp"), str(ROOT / "src/session_store.cpp"),
+                        "-o", str(cls.binary)], check=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -55,6 +57,24 @@ class HttpApiTests(unittest.TestCase):
             self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
         self.assertIn('401 Unauthorized', self.request('/api/settings/runtime', key='secret')[0])
         self.request('/api/settings/runtime', body={'context':'auto','kv':'auto','thinking':False})
+
+    def test_conversations_share_the_native_session_store(self):
+        conversation = {'id':'web-sync-fixture','title':'Shared from web', 'model':'tiny.gguf',
+                        'modelName':'Tiny model','purpose':'text-to-text',
+                        'messages':[{'role':'user','content':'Continue on the console'},
+                                    {'role':'assistant','content':'This is the shared answer.'}]}
+        header, saved = self.request('/api/conversations', body=conversation)
+        self.assertIn('201 Created', header)
+        record = json.loads(saved)
+        self.assertEqual(record['message_count'], 2)
+        catalog = json.loads(self.request('/api/conversations')[1])['data']
+        self.assertTrue(any(item['id'] == conversation['id'] for item in catalog))
+        detail = json.loads(self.request('/api/conversations/' + conversation['id'])[1])
+        self.assertEqual(detail['title'], conversation['title'])
+        self.assertEqual(detail['messages'], conversation['messages'])
+        self.assertIn('200 OK', self.request('/api/conversations/' + conversation['id'], method='DELETE')[0])
+        self.assertIn('404 Not Found', self.request('/api/conversations/' + conversation['id'])[0])
+        self.assertIn('401 Unauthorized', self.request('/api/conversations', key='secret')[0])
 
     def test_request_context_does_not_replace_shared_settings(self):
         shared = {'context': '32k', 'kv': 'auto', 'thinking': True}

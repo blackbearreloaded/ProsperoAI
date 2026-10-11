@@ -5,6 +5,40 @@
 #include "../vulkan/http_server.cpp"
 #include <iostream>
 #include <iterator>
+#include <dirent.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+
+extern "C"
+{
+    int sceKernelOpen(const char *path, int, int)
+    {
+        return open(path, O_RDONLY);
+    }
+    int sceKernelClose(int fd)
+    {
+        return close(fd);
+    }
+    int sceKernelGetdents(int fd, char *buffer, int size)
+    {
+        return static_cast<int>(syscall(SYS_getdents64, fd, buffer, size));
+    }
+    int sceKernelMkdir(const char *path, int mode)
+    {
+        return mkdir(path, static_cast<mode_t>(mode));
+    }
+    int sceKernelRmdir(const char *path)
+    {
+        return rmdir(path);
+    }
+    int sceKernelUnlink(const char *path)
+    {
+        return unlink(path);
+    }
+}
+
 static std::string input, wire;
 static std::size_t position;
 static unsigned current_model;

@@ -270,6 +270,11 @@ bool App::refresh_models()
     return !busy() && start(Job::RefreshModels);
 }
 
+bool App::sync_sessions()
+{
+    return !running_ && state_.initialized && !state_.unsaved && start(Job::SyncSessions);
+}
+
 void App::shutdown()
 {
     if (running_)
@@ -723,13 +728,50 @@ void App::work()
         }
 #endif
         break;
+    case Job::SyncSessions:
+    {
+        refresh_sessions();
+        if (result_.session.id[0])
+        {
+            prospero_session::Record record{};
+            std::vector<prospero_session::Message> messages(prospero_session::MessageCapacity);
+            if (prospero_session::load(result_.session.id, &record, messages.data(),
+                                       static_cast<unsigned>(messages.size())))
+            {
+                if (record.updated_us > result_.session.updated_us)
+                {
+                    messages.resize(record.message_count);
+                    result_.session = record;
+                    result_.messages = std::move(messages);
+                    refresh_images();
+                    result_.stats_valid = false;
+                    result_.status = "Conversation updated from the web";
+                }
+            }
+            else
+            {
+                result_.session = {};
+                result_.messages.clear();
+                result_.images.clear();
+                result_.stats_valid = false;
+                result_.status = "Conversation removed from the web";
+            }
+        }
+        break;
+    }
     }
     if (debug::enabled())
     {
-        static constexpr const char *names[] = {
-            "find models",         "refresh models", "choose model", "open conversation",
-            "delete conversation", "answer",         "save",         "save settings",
-            "play sound"};
+        static constexpr const char *names[] = {"find models",
+                                                "refresh models",
+                                                "choose model",
+                                                "open conversation",
+                                                "delete conversation",
+                                                "answer",
+                                                "save",
+                                                "save settings",
+                                                "play sound",
+                                                "sync conversations"};
         const double seconds =
             std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
         const char *model =

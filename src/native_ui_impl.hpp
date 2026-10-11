@@ -199,7 +199,7 @@ struct NativeUI::Impl
     std::map<std::string, Texture> images_;
     std::vector<ChatRow> chat_rows_;
 
-    float clock_ = 0, page_age_ = 10, body_size_ = 28;
+    float clock_ = 0, page_age_ = 10, body_size_ = 28, session_sync_age_ = 0;
     float boot_ = 1, boot_age_ = 0, busy_seconds_ = 0, hero_age_ = 10;
     bool welcomed_ = false, was_busy_ = false;
     bool conversation_ = false, search_open_ = false, rail_ = false, category_focus_ = false;

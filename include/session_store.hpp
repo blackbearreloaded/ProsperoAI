@@ -79,6 +79,8 @@ inline bool matches(const Record &record, const char *kind, const char *query)
 }
 
 bool create(Record *record, const char *model_id, const char *model_name, const char *purpose);
+bool create_with_id(Record *record, const char *id, const char *model_id, const char *model_name,
+                    const char *purpose);
 bool save(Record *record, const Message *messages, unsigned message_count);
 bool load(const char *id, Record *record, Message *messages, unsigned message_capacity);
 unsigned scan(Record *records, unsigned capacity);
