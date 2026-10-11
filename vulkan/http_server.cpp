@@ -907,14 +907,15 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                          "Expected a settings object.");
             return;
         }
-        constexpr const char *contexts[] = {"auto", "4k", "8k", "16k", "32k", "64k", "128k"};
+        constexpr const char *contexts[] = {"auto", "4k",  "8k",  "16k",
+                                            "32k",  "64k", "128k", "256k"};
         constexpr unsigned values[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
         for (auto it = j.begin(); it != j.end(); ++it)
         {
             bool valid = false;
             if (it.key() == "context" && it.value().is_string())
             {
-                for (unsigned i = 0; i < 7; ++i)
+                for (unsigned i = 0; i < 8; ++i)
                     if (it.value() == contexts[i])
                     {
                         p.context = values[i];

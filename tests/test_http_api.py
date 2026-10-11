@@ -52,6 +52,11 @@ class HttpApiTests(unittest.TestCase):
         self.assertEqual(json.loads(body), expected)
         self.assertIn('style=2\ntokens=192\ntheme=1\n', config.read_text())
         self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
+        header, body = self.request('/api/settings/runtime', body={'context':'256k', 'kv':'auto', 'thinking':True})
+        self.assertIn('200 OK', header)
+        expected = {'context':'256k', 'kv':'auto', 'thinking':True}
+        self.assertEqual(json.loads(body), expected)
+        self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
         for invalid in ({'context':'2k'}, {'kv':'q8_0'}, {'kv':'q2_0'}, {'thinking':'false'}, {'unknown':1}, {'context':'16k','kv':'bad'}, []):
             self.assertIn('400 Bad Request', self.request('/api/settings/runtime', body=invalid)[0])
             self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)

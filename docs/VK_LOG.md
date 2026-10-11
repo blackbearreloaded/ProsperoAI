@@ -596,3 +596,23 @@ bounded residency move to the subsequent draft PR.
 - Regression after all of the above, on `PPSA99023`: Bonsai answered correctly (bounded
   `max_tokens`), SD-Turbo completed in 29.7 s, Stable Audio in 153.1 s, matching prior
   baselines. Host lint and all 55 tests pass; the PS5 Vulkan folder build links cleanly.
+
+## 2026-10-11 — web UI fixes: empty-draft history, mobile history drawer, 256k settings
+
+- `/api/settings/runtime`'s POST handler validated `context` against a 7-entry `{auto..128k}`
+  table while its `values[]` already had an 8th (262144) entry from the 131072/262144 change
+  above; `"256k"` was silently rejected. Added the missing option and loop bound; a host
+  test now round-trips `256k` through the settings API. The web Settings page's context
+  `<select>` was missing the matching `<option>` too.
+- Starting a web conversation without sending a message no longer appears in history or
+  syncs to the console: `newConversation()` used to unshift it into the saved list and
+  persist it immediately, cluttering history with empty "New conversation" entries. The
+  conversation now only joins the list (and gets synced) once its first message is sent.
+- The mobile conversation drawer left history-only elements (the "+" new-conversation
+  button) behind a 15%-wide sliver with no way back to the chat except re-finding the
+  header's hamburger; switched it to a full-screen drawer with its own visible close
+  button, and "+" now closes the drawer after creating the conversation.
+- Verified server-side conversation sync directly (create-with-first-message POST, catalog
+  GET, detail GET, delete) against `PPSA99023`; unaffected by the client-side timing change
+  since the sync endpoint itself was not touched. No browser automation tool was available
+  in this environment to click through the page itself. Host lint and all 55 tests pass.
