@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "prompt": "Explain how a GPU executes quantized matrix multiplication, including workgroups, cache use and synchronization.",
+  "tokens": 64,
+  "runs_per_cell": 3,
+  "cells": [
+    {
+      "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+      "context": 512,
+      "batch": 128,
+      "ubatch": 128,
+      "runs": [
+        {
+          "wall_seconds": 1.046186,
+          "prompt_tokens": 28,
+          "generated_tokens": 64,
+          "decode_seconds": 1.028042,
+          "decode_tokens_per_second": 61.2815,
+          "run": 1
+        },
+        {
+          "wall_seconds": 1.058743,
+          "prompt_tokens": 28,
+          "generated_tokens": 64,
+          "decode_seconds": 1.040727,
+          "decode_tokens_per_second": 60.5346,
+          "run": 2
+        },
+        {
+          "wall_seconds": 1.046568,
+          "prompt_tokens": 28,
+          "generated_tokens": 64,
+          "decode_seconds": 1.031584,
+          "decode_tokens_per_second": 61.0711,
+          "run": 3
+        }
+      ],
+      "summary": {
+        "passed": 3,
+        "failed": 0,
+        "median_decode_tokens_per_second": 61.0711
+      }
+    }
+  ]
+}

@@ -667,3 +667,30 @@ bounded residency move to the subsequent draft PR.
   mode `755`; the deployed build re-measured `65.4261` tokens/s median (3/3 passed), which
   confirms the gain comes from the committed source and not from the experiment tree.
 - Evidence: `performance/2026-10-12/rdna2-rm-stdq-{baseline,4rows,4rows-deployed}.json`.
+
+## 2026-10-12 — RDNA2 UMA mat-vec workgroup size, and two rejected variants
+
+- Continued the same mat-vec tuning with identical protocol (Mistral 7B Q4_0, context 512,
+  batch/ubatch 128, 64 generated tokens, 3 runs, folder deploy of only `eboot.bin` at `755`).
+  Each variant was built from the pinned source, deployed and measured on `PPSA99023`.
+- Rejected: eight output rows per workgroup (`rm_stdq = 4`) regressed to `61.0711` tokens/s
+  from the four-row `65.4261`, so four rows is the peak of that knob, not a lower bound.
+- Accepted: upstream enables the larger hybrid-reduction mat-vec workgroup
+  (`DMMV_WG_SIZE_LARGE`, 4x subgroup threads) only for NVIDIA and Intel. Enabling it for
+  `AMD_RDNA2 && uma` on the narrower projections (`m <= 8192 && k >= 1024`, excluding Q6_K
+  as upstream does) measured `66.4924` tokens/s, about `+1.6%` over four-row alone, with all
+  three runs (66.34-66.69) above the previous spread.
+- Rejected: removing the `m <= 8192` limit so the 14336-row FFN mat-vec also uses the large
+  workgroup regressed to `62.1261` tokens/s. The hotspot wants few, wide workgroups; only
+  the narrow projections benefit from spreading.
+- Both accepted patches together, rebuilt from the committed `tools/prepare-llama-ps5-io.py`
+  and deployed, measure `66.6161` tokens/s median (3/3 passed) against the `62.9287`
+  baseline, about `+5.9%`. A greedy correctness prompt on the deployed build answers
+  correctly (primes and Tokyo), so the gain is not from degraded output.
+- Host suite: 56 of 58 tests pass with `HOST_CXX=g++`. `test_downloader_fit` fails only on
+  g++ `-Werror` warnings that clang does not emit, and `test_self_update` is the known
+  managed-sandbox Unix-socket limitation. With the default clang, 7 tests cannot link
+  because this host is missing `libclang_rt.asan`; none of this touches the build patch.
+- Evidence: `performance/2026-10-12/rdna2-rm-stdq-8rows.json`,
+  `rdna2-dmmv-large-wg-m8192.json`, `rdna2-dmmv-large-wg-all-m.json`,
+  `rdna2-combined-deployed.json`.
