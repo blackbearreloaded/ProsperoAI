@@ -18,7 +18,6 @@
 - The app opens without a second or two of black before its launch picture: it now declares
   HDR output and no VRR, so the console no longer changes the television's video mode when
   the app opens and closes.
-- The About screen credits Quatrixone.
 
 Contributors to this release: [Quatrixone](https://github.com/quatrixone),
 [Bilawal Riaz](https://github.com/bilawalriaz), and
