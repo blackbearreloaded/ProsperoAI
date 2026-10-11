@@ -19,9 +19,9 @@ if [[ $mode == ps5 ]]; then
         -DGGML_AVX512=OFF -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON
         -DSPIRV-Headers_DIR=/usr/share/cmake/SPIRV-Headers -U CMAKE_CXX_FLAGS)
 fi
-cmake -S "$root/tools/shared-vulkan" -B "$root/build/shared-prism-$mode" -G Ninja \
+cmake -S "$root/tools/vulkan-runtime" -B "$root/build/vulkan-runtime-$mode" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release "${options[@]}"
 targets=(llama stable-diffusion)
-[[ $mode != host ]] || targets+=(shared-ggml-test shared-media-test)
-cmake --build "$root/build/shared-prism-$mode" --target "${targets[@]}" \
+[[ $mode != host ]] || targets+=(vulkan-runtime-abi-test vulkan-runtime-media-test)
+cmake --build "$root/build/vulkan-runtime-$mode" --target "${targets[@]}" \
     --parallel "${BUILD_JOBS:-4}"

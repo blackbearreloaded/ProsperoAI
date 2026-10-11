@@ -1,4 +1,4 @@
-# Shared Vulkan media implementation
+# vulkan-runtime media implementation
 
 All app build aliases now produce `build/vulkan-runtime/PPSA99023` from the same
 Prism llama/ggml source pin and `GGML_MAX_NAME=160`. SD is built from pinned source
@@ -7,8 +7,8 @@ scratch allocator are removed. RADV uses the console AGC platform driver.
 
 ```sh
 make vulkan-runtime
-CC=clang-18 CXX=clang++-18 bash tools/build-shared-vulkan.sh host
-PROSPERO_REQUIRE_SHARED_VULKAN=1 HOST_CXX=clang++-18 make test
+CC=clang-18 CXX=clang++-18 bash tools/build-vulkan-runtime.sh host
+PROSPERO_REQUIRE_VULKAN_RUNTIME=1 HOST_CXX=clang++-18 make test
 ```
 
 SD uses Vulkan for diffusion, VAE and parameter storage. Stable Audio and Kokoro

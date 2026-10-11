@@ -122,9 +122,9 @@ $(RUNTIME): $(RUNTIME_INPUTS)
 	@printf '%s\n' '==> [libc] Generating the missing or outdated runtime'
 	@bash tools/rebuild-libc.sh
 
-app: $(RUNTIME) shared-vulkan
+app: $(RUNTIME) vulkan-runtime-libs
 	@printf '%s\n' '==> [app] Compiling, linking, signing, and assembling the app folder'
-	@bash tools/build-hybrid-release.sh
+	@bash tools/build-vulkan-release.sh
 
 deploy:
 	@printf '%s\n' '==> [deploy] Building and publishing the app folder over FTP'
@@ -205,16 +205,18 @@ app-vulkan-media-folder: vulkan-runtime
 sd-vulkan-check:
 	bash tools/build-sd-vulkan.sh
 
-.PHONY: shared-vulkan app-vulkan-shared-folder
-shared-vulkan: deps ## Build llama/SD against one ggml ABI and Vulkan backend (host-only cross build)
-	bash tools/build-shared-vulkan.sh ps5
+.PHONY: vulkan-runtime-libs shared-vulkan app-vulkan-shared-folder
+vulkan-runtime-libs: deps ## Build llama/SD against one ggml ABI and Vulkan backend (host-only cross build)
+	bash tools/build-vulkan-runtime.sh ps5
 
-app-vulkan-shared-folder: shared-vulkan ## Shared runtime folder; no deployment
-	SHARED_SD=1 MEDIA_VULKAN=1 bash tools/build-vulkan-native.sh
+app-vulkan-shared-folder: vulkan-runtime ## Compatibility alias
 
 .PHONY: app-bonsai-folder
-app-bonsai-folder: vulkan-runtime ## Alias: shared runtime includes the Bonsai 2 preset
+app-bonsai-folder: vulkan-runtime ## Alias: vulkan-runtime includes the Bonsai 2 preset
 
 .PHONY: vulkan-runtime
-vulkan-runtime: shared-vulkan ## Shared Prism/Vulkan text, image, audio and voice; no deployment
+vulkan-runtime: vulkan-runtime-libs ## Shared Prism/Vulkan text, image, audio and voice; no deployment
 	bash tools/build-vulkan-native.sh
+
+# Compatibility with earlier migration commands.
+shared-vulkan: vulkan-runtime-libs

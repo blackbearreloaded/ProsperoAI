@@ -15,7 +15,7 @@ successful return to text. Publish actual timings and regression limits in the P
 Kokoro's measured approximately 0.5% slowdown is accepted; do not claim every path is
 faster. RADV's platform AGC driver is required and remains linked.
 
-The next draft PR carries the remaining work: AirLLM/Strata S1 bounded layer slots,
+Draft [#20](https://github.com/blackbearreloaded/ProsperoAI/pull/20) carries the remaining work: AirLLM/Strata S1 bounded layer slots,
 prefetch and upload fences; output equivalence and physical-memory measurements;
 voice CPU convolution/LSTM and allocation/upload profiling; extended switching and
 capacity benchmarks. Expert caching and speculative decoding require their own gates.

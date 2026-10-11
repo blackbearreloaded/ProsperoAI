@@ -24,7 +24,7 @@ Updated: 2026-10-11. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
 ## PR scope
 
 PR #15 carries the verified runtime migration and completed compatibility/download work.
-Upstream #19/#17/#18 are merged dependencies. The subsequent draft carries S0 research
+Upstream #19/#17/#18 are merged dependencies. Draft #20 carries S0 research
 and the remaining AirLLM/Strata S1, voice profiling, peak memory, extended switching and
 capacity gates. No streaming inference, universal quality or real-time audio claim.
 

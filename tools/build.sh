@@ -24,5 +24,5 @@ if [[ -n ${BUILD_LABEL:-} ]]; then
 fi
 
 # There is one inference implementation. This entrypoint also serves build.ps1.
-bash "$root/tools/build-shared-vulkan.sh" ps5
-exec bash "$root/tools/build-hybrid-release.sh"
+bash "$root/tools/build-vulkan-runtime.sh" ps5
+exec bash "$root/tools/build-vulkan-release.sh"

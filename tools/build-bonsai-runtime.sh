@@ -9,7 +9,7 @@ source_tree="$root/build/prism-llama-source"
 python3 "$root/tools/deps.py" fetch llama-prism
 export CCACHE_DIR=${CCACHE_DIR:-$root/build/ccache}
 if [[ $mode == app ]]; then
-    bash "$root/tools/build-shared-vulkan.sh" ps5
+    bash "$root/tools/build-vulkan-runtime.sh" ps5
     bash "$root/tools/build-vulkan-native.sh"
     exit
 fi

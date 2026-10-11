@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-#ifdef PROSPERO_HYBRID_MEDIA
+#ifdef PROSPERO_VULKAN_RUNTIME
 #include "gpt_runtime.hpp"
 #include "runtime_vulkan.hpp"
 #ifdef PROSPERO_MEDIA_VULKAN

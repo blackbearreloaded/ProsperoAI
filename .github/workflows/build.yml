@@ -138,8 +138,8 @@ jobs:
       - name: Validate source and assets
         run: make lint
 
-      - name: Fetch pinned HTTP test headers
-        run: python3 tools/deps.py fetch llama-cpp
+      - name: Fetch pinned runtime test headers
+        run: python3 tools/deps.py fetch llama-cpp llama-prism
 
       - name: Run host regression tests
         run: make test
@@ -302,8 +302,8 @@ jobs:
           # Notes written in advance, or a draft: add the two files, leave title and notes alone.
           gh release upload "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY"
 
-  shared-vulkan:
-    name: Shared Vulkan ABI and media correctness
+  vulkan-runtime:
+    name: vulkan-runtime ABI and media correctness
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -311,7 +311,7 @@ jobs:
       CC: clang-18
       CXX: clang++-18
       BUILD_JOBS: 4
-      PROSPERO_REQUIRE_SHARED_VULKAN: "1"
+      PROSPERO_REQUIRE_VULKAN_RUNTIME: "1"
       VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
     steps:
       - name: Check out source
@@ -320,9 +320,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes clang-18 cmake ninja-build ccache glslc spirv-headers libvulkan-dev mesa-vulkan-drivers git unzip
-      - name: Fetch pinned shared sources
-        run: python3 tools/deps.py fetch llama-cpp vulkan-headers stable-diffusion-vulkan
-      - name: Build shared stack and test binaries
-        run: bash tools/build-shared-vulkan.sh host
+      - name: Fetch pinned vulkan-runtime sources
+        run: python3 tools/deps.py fetch llama-prism vulkan-headers stable-diffusion-vulkan
+      - name: Build vulkan-runtime and test binaries
+        run: bash tools/build-vulkan-runtime.sh host
       - name: Run mandatory ABI and Vulkan media tests
-        run: python3 -m unittest discover -s tests -p test_shared_ggml.py -v
+        run: python3 -m unittest discover -s tests -p test_vulkan_runtime.py -v

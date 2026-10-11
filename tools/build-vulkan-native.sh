@@ -10,12 +10,10 @@ archive="$ref/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a"
 [[ ${SHARED_SD:-1} == 1 && ${MEDIA_VULKAN:-1} == 1 ]] || {
  echo "AGC inference was removed; this build requires shared Vulkan media" >&2; exit 2;
 }
-shared_sd=1
-media_vulkan=1
 work="$root/build/vulkan-runtime"
 llama_source="$root/build/prism-llama-source"
-llama_build="$root/build/shared-prism-ps5/llama"
-[[ -f $llama_build/src/libllama.a ]] || { echo "Run make shared-vulkan first" >&2; exit 2; }
+llama_build="$root/build/vulkan-runtime-ps5/llama"
+[[ -f $llama_build/src/libllama.a ]] || { echo "Run make vulkan-runtime-libs first" >&2; exit 2; }
 title=${PROSPERO_APP_TITLE:-PPSA99023}
 [[ $title =~ ^PPSA[0-9]{5}$ ]] || { echo "Invalid title ID" >&2; exit 2; }
 app="$work/$title"
@@ -38,13 +36,13 @@ sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp 
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
  src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
- vulkan/gpt_runtime_hybrid.cpp vulkan/media_vulkan.cpp
+ vulkan/gpt_runtime_router.cpp vulkan/media_vulkan.cpp
  vulkan/storage.cpp vulkan/storage_paths.cpp vulkan/elevation/elevation.cpp vulkan/debug_tee.cpp src/debug_log.cpp
  src/native_ui_update.cpp vulkan/update_ps5.cpp
  vulkan/gpt_runtime_vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
 media_definitions=()
-media_definitions=(-DPROSPERO_PRISM_RUNTIME -DPROSPERO_MEDIA_VULKAN -DPROSPERO_SHARED_SD)
+media_definitions=(-DPROSPERO_PRISM_RUNTIME -DPROSPERO_MEDIA_VULKAN)
 # Kokoro's archived entrypoint asks for a backend reservation; bind it to Vulkan.
 kokoro_archive="$work/libkokoro-tts-vulkan.a"
 llvm-objcopy-18 --redefine-sym ps5_agc_backend_reserve=prospero_media_vk_reserve \
@@ -64,11 +62,7 @@ for relative in "${sources[@]}"; do
  abi_definitions+=(-DGGML_MAX_NAME=160)
  case "$relative" in
   src/sd_runtime_ps5.cpp)
-   if [[ $shared_sd == 1 ]]; then
-    media_includes=(-I "$root/.deps/stable-diffusion-vulkan/include")
-   else
-    media_includes=(-I "$root/vendor/include")
-   fi;;
+   media_includes=(-I "$root/.deps/stable-diffusion-vulkan/include");;
  esac
  object="$work/obj/${relative//\//_}.o"
  ninja_inputs=("$root/$relative" "$root/tooling/prospero-clang18")
@@ -82,7 +76,7 @@ for relative in "${sources[@]}"; do
  fi
  ninja_edge CXX "$object" env PS5_PAYLOAD_SDK="$sdk" USE_CCACHE="${USE_CCACHE:-1}" sh "$root/tooling/prospero-clang18" \
   -std=c++20 -O2 -fexceptions -fcxx-exceptions -frtti -Wall -Wextra -Wno-missing-field-initializers \
-  -ffunction-sections -fdata-sections -DPS5_LLAMA_VULKAN -DPROSPERO_UI_VULKAN -DPROSPERO_HYBRID_MEDIA \
+  -ffunction-sections -fdata-sections -DPS5_LLAMA_VULKAN -DPROSPERO_UI_VULKAN -DPROSPERO_VULKAN_RUNTIME \
   -DPS5_MEDIA_AUDIO -DPS5_MEDIA_IMAGE -DPS5_SANDBOX_APP -DPS5_APP_HAS_DSO_HANDLE -DPS5_SD_GENERATE -DCL_TARGET_OPENCL_VERSION=120 -DGL_GLEXT_PROTOTYPES \
   -DSDL_MAIN_HANDLED -DSDL_STATIC_LIB -DUSING_GENERATED_CONFIG_H \
   "${media_definitions[@]}" "${abi_definitions[@]}" "${media_includes[@]}" -I "$root/include" -I "$root/vulkan" -I "$root/vulkan/ui" -I "$kit_stage/src" -I "$work/generated" \
@@ -153,7 +147,7 @@ radv_link_flags+=(--wrap=sceKernelDebugOutText)
 cat > "$work/app-compat.map" <<'MAP'
 { local: pthread_once; strtof; strtod; fseek; ftell; strcasestr; gl*; hui_release_splash; __wrap_*; };
 MAP
-sd_archives=("$root/build/shared-prism-ps5/sd/libstable-diffusion.a")
+sd_archives=("$root/build/vulkan-runtime-ps5/sd/libstable-diffusion.a")
 "$sdk/bin/prospero-lld" "${radv_linker_script[@]}" --eh-frame-hdr "${radv_link_flags[@]}" --wrap=sceAgcInit \
  --version-script "$work/app-compat.map" --version-script "$ref/tooling/native/app-symbols.map" --exclude-libs=ALL -e _start \
  -o "$work/llvm-pie.elf" "$work/obj/app_crt.o" "$work/obj/app_cpp_runtime.o" "${objects[@]}" "$work/obj/llama_compat.o" \

@@ -10,7 +10,9 @@ them; RADV still links the console AGC platform driver.
 ## Build and compatibility
 
 `make vulkan-runtime` produces `build/vulkan-runtime/PPSA99023`; `make app` packages
-the configured release title. Neither command deploys. All previous app Vulkan/Bonsai
+the configured release title. Neither command deploys. `tools/build-vulkan-runtime.sh` builds the libraries and
+`tools/build-vulkan-release.sh` packages the app. The CMake project, CI job and test
+binaries use the same `vulkan-runtime` name. Historical make targets remain aliases. All previous app Vulkan/Bonsai
 folder aliases now use this runtime. The pinned Bonsai PTQ1_0 preset is included.
 
 Existing GGUF models continue to work. A legacy preset ID can alias its installed GGUF;

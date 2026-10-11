@@ -273,7 +273,7 @@ ABI mismatch is resolved by rebuilding all consumers consistently, not by overri
 For host ABI/device/decoder/parallel/parser and real-Vulkan numerical tests, run:
 
 ```sh
-CC=clang-18 CXX=clang++-18 bash tools/build-shared-vulkan.sh host
+CC=clang-18 CXX=clang++-18 bash tools/build-vulkan-runtime.sh host
 TMPDIR="$PWD/build/context-validation-tmp" HOST_CXX=clang++-18 make test
 ```
 

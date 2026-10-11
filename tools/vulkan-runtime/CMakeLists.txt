@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.18)
-project(prospero_shared_vulkan LANGUAGES C CXX)
+project(prospero_vulkan_runtime LANGUAGES C CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 get_filename_component(PROS_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(PROS_LLAMA_SOURCE "${PROS_ROOT}/.deps/llama.cpp" CACHE PATH "Shared llama/ggml source")
@@ -44,16 +44,16 @@ set_property(SOURCE "${PROS_ROOT}/.deps/stable-diffusion-vulkan/src/version.cpp"
     SDCPP_BUILD_COMMIT=f89d9b13d730eabeede7314ce49dacd18d3c90c2 SDCPP_BUILD_VERSION=prospero-pinned)
 if(NOT CMAKE_CROSSCOMPILING)
     include("${CMAKE_CURRENT_LIST_DIR}/sd-portability.cmake")
-    add_executable(shared-ggml-test "${PROS_ROOT}/tests/shared_ggml_test.cpp")
-    target_link_libraries(shared-ggml-test PRIVATE llama stable-diffusion ggml-vulkan)
-    target_compile_features(shared-ggml-test PRIVATE cxx_std_20)
-    target_compile_options(shared-ggml-test PRIVATE -UNDEBUG
+    add_executable(vulkan-runtime-abi-test "${PROS_ROOT}/tests/vulkan_runtime_abi_test.cpp")
+    target_link_libraries(vulkan-runtime-abi-test PRIVATE llama stable-diffusion ggml-vulkan)
+    target_compile_features(vulkan-runtime-abi-test PRIVATE cxx_std_20)
+    target_compile_options(vulkan-runtime-abi-test PRIVATE -UNDEBUG
         "-include${CMAKE_CURRENT_LIST_DIR}/sd-constant-tls.hpp")
-    add_executable(shared-media-test "${PROS_ROOT}/tests/media_vulkan_test.cpp"
+    add_executable(vulkan-runtime-media-test "${PROS_ROOT}/tests/media_vulkan_test.cpp"
         "${PROS_ROOT}/vulkan/media_vulkan.cpp")
-    target_include_directories(shared-media-test BEFORE PRIVATE
+    target_include_directories(vulkan-runtime-media-test BEFORE PRIVATE
         "${PROS_LLAMA_SOURCE}/ggml/include" "${PROS_ROOT}/include" "${PROS_ROOT}/vendor/include")
-    target_compile_definitions(shared-media-test PRIVATE CL_TARGET_OPENCL_VERSION=120)
-    target_compile_options(shared-media-test PRIVATE -UNDEBUG)
-    target_link_libraries(shared-media-test PRIVATE ggml-vulkan ggml)
+    target_compile_definitions(vulkan-runtime-media-test PRIVATE CL_TARGET_OPENCL_VERSION=120)
+    target_compile_options(vulkan-runtime-media-test PRIVATE -UNDEBUG)
+    target_link_libraries(vulkan-runtime-media-test PRIVATE ggml-vulkan ggml)
 endif()

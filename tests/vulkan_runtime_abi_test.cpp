@@ -77,8 +77,8 @@ int main(int argc, char **argv)
     std::vector<char> devices(size + 1);
     sd_list_devices(devices.data(), devices.size());
     assert(std::strstr(devices.data(), "Vulkan0") && std::strstr(devices.data(), "CPU"));
-    std::printf("shared ggml ABI: name=%d tensor=%zu; llama + SD see devices:\n%s\n", GGML_MAX_NAME,
-                sizeof(ggml_tensor), devices.data());
+    std::printf("vulkan-runtime ggml ABI: name=%d tensor=%zu; llama + SD see devices:\n%s\n",
+                GGML_MAX_NAME, sizeof(ggml_tensor), devices.data());
     ggml_free(ctx);
     if (argc > 1 && argv[1][0])
     {
@@ -107,7 +107,7 @@ int main(int argc, char **argv)
         assert(logits);
         for (int i = 0; i < llama_vocab_n_tokens(vocab); ++i)
             assert(std::isfinite(logits[i]));
-        std::puts("shared ABI llama Vulkan decode: finite logits");
+        std::puts("vulkan-runtime llama Vulkan decode: finite logits");
         llama_free(inference);
         llama_model_free(model);
     }

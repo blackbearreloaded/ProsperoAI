@@ -5,7 +5,7 @@
 #include "reasoning_prompt.hpp"
 #include "minicpm5_chat.hpp"
 #include "inference_config.hpp"
-#ifdef PROSPERO_HYBRID_MEDIA
+#ifdef PROSPERO_VULKAN_RUNTIME
 #include "runtime_vulkan.hpp"
 #endif
 #include "model_paths.hpp"
@@ -27,7 +27,7 @@
 #include <unistd.h>
 #include <vector>
 
-#ifdef PROSPERO_HYBRID_MEDIA
+#ifdef PROSPERO_VULKAN_RUNTIME
 namespace prospero_vulkan {
 #endif
 extern "C" int sceKernelDebugOutText(int, const char *);
@@ -439,7 +439,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
         return 1;
     }
 }
-#ifdef PROSPERO_HYBRID_MEDIA
+#ifdef PROSPERO_VULKAN_RUNTIME
 void release_model_memory() { std::lock_guard<std::mutex> lock(runtime_mutex); release_model(); }
 } // namespace prospero_vulkan
 #endif

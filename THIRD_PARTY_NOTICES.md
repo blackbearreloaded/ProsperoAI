@@ -19,7 +19,7 @@ The shared-Vulkan SD compile probe fetches stable-diffusion.cpp (MIT) at
 The experimental shared folder builds this source against llama's ggml; default
 release packaging retains the previously shipped media runtime until console gates pass.
 Host-only recursive PickleValue adaptation and constant-initialized TLS declarations
-are maintained in `tools/shared-vulkan/`; the pinned source checkout is unchanged.
+are maintained in `tools/vulkan-runtime/`; the pinned source checkout is unchanged.
 
 ProsperoAI is built on the
 [PS5 Native App Boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate)
