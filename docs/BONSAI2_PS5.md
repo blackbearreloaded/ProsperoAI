@@ -24,10 +24,10 @@ comparison records below describe earlier experimental builds.
 
 ```sh
 bash tools/build-bonsai-runtime.sh host
-make app-bonsai-folder
+PROSPERO_TEST_TITLE=<TEST-TITLE-ID> make app-bonsai-folder
 ```
 
-App output is `build/vulkan-runtime/PPSA99023`. These commands do not deploy.
+App output is `build/vulkan-runtime/<TEST-TITLE-ID>`. These commands do not deploy.
 Update the folder only after stopping the test title and verifying `mounted:false`.
 Never update PPSA99004 for this experiment.
 
@@ -43,7 +43,7 @@ streamed inference in this runtime.
 
 ## Archived comparison results — 2026-10-11
 
-Native inference passes on PS5 FW 12.70 in folder-backed test title PPSA99023.
+Native inference passes on PS5 FW 12.70 in folder-backed test title <TEST-TITLE-ID>.
 Model host SHA256 and full console readback match the pinned digest. The final
 Prism/media build preserves entry 0x120, 14 program headers and the same 15 NEEDED
 libraries as the normal build. Exact build and model receipts are in

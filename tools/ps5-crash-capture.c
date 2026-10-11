@@ -62,21 +62,24 @@ static void copy_tree(const char *source, const char *target, int depth)
     }
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    if (argc != 2 || strncmp(argv[1], "PPSA", 4) != 0 || strlen(argv[1]) != 9)
+        return 2;
+    const char *title = argv[1];
     const char *root = "/devlog/system/sce_coredumps.0";
     char destination[128];
     snprintf(destination, sizeof(destination), "/data/prospero-crash-%lld", (long long)time(NULL));
     if (mkdir(destination, 0777) != 0) return 1;
     FILE *log = fopen("/data/prospero-crash-capture.log", "w");
-    if (log) { fprintf(log, "watching PPSA99023 for 120 seconds; destination=%s\n", destination); fflush(log); }
+    if (log) { fprintf(log, "watching %s for 120 seconds; destination=%s\n", title, destination); fflush(log); }
     deadline = time(NULL) + 120;
     while (time(NULL) < deadline && copied < 128ULL * 1024 * 1024) {
         DIR *dir = opendir(root);
         if (dir) {
             struct dirent *entry;
             while ((entry = readdir(dir))) {
-                if (strncmp(entry->d_name, "PPSA99023_", 10)) continue;
+                if (strncmp(entry->d_name, title, 9) || entry->d_name[9] != '_') continue;
                 char src[1024], dst[1024];
                 snprintf(src, sizeof(src), "%s/%s", root, entry->d_name);
                 snprintf(dst, sizeof(dst), "%s/%s", destination, entry->d_name);

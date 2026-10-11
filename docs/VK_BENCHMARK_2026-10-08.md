@@ -1,6 +1,6 @@
 # Mistral AGC / Vulkan benchmark — 2026-10-08
 
-Measured on the same PS5, firmware 12.70, test title PPSA99023. Original PPSA99004 was not modified.
+Measured on the same PS5, firmware 12.70, test title <TEST-TITLE-ID>. Original PPSA99004 was not modified.
 
 | Backend | Run 1 | Run 2 | Run 3 | Median decode tok/s |
 | --- | ---: | ---: | ---: | ---: |

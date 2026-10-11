@@ -2,12 +2,27 @@
 
 ## Unreleased
 
+## 01.004.000
+
+- Text, image, audio and voice now use one Vulkan runtime. The older AGC inference
+  implementations and duplicate runtime copies have been removed.
+- Added the pinned Ternary Bonsai 2 27B PTQ1_0 preset. The release also supports the
+  optional MiniCPM5 2B Q8_0 model.
+- Web and PS5 conversations now use the same saved-session store, so a conversation can
+  be continued from either interface. Existing browser-only history is migrated on first
+  sync, and deletion removes the shared conversation and its categorized outputs.
+- Added larger context and response controls while preserving existing defaults, and
+  reused evaluated prompt prefixes when continuing compatible conversations.
+- Model downloads now report memory fit, can use parallel transfers, and resume an
+  interrupted transfer instead of starting over. Cancelling still removes partial data.
 - The app opens without a second or two of black before its launch picture: it now declares
   HDR output and no VRR, so the console no longer changes the television's video mode when
   the app opens and closes.
-- A model download that the network interrupted continues where it stopped when it is
-  started again, instead of starting over: what arrived stays, and only the rest is asked
-  for. A cancelled download is still removed.
+- The About screen credits Quatrixone.
+
+Contributors to this release: [Quatrixone](https://github.com/quatrixone),
+[Bilawal Riaz](https://github.com/bilawalriaz), and
+[BlackBearReloaded](https://github.com/blackbearreloaded).
 
 ## 01.003.000
 

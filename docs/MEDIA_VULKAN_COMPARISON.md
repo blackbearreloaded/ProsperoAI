@@ -1,6 +1,6 @@
 # Console media comparison — 2026-10-11
 
-PS5 FW 12.70, test slot PPSA99023. One initial request and three repeats per model,
+PS5 FW 12.70, test slot <TEST-TITLE-ID>. One initial request and three repeats per model,
 then return to Mistral text after each group. No model transfers during generation.
 All requests and downloaded artifacts passed. Settings restored to Auto/Auto/Thinking off.
 

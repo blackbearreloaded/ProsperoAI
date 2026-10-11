@@ -86,7 +86,7 @@ questions belong in [VK_ACTIVE.md](VK_ACTIVE.md), not here.
   `catchReturnFromMain` calls `sceSystemServiceLoadExec("exit", NULL)` then spins forever instead;
   returning or calling `exit()` both make the console report a crash over a run that worked).
   Patched `vk_std.c` to do the same, confirmed `libSceSystemService.prx` in NEEDED after relink,
-  repackaged as `PPSA99023`. Result: identical `ProcessTerm()` crash, with not even the first
+  repackaged as `<TEST-TITLE-ID>`. Result: identical `ProcessTerm()` crash, with not even the first
   `radv_marker("main: entered")` line appearing anywhere. Rules out return-from-main as our
   specific cause — we never get far enough into `main` for it to apply.
 - `/data/.kstuff_noautomount` confirms this console runs **KStuff**; Mihawk's `AGENTS.md` names
@@ -103,13 +103,13 @@ questions belong in [VK_ACTIVE.md](VK_ACTIVE.md), not here.
 - Checked the more specific lead instead: `platform.c`'s Lapy daemon (`ps5_elevation_request`) for
   `/data` access. Launched `PPSA99008` (Lapy JB Daemon) and confirmed it stays resident
   (`agent procs`: `app=24 title=PPSA99008 count=1 pids=128`), then launched the RADV test
-  (`PPSA99023`) while it was running. Identical crash. The launch necessarily killed Lapy first
+  (`<TEST-TITLE-ID>`) while it was running. Identical crash. The launch necessarily killed Lapy first
   (one foreground app at a time), so this doesn't fully rule out Lapy mattering if it could run
   truly in the background, only that launching it immediately before doesn't help.
 
 ## 2026-10-08 — RADV and llama.cpp run on console; full app warmup fixed
 
-Reference RADV linking, platform heap wrappers, SDK libc++18 and emulated TLS produced a working PPSA99023 smoke. Device discovery: RADV NAVI21, Vulkan 1.4.354. Old shell-exit logs prove earlier blanket pre-main crash interpretation incorrect: tests called sceSystemServiceLoadExec("exit", NULL), then the system failed executing "exit". A bounded console coredump watcher copied no dumps for that run.
+Reference RADV linking, platform heap wrappers, SDK libc++18 and emulated TLS produced a working <TEST-TITLE-ID> smoke. Device discovery: RADV NAVI21, Vulkan 1.4.354. Old shell-exit logs prove earlier blanket pre-main crash interpretation incorrect: tests called sceSystemServiceLoadExec("exit", NULL), then the system failed executing "exit". A bounded console coredump watcher copied no dumps for that run.
 
 Cross-built pinned llama.cpp CPU and Vulkan static libraries. Explicit Vulkan0 selection is required because this PS5 device is classified as integrated. stories260K.gguf offloaded 6/6 layers; 32 greedy tokens matched pure CPU exactly. Inclusive timing: Vulkan 0.325 s (98.43 tok/s), CPU 0.055 s (580.89 tok/s). Tiny-model launch/dispatch overhead dominates; these are validation figures, not AGC benchmark numbers. Evidence: /tmp/prospero-llama-console2-klog.txt.
 
@@ -131,7 +131,7 @@ AGC app booted and discovered Mistral, but /api/generate failed before inference
 
 ### Upstream AGC and folder deployment verified
 
-User pointed out that RetroArch runs from a folder and that AGC should be the original upstream build. Confirmed RetroArch PPSA99169 source_type=folder. Downloaded official blackbearreloaded/ProsperoAI release 01.000.000 ZIP, verified published SHA-256 19c2bacebf6fb1587b32d458fb5af2fb472d9f3844085993b0f1a30669dc0c69. Copied its unmodified eboot.bin/libraries/assets to test slot PPSA99023, only changing param.json title/concept/content ID. Added recipe-verified AGC Mistral model and built-in auto_chat.txt prompt; no inference-code changes or HTTP additions to this baseline.
+User pointed out that RetroArch runs from a folder and that AGC should be the original upstream build. Confirmed RetroArch PPSA99169 source_type=folder. Downloaded official blackbearreloaded/ProsperoAI release 01.000.000 ZIP, verified published SHA-256 19c2bacebf6fb1587b32d458fb5af2fb472d9f3844085993b0f1a30669dc0c69. Copied its unmodified eboot.bin/libraries/assets to test slot <TEST-TITLE-ID>, only changing param.json title/concept/content ID. Added recipe-verified AGC Mistral model and built-in auto_chat.txt prompt; no inference-code changes or HTTP additions to this baseline.
 
 Folder launch initially refused 0x80aa001a with errno=13. FTP SITE CHMOD 755 on eboot.bin and libc.prx fixed it; upstream title boots and generates coherent text. Three fresh-launch runs with default system prompt, 62 input tokens, 128 generated tokens and 4096 context capacity: decode 47.96, 47.92, 48.02 tok/s, median 47.96. Numerator is 127 decode steps, excluding the first token supplied by prefill, matching the upstream UI formula. build/benchmark-upstream-agc-mistral.json, /tmp/prospero-upstream-agc{2,3,4}-klog.txt and /tmp/prospero-upstream-agc-result.jpg preserve evidence. Load was 1.43–1.93 seconds from folder.
 
@@ -143,7 +143,7 @@ Added app-vulkan-folder target and FTP put-dir/size/chmod commands. Folder uploa
 
 Vulkan aligned to context capacity 4096 and same default UI system/user text as upstream. Three fresh-launch decode results: 69.73, 69.72, 69.72 tok/s, median 69.72, versus upstream AGC 47.96. Same source Q4_0 model, 128 generated tokens. Prompt encoding differs by one token (AGC 62, llama.cpp 61); decode numerator is 127 after first prefill token. Vulkan +45.4% for this short-context decode test. Vulkan prefill ~0.343 s; reported load ~59.9 s vs upstream folder load 1.43–1.93 s. Main GPU buffers at context4096: 3850.02 + 512 + 52.01 MiB (~4.31 GiB). Full report: docs/VK_BENCHMARK_2026-10-08.md; JSON: build/benchmark-comparison-mistral.json.
 
-Final console state: Vulkan folder /data/homebrew/PPSA99023, pid192 running. Temporary auto_chat.txt removed, so ordinary launches do not automatically benchmark. Original PPSA99004 untouched. No-change Vulkan folder build measured 3.776 s. Host integration tests 2 passed, shell syntax and Python compilation passed, benchmark arithmetic validated with mocked response including first-token accounting, git diff --check clean. No commit or push.
+Final console state: Vulkan folder /data/homebrew/<TEST-TITLE-ID>, pid192 running. Temporary auto_chat.txt removed, so ordinary launches do not automatically benchmark. Original PPSA99004 untouched. No-change Vulkan folder build measured 3.776 s. Host integration tests 2 passed, shell syntax and Python compilation passed, benchmark arithmetic validated with mocked response including first-token accounting, git diff --check clean. No commit or push.
 
 Final network verification: http://<PS5-IP>:11434/ returned HTTP 200; /api/tags exposes loaded Mistral GGUF. Final screenshot confirms llama.cpp Vulkan / RADV, model loaded, HTTP server listening.
 
@@ -155,7 +155,7 @@ Removed the Models/Settings tab redesign, model-delete UI/API and shared deletio
 
 Added Vulkan /v1/models and /v1/chat/completions, SSE text deltas, usage/finish reasons, optional bearer key on all routes, bounded request parsing, worker joining and configurable context (512–16384; default 4096). Tools use a portable schema prompt and GBNF envelope/name constraints with OpenAI tool-call IDs and tool-result history; this is not native Jinja tool templating or full argument-schema validation.
 
-PS5 PPSA99023: /v1/models/auth, non-streaming completion, SSE usage/DONE and required lookup(query=Vulkan) followed by tool result and final answer verified. OpenCode 1.1.36 direct streaming returned API_OK. Automatic read-tool choice on Mistral 7B hallucinated file contents; do not claim reliable coding-agent behavior. API tests used context_size.txt=16384, separate from the 4096-token benchmark. Temporary test key stored only outside Git. Results: /tmp/prospero-openai-console-results.json and /tmp/prospero-opencode-test/. Existing AGC build retained for media; image/audio/speech Vulkan migration planned. User requested akandr/bc250 reference as related Linux APU background, not PS5 evidence.
+PS5 <TEST-TITLE-ID>: /v1/models/auth, non-streaming completion, SSE usage/DONE and required lookup(query=Vulkan) followed by tool result and final answer verified. OpenCode 1.1.36 direct streaming returned API_OK. Automatic read-tool choice on Mistral 7B hallucinated file contents; do not claim reliable coding-agent behavior. API tests used context_size.txt=16384, separate from the 4096-token benchmark. Temporary test key stored only outside Git. Results: /tmp/prospero-openai-console-results.json and /tmp/prospero-opencode-test/. Existing AGC build retained for media; image/audio/speech Vulkan migration planned. User requested akandr/bc250 reference as related Linux APU background, not PS5 evidence.
 
 Additional client check: OpenCode read roundtrip succeeded via a diagnostic proxy explicitly setting tool_choice=required on the first request. OpenCode executed read(filePath=/tmp/prospero-opencode-test/fixture.txt), received the real file result and answered PROSPERO_TOOL_OK. This does not change the automatic-choice limitation above. Diagnostic proxy stopped after testing.
 
@@ -172,8 +172,8 @@ Additional client check: OpenCode read roundtrip succeeded via a diagnostic prox
   evaluation, using elapsed time since startup. Earlier ~60 s reported load is
   not an isolated disk-read measurement. Added explicit phase timings.
 - User approved removing PPSA99019, installing the benchmark and closing
-  PPSA99023 (PID 95) to launch it. First shadow delete stopped with EBUSY (16);
-  retry after closing PPSA99023 completed, source absent before upload.
+  <TEST-TITLE-ID> (PID 95) to launch it. First shadow delete stopped with EBUSY (16);
+  retry after closing <TEST-TITLE-ID> completed, source absent before upload.
 - Benchmark PPSA99019 launched `0x00006018`, PID 97. Report is accessible at
   `/mnt/sandbox/PPSA99019_000/download0/prospero-load-benchmark.txt`, not a global
   FTP `/download0`. Device init 7.53 ms; model load failed because the title
@@ -196,7 +196,7 @@ uncached SSD. See VK_LOAD_BENCHMARK_2026-10-09.md for protocol and evidence.
 
 Legacy app rebuilt from parent8e1daee using corrected runtime/current llama
 archives; ELF foundation matches working app. Explicitly authorized deployment
-to PPSA99023 completed. Full-app model ready2908.83 ms at installed context16384;
+to <TEST-TITLE-ID> completed. Full-app model ready2908.83 ms at installed context16384;
 generated25 tokens and remains running. Original assets restored and temporary
 auto_chat/load config files removed. Exact original backup retained. PPSA99004
 untouched, no reboot. Native OpenGL/RADV linking remains unresolved.
@@ -213,7 +213,7 @@ graphics queue, color-attachment render pass and a diagnostic attachment clear.
 No EGL, OpenGL, UI redesign or model is included. Build/sign/package and ELF
 foundation checks pass (same NEEDED as working standalone, entry0x120,14 headers).
 
-Closed PPSA99023 temporarily; old PPSA99019 benchmark replacement initially
+Closed <TEST-TITLE-ID> temporarily; old PPSA99019 benchmark replacement initially
 returned EBUSY until active app closed. Verified registration404 and source
 absence before uploading the20MiB UI probe. Automatic rescan registered it.
 Launch0x0000c018, PID118: all Vulkan init/acquire/submit/present calls return0;
@@ -221,13 +221,13 @@ Launch0x0000c018, PID118: all Vulkan init/acquire/submit/present calls return0;
 build/vulkan-ui-probe/console-results.txt; klog /tmp/prospero-ui-probe-klog.txt.
 No screenshot: active Remote Play manager/session unavailable. API success does
 not prove pixel correctness, UI parity, text rendering or inference concurrency.
-Probe then closed and optimized legacy PPSA99023 relaunched. No reboot or main
+Probe then closed and optimized legacy <TEST-TITLE-ID> relaunched. No reboot or main
 PPSA99004 changes. Migration stages are documented in VK_UI_MIGRATION.md.
 
 
 ## 2026-10-09 — Native Models presets, HTTP workspace and hybrid AGC Voice
 
-- PPSA99023 only: updated artwork/splash and Models trigger navigation; Triangle Space,
+- <TEST-TITLE-ID> only: updated artwork/splash and Models trigger navigation; Triangle Space,
   R2 Done. New pinned Text/Image/Audio/Voice presets with hidden staging, size/SHA-256
   verification and aggregate progress. User confirmed matching graphics after restarting.
 - Fixed mounted-leaf storage validation and explicit HTTPS/CDN redirects. Kokoro bundle
@@ -253,7 +253,7 @@ PPSA99004 changes. Migration stages are documented in VK_UI_MIGRATION.md.
 - `HOST_CXX=clang++-18 make test`: 27 passed. An initial model I/O test failed because
   `/tmp` was full; moving task-created binary backups to `build/` restored space and the
   full suite passed. Default `make app` also succeeded. Main PPSA99004 untouched.
-- Final web assets uploaded only after PPSA99023 reported `mounted:false`; title
+- Final web assets uploaded only after <TEST-TITLE-ID> reported `mounted:false`; title
   relaunched. Live browser test against the console HTTP server passed: Speak selects
   Kokoro, Back preserves history, current-conversation deletion returns to Workspace,
   and empty Image opens the SD-Turbo preset. Screenshot `build/prospero-web-live-test.png`.
@@ -268,7 +268,7 @@ PPSA99004 changes. Migration stages are documented in VK_UI_MIGRATION.md.
   checks the private storage marker, sends the helper only to the console-local ELF loader
   on 9021 if needed, handles partial writes and waits for the mount. Networking startup
   is shared with HTTP; discovery rescans after setup.
-- PPSA99023 launched the helper itself: new resident PID92, successful mount, raw Mistral
+- <TEST-TITLE-ID> launched the helper itself: new resident PID92, successful mount, raw Mistral
   and Kokoro visible in HTTP/native catalogs. No new helper was sent manually. Evidence:
   build/prospero-auto-mount-log.txt and build/prospero-auto-mount.jpg.
 - Host suite: 28 passed, including partial-send, loopback-only destination, invalid-ELF,
@@ -287,7 +287,7 @@ catalog-size estimate, not a measured allocation guarantee.
 
 Host evidence: 35 tests passed with clang++-18 (ASan/UBSan controller included); HTTP covers
 persistent settings, bad-value rejection and auth. Native Generation preview rendered and
-inspected; JS syntax passed. `make app-vulkan-folder` built/signed PPSA99023, entry 0x120,
+inspected; JS syntax passed. `make app-vulkan-folder` built/signed <TEST-TITLE-ID>, entry 0x120,
 14 program headers. Compared with build/prospero-vulkan/eboot.elf, no new PRX dependency
 was added; libSceHttp2, libSceSsl and libkernel_sys are absent from the new NEEDED list.
 Changes are local and unpushed. No console access/deployment, launch code, klog or hardware
@@ -325,7 +325,7 @@ native folder uses source SD on Vulkan0 and omits private SD/tts ggml archives. 
 adapter compiles direct-only for legacy text, not as a ggml backend. Default packaging
 still retains the comparison paths until console gates pass.
 
-`BUILD_JOBS=2 make app-vulkan-shared-folder` built and signed PPSA99023
+`BUILD_JOBS=2 make app-vulkan-shared-folder` built and signed <TEST-TITLE-ID>
 (`build/shared-vulkan-app-build-final.log`). ELF entry 0x120, 14 program headers, identical
 baseline NEEDED dependencies, one defined ggml_init, no private ggml/PS5AGC backend symbols
 (`build/shared-vulkan-elf-validation.log`). Default folder rebuilt and signed after changes
@@ -372,7 +372,7 @@ updated and marked ready at the user's request; #17 currently conflicts with mai
 Final host suite: 49 tests, one opt-in skipped; actual llama prefix regression separately
 passed under ASan/UBSan. Lint and both normal/shared signed folder builds passed.
 
-On FW 12.70, PPSA99023 normal/shared builds booted. Mistral repeated 918-token prompt
+On FW 12.70, <TEST-TITLE-ID> normal/shared builds booted. Mistral repeated 918-token prompt
 prefill improved from 2320.505 ms to 13.118 ms with matching greedy outputs; edited
 prefix, 8K/16K contexts, retained weights on context recreation and both Ollama routes
 passed. A max_tokens=4096 request ended naturally at 1206 tokens. Shared text/Kokoro/text
@@ -440,7 +440,7 @@ standalone reconciliation, and no change to the broader unpushed continuation.
   pair of largest slots 169.822 MB, resident nonlayer 556.257 MB. Uncontrolled-cache
   disk-only median 1.384/1.778 GB/s serial/four workers. ~0.33 tokens/s I/O-only full
   layer streaming bound; no upload or streamed-inference claim. S1 remains pending.
-- PPSA99023 remains running; saved settings restored Auto/Auto/Thinking off.
+- <TEST-TITLE-ID> remains running; saved settings restored Auto/Auto/Thinking off.
   PPSA99004 untouched, no reboot. Image/audio models not installed: those paths,
   perceptual parity, larger context, sustained performance and streaming remain gates.
   Raw evidence: performance/2026-10-11/bonsai2-*.json and streaming-bonsai2-*.json.
@@ -483,7 +483,7 @@ standalone reconciliation, and no change to the broader unpushed continuation.
 
 ## 2026-10-11 — final console state after media comparison
 
-- Restored verified Prism eboot in unmounted PPSA99023; chmod, shadow mount and
+- Restored verified Prism eboot in unmounted <TEST-TITLE-ID>; chmod, shadow mount and
   launch passed (0x00004018). Exact Bonsai returned 4 after restoration.
 - Settings Auto/Auto/Thinking off; SD/audio/voice/Bonsai/old model installations
   remain available. Receipt: performance/2026-10-11/media-final-return-bonsai.json.
@@ -498,7 +498,7 @@ in PR #15, with remaining planned work in a separate draft. Built complete Prism
 against GGML_MAX_NAME=160; removed private ggml and AGC inference/scratch/routing.
 RADV platform AGC imports remain necessary. Signed test eboot 10758bc079a5895f558c6b1362a047cdca14c5e2df32d6d89712d2e11d26873f;
 entry 0x120, 14 program headers, working 15 NEEDED, one ggml_init, no AGC inference
-or private ggml symbols. Test23 stopped, mounted:false verified, eboot uploaded, chmod,
+or private ggml symbols. The test title was stopped, mounted:false verified, eboot uploaded, chmod,
 explicit shadow mount, launch result 0x00006018. No UI confirmation or reboot required.
 
 Bonsai warm median 11.202328 t/s; Thinking/4K/16K and Mistral/MiniCPM/Qwen regressions
@@ -513,3 +513,38 @@ restriction passes, without disabling sanitizer in the final full-suite run.
 Records: performance/2026-10-11/vulkan-runtime-{build,bonsai,media,legacy-alias}.json.
 Voice speedup, peak memory/thermals and streaming are not claimed. These and S1
 bounded residency move to the subsequent draft PR.
+
+## 2026-10-11 — PR #15 release-candidate verification
+
+- Repeated the full Bonsai console check through the app HTTP server. Cold correctness,
+  three identical warm outputs (11.208128 tokens/s median), Thinking mode, 16K context,
+  Mistral/MiniCPM5/Qwen regression and return to Bonsai passed.
+- Repeated the media check through the app HTTP server. SD-Turbo completed in 29.649 s;
+  Stable Audio in 147.683 s; Kokoro in 89.228 s. The image and WAV artifacts validated,
+  neither WAV clipped, and text generation passed after every media model.
+- Shared conversation create/read/delete passed on the console HTTP server. The production
+  title was untouched and the console was not rebooted.
+- Prepared `01.004.000` metadata and English release notes. Removed the private test-title
+  ID from tracked documentation, tools and archived evidence; test tools now require explicit
+  title variables. The remaining release gate is an old-version-to-candidate updater run on
+  a test title, followed by the final candidate build, host suite and CI.
+
+## 2026-10-11 — old-release update and final PPSA99004 verification
+
+- Backed up the installed `PPSA99004` folder and confirmed its registered version was
+  `01.003.000` and unmounted. Its eight installed model entries were already in the shared
+  `/data/prosperoai/models` store, so no duplicate model transfer was needed.
+- Built the `01.003.000` Vulkan source with the documented development-offer switch and
+  pointed it at a temporary GitHub prerelease containing the exact candidate ZIP. The old
+  app showed the `01.004.000` offer, saved a screenshot before confirmation, downloaded and
+  verified the archive, closed, and let the helper replace the folder. The installed
+  `param.json` matches the candidate and reports `01.004.000`.
+- The updater-installed `PPSA99004` candidate launched successfully. Bonsai cold correctness,
+  three identical warm outputs (11.205240 tokens/s median), Thinking, 16K context,
+  Mistral/MiniCPM5 regression and return to Bonsai passed through HTTP.
+- Media passed through HTTP: SD-Turbo 30.324 s, Stable Audio 148.888 s and Kokoro 89.014 s.
+  Artifacts match the prior candidate hashes, WAV properties are valid with no clipping, and
+  text generation passed before media and after every model.
+- Final host validation: lint passed; all 55 tests passed with one opt-in real-model test
+  skipped; the release ZIP contains 121 entries, the ELF has entry `0x120`, 14 program
+  headers and 15 NEEDED libraries, and `self-updater.elf` is present.

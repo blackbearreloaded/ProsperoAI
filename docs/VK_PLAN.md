@@ -53,9 +53,8 @@ absence), and screenshots for every attempt — see AGENTS.md's debugging order.
 - A package re-uploaded under a title ID the console has already registered leaves the
   registration inconsistent ("The data is corrupted"). Delete the registration in the UI
   (Options > Delete) first, or use a fresh ID.
-- `PPSA99004` is ProsperoAI itself — never overwritten for a RADV test. RADV tests use their own
-  IDs (`PPSA99019` is the current RADV Build slot; reuse it rather than minting a new ID each
-  attempt).
+- `PPSA99004` is ProsperoAI itself — never overwritten for a RADV test. RADV tests use a
+  configured test title ID; reuse its slot rather than minting a new ID each time.
 - The control payload `ps5vkctl` (built from `.deps/mihawk-vulkan-review/payload/ps5vkctl`,
   loaded once per boot) needs an active Remote Play session before `agent launch` works: without
   one, `sceUserServiceGetLoginUserIdList` returns no user and launch fails outright.

@@ -16,6 +16,9 @@ args = parser.parse_args()
 host = os.environ.get('PS5_HOST')
 if not host:
     parser.error('PS5_HOST is required')
+title = os.environ.get('PROSPERO_TEST_TITLE')
+if not title:
+    parser.error('PROSPERO_TEST_TITLE is required')
 base = f'http://{host}:11434'
 model = 'Ternary-Bonsai-2-27B-PTQ1_0.gguf'
 
@@ -30,7 +33,7 @@ def request(path, body=None):
 
 original = request('/api/settings/runtime')
 result = {'runtime': 'Prism e8fd209c975c80aa7fb36a8423571ff3b1b7e955',
-    'title': 'PPSA99023', 'method': 'resident Vulkan, greedy, 4K, automatic KV; warm repeats; no model transfer during timing',
+    'title': title, 'method': 'resident Vulkan, greedy, 4K, automatic KV; warm repeats; no model transfer during timing',
     'original_settings': original, 'presets': request('/api/models/presets'), 'runs': []}
 args.output.parent.mkdir(parents=True, exist_ok=True)
 

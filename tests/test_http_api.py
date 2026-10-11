@@ -203,7 +203,7 @@ class HttpApiTests(unittest.TestCase):
         self.assertEqual(frames[-1], "[DONE]")
         chunks = [json.loads(frame) for frame in frames[:-1]]
         content = "".join(c["choices"][0]["delta"].get("content", "") for c in chunks if c["choices"])
-        self.assertEqual(content, "Hello čau 😀")
+        self.assertEqual(content, "Hello café 😀")
         self.assertEqual(chunks[-2]["choices"][0]["finish_reason"], "length")
         self.assertEqual(chunks[-1]["choices"], [])
         self.assertEqual(chunks[-1]["usage"]["completion_tokens"], 4)
@@ -259,7 +259,7 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn("200", head)
 
     def test_nested_text_parts_and_escaped_content(self):
-        text = 'quoted " and } braces čau 😀'
+        text = 'quoted " and } braces café 😀'
         body = {"model":"tiny.gguf", "messages":[{"role":"user", "content":[{"type":"text","text":text}]},
                                                   {"role":"user", "content":"echo"}]}
         _, wire = self.request(body=body)

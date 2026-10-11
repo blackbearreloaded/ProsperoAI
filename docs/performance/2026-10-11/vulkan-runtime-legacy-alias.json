@@ -1,6 +1,6 @@
 {
   "runtime": "vulkan-runtime",
-  "title": "PPSA99023",
+  "title": "<TEST-TITLE-ID>",
   "legacy_alias": "mistral-7b-instruct-v0.3-q4-0",
   "legacy_response": {
     "model": "mistral-7b-instruct-v0.3-q4-0",

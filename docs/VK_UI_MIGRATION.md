@@ -24,14 +24,15 @@ while the Vulkan variant is developed in the existing test slots.
 ## First-stage build
 
 ```bash
-UI_PROBE=1 bash tools/build-vulkan-smoke.sh
+PROSPERO_TEST_TITLE=<TEST-TITLE-ID> PROSPERO_UI_TEST_TITLE=<UI-TEST-TITLE-ID> \
+  UI_PROBE=1 bash tools/build-vulkan-smoke.sh
 ```
 
-Output: `build/vulkan-ui-probe/PPSA99019.ffpfsc`. No model, EGL or OpenGL is
+Output: `build/vulkan-ui-probe/<UI-TEST-TITLE-ID>.ffpfsc`. No model, EGL or OpenGL is
 included. The probe draws a dark clear background and a rectangular attachment
 clear, and presents 120 frames, then holds the last frame. This diagnostic scene
 is not a product redesign. Results go to
-`/mnt/sandbox/PPSA99019_000/download0/prospero-vulkan-ui.txt` while running.
+`/mnt/sandbox/<UI-TEST-TITLE-ID>_000/download0/prospero-vulkan-ui.txt` while running.
 The first probe uses a deliberately serialized queue and fixed display extent;
 it does not yet implement UI geometry, text, display recreation or concurrent
 inference. Current evidence belongs in VK_ACTIVE.md and VK_LOG.md.
@@ -58,7 +59,7 @@ authorization.
 Both runtimes look for their respective formats in
 `/data/prosperoai/models`, reached with the filesystem access Lapy gives the app at
 launch (`vulkan/storage.cpp`); the nullfs mount helper of the first hybrid builds is gone.
-The default test target is PPSA99023.
+The default test target is <TEST-TITLE-ID>.
 
 The PS5 test title previously booted and rendered the full native Vulkan UI,
 loaded the shared Mistral GGUF and generated a response. A later browser request

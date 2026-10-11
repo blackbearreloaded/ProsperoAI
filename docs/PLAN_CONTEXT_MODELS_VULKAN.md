@@ -7,7 +7,7 @@ and Kokoro through the Vulkan bridge. Existing download-resume work remains incl
 
 Upstream #19 (context/output limits), #17 (transactional prompt-prefix reuse) and #18
 (MiniCPM5 support) are merged dependencies. Preserve their defaults and regression
-coverage when integrating upstream main. Test title is PPSA99023; PPSA99004 is untouched.
+coverage when integrating upstream main. Test title is <TEST-TITLE-ID>; PPSA99004 is untouched.
 
 Completion requires host regression tests, one common ggml ABI, static ELF checks,
 console text/Thinking/context/model-switch checks, and valid media outputs followed by

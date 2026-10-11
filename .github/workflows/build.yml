@@ -53,7 +53,7 @@ jobs:
       - name: Install native toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang-18 clang-format-18 lld-18 llvm-18 clang-19 lld-19 llvm-19-dev libclang-19-dev libclang-cpp19-dev libclc-19-dev libllvmspirvlib-19-dev cmake glslc glslang-tools spirv-headers spirv-tools python3-venv libzstd-dev zlib1g-dev libedit-dev libffi-dev libxml2-dev bison flex make ninja-build ccache pkg-config tar unzip wget
+          sudo apt-get install --yes clang-18 clang-format-18 lld-18 llvm-18 clang-19 lld-19 llvm-19-dev libclang-19-dev libclang-cpp19-dev libclc-19-dev libllvmspirvlib-19-dev cmake glslc glslang-tools spirv-headers spirv-tools python3-venv libzstd-dev zlib1g-dev libedit-dev libffi-dev libxml2-dev libgl-dev bison flex make ninja-build ccache pkg-config tar unzip wget
 
       - name: Restore dependencies
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -312,14 +312,20 @@ jobs:
       CXX: clang++-18
       BUILD_JOBS: 4
       PROSPERO_REQUIRE_VULKAN_RUNTIME: "1"
-      VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install host Vulkan toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang-18 cmake ninja-build ccache glslc spirv-headers libvulkan-dev mesa-vulkan-drivers git unzip
+          sudo apt-get install --yes clang-18 cmake ninja-build ccache glslc spirv-headers libvulkan-dev mesa-vulkan-drivers vulkan-tools git unzip
+      - name: Select the software Vulkan driver
+        shell: bash
+        run: |
+          software=$(find /usr/share/vulkan/icd.d -name 'lvp_icd*.json' -print -quit)
+          test -n "$software"
+          echo "VK_ICD_FILENAMES=$software" >> "$GITHUB_ENV"
+          VK_ICD_FILENAMES="$software" vulkaninfo --summary
       - name: Fetch pinned vulkan-runtime sources
         run: python3 tools/deps.py fetch llama-prism vulkan-headers stable-diffusion-vulkan
       - name: Build vulkan-runtime and test binaries

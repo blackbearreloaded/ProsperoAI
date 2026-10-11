@@ -9,7 +9,7 @@ them; RADV still links the console AGC platform driver.
 
 ## Build and compatibility
 
-`make vulkan-runtime` produces `build/vulkan-runtime/PPSA99023`; `make app` packages
+`make vulkan-runtime` produces `build/vulkan-runtime/<TEST-TITLE-ID>`; `make app` packages
 the configured release title. Neither command deploys. `tools/build-vulkan-runtime.sh` builds the libraries and
 `tools/build-vulkan-release.sh` packages the app. The CMake project, CI job and test
 binaries use the same `vulkan-runtime` name. Historical make targets remain aliases. All previous app Vulkan/Bonsai

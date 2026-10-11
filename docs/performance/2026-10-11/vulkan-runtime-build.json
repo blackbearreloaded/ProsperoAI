@@ -1,6 +1,6 @@
 {
   "runtime": "vulkan-runtime",
-  "title": "PPSA99023",
+  "title": "<TEST-TITLE-ID>",
   "prism_commit": "e8fd209c975c80aa7fb36a8423571ff3b1b7e955",
   "ggml_max_name": 160,
   "ggml_init_copies": 1,

@@ -1,6 +1,6 @@
 # vulkan-runtime media implementation
 
-All app build aliases now produce `build/vulkan-runtime/PPSA99023` from the same
+All app build aliases now produce `build/vulkan-runtime/<TEST-TITLE-ID>` from the same
 Prism llama/ggml source pin and `GGML_MAX_NAME=160`. SD is built from pinned source
 against those headers and libraries. Private SD/TTS ggml, AGC inference and its
 scratch allocator are removed. RADV uses the console AGC platform driver.

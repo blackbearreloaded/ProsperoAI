@@ -92,7 +92,7 @@ llama-vulkan: deps ## Host llama-cli with the Vulkan backend, plus a PS5 syntax 
 llama-ps5: deps ## Cross-build static llama.cpp and Vulkan libraries for PS5
 	@bash tools/build-llama-ps5.sh
 
-vulkan-smoke: ## Build PS5 Vulkan startup/device-discovery test folder (PPSA99023)
+vulkan-smoke: ## Build PS5 Vulkan startup/device-discovery test folder
 	@bash tools/build-vulkan-smoke.sh
 
 llama-vulkan-title: llama-ps5 ## Build model inference test folder (requires build/vulkan-models/stories260K.gguf)
@@ -216,7 +216,7 @@ app-bonsai-folder: vulkan-runtime ## Alias: vulkan-runtime includes the Bonsai 2
 
 .PHONY: vulkan-runtime
 vulkan-runtime: vulkan-runtime-libs ## Shared Prism/Vulkan text, image, audio and voice; no deployment
-	bash tools/build-vulkan-native.sh
+	PROSPERO_APP_TITLE="$${PROSPERO_TEST_TITLE:?Set PROSPERO_TEST_TITLE to the test title ID}" bash tools/build-vulkan-native.sh
 
 # Compatibility with earlier migration commands.
 shared-vulkan: vulkan-runtime-libs

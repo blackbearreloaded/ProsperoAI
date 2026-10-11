@@ -14,15 +14,15 @@ fi
 [[ $app_test == 0 ]] || model_test=1
 [[ $model_test == 0 ]] || work="$root/build/llama-vulkan-title"
 [[ $app_test == 0 ]] || work="$root/build/prospero-vulkan"
-title=PPSA99023
+title=${PROSPERO_TEST_TITLE:?Set PROSPERO_TEST_TITLE to the smoke-test title ID}
 if [[ ${LOAD_BENCHMARK:-0} == 1 ]]; then
     [[ $model_test == 1 && $app_test == 0 ]] || { echo "LOAD_BENCHMARK requires LLAMA_SMOKE=1" >&2; exit 2; }
-    title=PPSA99019
+    title=${PROSPERO_LOAD_TEST_TITLE:?Set PROSPERO_LOAD_TEST_TITLE for LOAD_BENCHMARK}
     work="$root/build/vulkan-load-benchmark"
 fi
 if [[ ${UI_PROBE:-0} == 1 ]]; then
     [[ $model_test == 0 && $app_test == 0 && ${LOAD_BENCHMARK:-0} == 0 ]] || { echo "UI_PROBE must run independently" >&2; exit 2; }
-    title=PPSA99019
+    title=${PROSPERO_UI_TEST_TITLE:?Set PROSPERO_UI_TEST_TITLE for UI_PROBE}
     work="$root/build/vulkan-ui-probe"
 fi
 app="$work/$title"

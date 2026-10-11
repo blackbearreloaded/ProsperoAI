@@ -186,7 +186,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
         : last == "long"           ? std::string(24000, 'x')
         : last == "selected-model" ? gpt_runtime_model_id(current_model)
         : last == "echo"           ? messages[0].content
-                                   : "Hello čau 😀";
+                                   : "Hello café 😀";
     std::snprintf(out, capacity, "%s", text.c_str());
     *stats = {};
     stats->prompt_tokens = 10;

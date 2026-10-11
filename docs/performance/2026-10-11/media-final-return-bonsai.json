@@ -34,7 +34,7 @@
     }
   },
   "passed": true,
-  "test_title": "PPSA99023",
+  "test_title": "<TEST-TITLE-ID>",
   "eboot_sha256": "1abdea8e26b8446b44f145218aae4fbc0cc6dc0d7e54420d9c7e10ef895380f9",
   "restored_settings": {
     "context": "auto",

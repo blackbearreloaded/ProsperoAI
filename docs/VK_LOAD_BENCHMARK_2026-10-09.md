@@ -60,7 +60,7 @@ corrected runtime and current llama archives. ELF NEEDED libraries, entry 0x120,
 14 program headers and header types match the working build. Native OpenGL UI
 and RADV combined linking remains a separate unresolved task.
 
-User-authorized deployment to PPSA99023 completed. Full-app warmup reported
+User-authorized deployment to <TEST-TITLE-ID> completed. Full-app warmup reported
 **device 4.16 ms, weights 2831.79 ms, context 72.87 ms, total 2908.83 ms**;
 the installed context configuration remains 16384. It generated 25 tokens and
 remained running (PID 116 at verification). Temporary automatic-chat and benchmark

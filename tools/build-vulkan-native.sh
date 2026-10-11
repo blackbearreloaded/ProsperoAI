@@ -14,7 +14,7 @@ work="$root/build/vulkan-runtime"
 llama_source="$root/build/prism-llama-source"
 llama_build="$root/build/vulkan-runtime-ps5/llama"
 [[ -f $llama_build/src/libllama.a ]] || { echo "Run make vulkan-runtime-libs first" >&2; exit 2; }
-title=${PROSPERO_APP_TITLE:-PPSA99023}
+title=${PROSPERO_APP_TITLE:?Set PROSPERO_APP_TITLE to the target title ID}
 [[ $title =~ ^PPSA[0-9]{5}$ ]] || { echo "Invalid title ID" >&2; exit 2; }
 app="$work/$title"
 label=${BUILD_LABEL:-vulkan-runtime}

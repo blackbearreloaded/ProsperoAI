@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Compare fixed media fixtures on a deployed PPSA99023 build (no deployment)."""
+"""Compare fixed media fixtures on an already deployed test build."""
 import argparse
 import array
 import hashlib
@@ -25,11 +25,14 @@ parser.add_argument('--models', nargs='+', default=['sd-turbo-fp16', 'stable-aud
 args = parser.parse_args()
 if not os.environ.get('PS5_HOST'):
     parser.error('PS5_HOST is required')
+title = os.environ.get('PROSPERO_TEST_TITLE')
+if not title:
+    parser.error('PROSPERO_TEST_TITLE is required')
 if args.warm_repeats < 0:
     parser.error('warm repeats must be nonnegative')
 base = 'http://' + os.environ['PS5_HOST'] + ':11434'
 status = subprocess.check_output(['python3', str(Path(__file__).with_name('ps5ctl.py')), 'agent', 'status'], text=True)
-assert 'title=PPSA99023' in status, status
+assert f'title={title}' in status, status
 fixtures = {
     'sd-turbo-fp16': 'A red apple on a wooden table, natural window light, photographic detail.',
     'stable-audio-open-small': 'Gentle acoustic guitar melody with soft warm notes, no speech.',
@@ -53,7 +56,7 @@ for attempt in range(60):
         if attempt == 59:
             raise
         time.sleep(0.5)
-result = {'label': args.label, 'test_title': 'PPSA99023', 'original_settings': original,
+result = {'label': args.label, 'test_title': title, 'original_settings': original,
           'method': f'one initial request per model then {args.warm_repeats} repeated requests; elapsed HTTP includes actual runtime loading; no console transfers during generation',
           'fixtures': {'sd': {'width': 512, 'height': 512, 'steps': 1, 'seed': 42, 'cfg': 1},
                        'audio': {'latent_length': 256, 'expected_rate': 44100}, 'tts': {'expected_rate': 24000}},
