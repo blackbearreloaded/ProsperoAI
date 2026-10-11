@@ -90,7 +90,10 @@ constexpr int kSolSocket = 0xffff;
 constexpr int kSoReuseAddr = 0x0004;
 
 constexpr int kNetPoolSize = 4 * 1024 * 1024;
-constexpr int kListenBacklog = 4;
+constexpr int kListenBacklog = 8;
+// A page load alone opens several concurrent requests (assets, fonts, model/settings/sync
+// polls); matches kListenBacklog so a burst that fills the backlog can actually be served.
+constexpr std::size_t kMaxActiveConnections = 8;
 constexpr std::size_t kRequestCapacity = 256 * 1024;
 constexpr std::size_t kResponseTextCapacity = prospero_generation::MaxOutputBytes;
 unsigned short kHttpServerPort = 11434;
@@ -1331,7 +1334,7 @@ void *server_worker(void *)
             else
                 ++it;
         }
-        if (connections.size() >= 4)
+        if (connections.size() >= kMaxActiveConnections)
         {
             openai_error(api, client_sock, "503 Service Unavailable", "server_busy",
                          "Too many active connections.");

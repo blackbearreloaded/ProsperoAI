@@ -634,3 +634,17 @@ bounded residency move to the subsequent draft PR.
   and a simulated long conversation (message bubbles wrap correctly, `#messages` scrolls
   independently of the fixed header/composer, auto-scroll-to-bottom works). Welcome and
   Models card/list layouts were already sound on mobile. Host lint passes.
+
+## 2026-10-11 — raised the HTTP server's hard connection cap
+
+- The web client's own cold page load (index.html, app.css, app.js, 3 fonts, plus the
+  immediate `/v1/models`, `/api/conversations` and `/api/models/download` calls) routinely
+  opens more concurrent connections than the server's hard cap of 4, so "Conversation sync
+  unavailable: Too many active connections." could appear on a normal load, not only under
+  the heavy automated testing above. Raised the cap (and the matching listen backlog) from
+  4 to 8; each connection's own 8 MiB thread stack is ordinary system RAM, not the
+  constrained Vulkan heap, so this does not compete with model/KV budgets.
+- Verified on `PPSA99023`: 8 concurrent `/v1/models` requests all returned 200 (previously
+  4 would have been rejected), and a realistic cold-load burst (the 6 static assets plus
+  `/v1/models` and `/api/conversations`) all succeeded concurrently. Host lint and all 55
+  tests pass.
