@@ -44,12 +44,10 @@ absence), and screenshots for every attempt — see AGENTS.md's debugging order.
 
 ## Known invariants (this console, FW 12.70)
 
-- Title installs that register correctly use `.ffpfsc` images uploaded over FTP and picked up by
-  ShadowMountPlus (`shadow` command / resend the `shadowmountplus.elf` payload). Folder deploys
-  (`/data/homebrew/<ID>/` as a directory) mount via nullfs but do **not** register in the system's
-  title database on this console: launch returns `0x80aa001a` even after `games/mount` succeeds.
-  This contradicts Mihawk's own docs (which validate folder deploys on 12.70), so the console's
-  environment differs from his in some unidentified way — open question, not resolved.
+- Both `.ffpfsc` images and app folders can register through ShadowMountPlus on this console.
+  Folder deploys require mode `755` on the uploaded app tree, including executable `eboot.bin`
+  and PRX modules; missing execute permission caused the earlier `0x80aa001a` launch failure.
+  Prefer folder deploys for development iterations and `.ffpfsc` only when an image is required.
 - A package re-uploaded under a title ID the console has already registered leaves the
   registration inconsistent ("The data is corrupted"). Delete the registration in the UI
   (Options > Delete) first, or use a fresh ID.

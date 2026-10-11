@@ -84,11 +84,15 @@ port 2323), process list, launch and screenshots.
 - Development and release builds use an app folder (releases also publish a ZIP of that folder).
   Do not replace a registered package image in place: remove its registration in the console UI
   before installing a different image. Folder-backed test titles can be updated after stopping
-  the title and verifying it is unmounted.
+  the title and verifying it is unmounted. Folder deployment works on this console when the
+  uploaded app tree has mode `755`; in particular, `eboot.bin` and PRX modules must be executable.
+  Prefer `tools/ps5ctl.py ftp put-dir`, which applies the executable permissions, over repeatedly
+  building and registering `.ffpfsc` images during development.
 - Deleting files from `/data/homebrew` does not remove the registration.
 - To update a folder-backed test title without a reboot, stop it in the console UI, verify
-  `shadow info <ID>` reports `mounted:false`, then upload only the changed files with FTP. The
-  first registration still requires the configured title registration workflow.
+  `shadow info <ID>` reports `mounted:false`, then upload only the changed files with FTP and
+  retain mode `755` on the app tree. The first registration still requires the configured title
+  registration workflow.
 - Icons and metadata come from `sce_sys/`. Use this project's `sce_sys`, not another project's.
 
 ## Git and attribution
