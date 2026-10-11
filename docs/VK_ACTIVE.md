@@ -1,6 +1,6 @@
 # Active work
 
-Updated: 2026-10-11. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
+Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
 
 ## Verified vulkan-runtime
 
@@ -28,6 +28,18 @@ Updated: 2026-10-11. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
   the Vulkan backend's real reported heap instead of a hardcoded figure. The web UI can now
   view/play/download generated images and audio inline (new authenticated `/download0/<path>`
   route plus client-side TGA decode), matching what the native app already did. PR #22.
+
+## Decode performance tuning (branch `perf/ps5-vulkan-profiling`)
+
+- GPU timestamps now reach klog, which showed Q4_0 `MUL_MAT_VEC` (m=14336,k=4096) and the
+  fused `MUL_MAT_ADD` as the Mistral 7B decode hotspots, about 15.8 ms GPU time per token.
+- Two PS5-only mat-vec patches in `tools/prepare-llama-ps5-io.py` are committed and verified
+  on the console: four standard-quant rows per workgroup, and the large hybrid-reduction
+  workgroup for narrow projections. Mistral 7B Q4_0 decode went from `62.93` to `66.62`
+  tokens/s (about `+5.9%`), with correct greedy output. Eight rows, large workgroups for all
+  m, and forced wave32 were measured and rejected.
+- Run-to-run spread under this protocol is about `0.5` tokens/s; treat smaller deltas as
+  noise. Evidence: `performance/2026-10-12/rdna2-*.json`.
 
 ## Release preparation
 

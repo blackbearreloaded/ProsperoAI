@@ -694,3 +694,19 @@ bounded residency move to the subsequent draft PR.
 - Evidence: `performance/2026-10-12/rdna2-rm-stdq-8rows.json`,
   `rdna2-dmmv-large-wg-m8192.json`, `rdna2-dmmv-large-wg-all-m.json`,
   `rdna2-combined-deployed.json`.
+
+## 2026-10-12 — forcing wave32 for mat-vec showed no gain; run-to-run noise quantified
+
+- Forcing a required subgroup size of 32 for the mat-vec pipelines on `AMD_RDNA2 && uma`
+  (through `subgroup_size_control`, also scaling the workgroup sizes) measured `65.9353`
+  tokens/s against the committed build's `66.6161`, so it was reverted rather than kept.
+- Re-measuring the unchanged committed build right afterwards gave `66.1684` tokens/s, so
+  repeated identical builds vary by roughly `0.5` tokens/s under this protocol. The wave32
+  result is inside that band: the honest reading is no measurable gain, not a regression.
+  It also means the workgroup-size step above (`+1.06` tokens/s) is a small effect at the
+  edge of the noise, while the four-row step (`+2.5`) and the combined `62.93 -> 66.6`
+  (about `+5.9%`) are well clear of it.
+- The console now runs the committed build from `4d67511`, re-uploaded and verified after
+  the experiment.
+- Evidence: `performance/2026-10-12/rdna2-dmmv-wave32-rejected.json`,
+  `rdna2-combined-restored.json`.
