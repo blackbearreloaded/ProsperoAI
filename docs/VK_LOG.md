@@ -616,3 +616,21 @@ bounded residency move to the subsequent draft PR.
   GET, detail GET, delete) against `PPSA99023`; unaffected by the client-side timing change
   since the sync endpoint itself was not touched. No browser automation tool was available
   in this environment to click through the page itself. Host lint and all 55 tests pass.
+
+## 2026-10-11 — mobile layout review via headless Chromium against PPSA99023
+
+- No browser automation tool was connected in this environment, so the web UI was actually
+  rendered and screenshotted at a 390x844 mobile viewport with a local headless Chromium
+  driven over its own DevTools protocol directly against `PPSA99023`'s HTTP server, rather
+  than inferred from CSS alone.
+- Found and fixed: the Models page's search input and type filters stayed in one flex row
+  on mobile (only `gap` was overridden there), collapsing the search box to an unusable
+  sliver next to wrapped filter pills; now stacks in a column. The chat header's Back
+  button, history toggle, title and model chip wrapped unpredictably across the same row;
+  reordered with flex `order` into back+toggle, then a full-width title row, then the model
+  chip, each on its own line.
+- Re-screenshotted after each fix to confirm, then exercised an actual message round trip
+  (title updates from the real first message, response renders, "Completed" status shows)
+  and a simulated long conversation (message bubbles wrap correctly, `#messages` scrolls
+  independently of the fixed header/composer, auto-scroll-to-bottom works). Welcome and
+  Models card/list layouts were already sound on mobile. Host lint passes.
