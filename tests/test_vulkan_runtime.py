@@ -14,9 +14,10 @@ class VulkanRuntimeTests(unittest.TestCase):
                 self.fail('mandatory vulkan-runtime binaries are missing')
             self.skipTest('bash tools/build-vulkan-runtime.sh host required')
         environment = {**os.environ, 'GGML_NO_BACKTRACE': '1'}
-        software = Path('/usr/share/vulkan/icd.d/lvp_icd.x86_64.json')
-        if software.exists():
+        software = next(iter(sorted(Path('/usr/share/vulkan/icd.d').glob('lvp_icd*.json'))), None)
+        if software is not None:
             environment['VK_ICD_FILENAMES'] = str(software)
+        if environment.get('VK_ICD_FILENAMES'):
             environment['GGML_VK_VISIBLE_DEVICES'] = '0'
         for binary in binaries:
             with self.subTest(binary=binary.name):

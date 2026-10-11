@@ -19,6 +19,7 @@ title=${PROSPERO_APP_TITLE:?Set PROSPERO_APP_TITLE to the target title ID}
 app="$work/$title"
 label=${BUILD_LABEL:-vulkan-runtime}
 [[ $label =~ ^[A-Za-z0-9\ ,._#-]{1,40}$ ]] || { echo "Invalid build label" >&2; exit 2; }
+bash "$root/tools/prepare-opengl.sh" >/dev/null
 kit_stage=$(bash "$root/tools/prepare-ui-kit.sh")
 kit=$(bash "$root/tools/prepare-ui-kit.sh" --kit)
 fonts=$(bash "$root/tools/bake-fonts.sh")
