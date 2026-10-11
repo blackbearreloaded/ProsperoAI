@@ -164,7 +164,7 @@ Installation and repeated launches within a console-testing task are covered by 
 
 The Vulkan build also exposes `/v1/models` and `/v1/chat/completions`, including SSE and portable function calls. See [OpenCode configuration](OPENCODE.md) for bearer keys, context sizing and protocol limits. The native Vulkan title links the existing AGC media backend alongside Vulkan text inference. Voice generation and switching back to Vulkan text have been verified on console; Image and Audio generation in this combined build have not yet been exercised.
 
-Default Vulkan backend logging forwards WARN/ERROR. Create `/app0/vulkan_verbose_logging.txt` only for detailed diagnosis; synchronous full debug output materially slows loading. For first-load-only benchmark runs, add `/app0/load_parallel_only.txt` (three optimized loads per launch).
+Default Vulkan backend logging forwards WARN/ERROR. Create `/app0/vulkan_verbose_logging.txt` only for detailed diagnosis; synchronous full debug output materially slows loading. Create `/app0/vulkan_profile.txt` in a benchmark package to enable ggml's per-operator GPU timestamp report; profiling waits for query results and must not be used for throughput claims. The HTTP generation endpoint accepts benchmark-only `options.num_batch` and `options.num_ubatch` overrides (32–2048); changing either recreates the context. For first-load-only benchmark runs, add `/app0/load_parallel_only.txt` (three optimized loads per launch).
 
 ## Native UI Vulkan presentation probe
 

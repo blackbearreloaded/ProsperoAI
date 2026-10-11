@@ -23,6 +23,10 @@ struct gpt_runtime_settings_t
     unsigned context_length = 0;   // 0 = Auto (see prospero_kv::choose_auto)
     const char* kv_cache = nullptr; // nullptr/"auto", "f16", "q8_0", "q4_0"
     bool thinking = false;
+    // Optional benchmark overrides. Zero keeps the app/file default. Changing either
+    // recreates the llama context, so production callers should leave them zero.
+    unsigned batch_length = 0;
+    unsigned ubatch_length = 0;
 };
 
 struct gpt_runtime_stats_t

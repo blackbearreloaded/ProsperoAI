@@ -318,7 +318,8 @@ void iso8601_now(char *output, std::size_t capacity)
 bool run_generation(const gpt_runtime_message_t *messages, unsigned message_count,
                     char *response_text, std::size_t response_capacity, unsigned max_tokens = 512,
                     gpt_runtime_stats_t *reported_stats = nullptr, const char *model_id = nullptr,
-                    unsigned context_tokens = 0)
+                    unsigned context_tokens = 0, unsigned batch_tokens = 0,
+                    unsigned ubatch_tokens = 0)
 {
     pthread_mutex_lock(&generation_mutex);
     gpt_runtime_settings_t settings{0, max_tokens};
@@ -328,6 +329,8 @@ bool run_generation(const gpt_runtime_message_t *messages, unsigned message_coun
     settings.thinking = runtime.thinking;
     settings.model_id = model_id;
     settings.context_tokens = context_tokens;
+    settings.batch_length = batch_tokens;
+    settings.ubatch_length = ubatch_tokens;
     gpt_runtime_stats_t stats{};
     const int result = gpt_runtime_generate(messages, message_count, settings, response_text,
                                             response_capacity, &stats, nullptr);
@@ -549,9 +552,12 @@ void handle_generate(const NetApi &api, int sock, const char *request_body)
                                                prospero_generation::MaxOutputTokens);
     const unsigned context_tokens = request_option(request_body, "num_ctx", 0,
                                                    prospero_generation::MaxContextTokens);
+    const unsigned batch_tokens = request_option(request_body, "num_batch", 0, 2048);
+    const unsigned ubatch_tokens = request_option(request_body, "num_ubatch", 0, 2048);
     gpt_runtime_stats_t stats{};
     const bool ok = run_generation(messages, 1, response_text.data(), response_text.size(),
-                                   max_tokens, &stats, model, context_tokens);
+                                   max_tokens, &stats, model, context_tokens, batch_tokens,
+                                   ubatch_tokens);
 
     char created_at[32];
     iso8601_now(created_at, sizeof(created_at));

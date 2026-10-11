@@ -45,6 +45,8 @@ llama_context *context;
 unsigned requested_context_setting;   // from gpt_runtime_settings_t::context_length
 bool requested_kv_is_auto = true;     // from gpt_runtime_settings_t::kv_cache
 std::string requested_kv_setting;     // "f16"/"q8_0"/"q4_0" when not Auto
+unsigned requested_batch_setting;
+unsigned requested_ubatch_setting;
 std::vector<llama_token> previous_tokens; // the last turn's token sequence, for prefix reuse
 
 // Derived from llama.cpp's own model-introspection API (llama_model_n_layer/n_head_kv,
@@ -129,16 +131,21 @@ void release_model() {
     // into the new context.
     previous_tokens.clear();
 }
-void configure_context(unsigned context_length, const char *kv_cache) {
+void configure_context(unsigned context_length, const char *kv_cache,
+                       unsigned batch_length = 0, unsigned ubatch_length = 0) {
     const bool kv_is_auto = !kv_cache || !std::strcmp(kv_cache, "auto");
     const std::string kv_setting = kv_cache ? kv_cache : "";
-    if (context_length != requested_context_setting || kv_is_auto != requested_kv_is_auto || kv_setting != requested_kv_setting) {
+    if (context_length != requested_context_setting || kv_is_auto != requested_kv_is_auto ||
+        kv_setting != requested_kv_setting || batch_length != requested_batch_setting ||
+        ubatch_length != requested_ubatch_setting) {
         if (context) llama_free(context);
         context = nullptr;
         previous_tokens.clear();
         requested_context_setting = context_length;
         requested_kv_is_auto = kv_is_auto;
         requested_kv_setting = kv_setting;
+        requested_batch_setting = batch_length;
+        requested_ubatch_setting = ubatch_length;
     }
 }
 // A failed decode may leave some ubatches resident. Never advertise those as
@@ -182,6 +189,13 @@ bool prepare() {
     const int64_t load_start = ggml_time_us();
     if (!initialized) {
         verbose_logging = access("/app0/vulkan_verbose_logging.txt", F_OK) == 0;
+        // A title has no launch shell where profiling variables can be exported.
+        // This package marker exposes the pinned backend's timestamp-query logger.
+        if (access("/app0/vulkan_profile.txt", F_OK) == 0) {
+            setenv("GGML_VK_PERF_LOGGER", "1", 1);
+            setenv("GGML_VK_PERF_LOGGER_FREQUENCY", "1", 1);
+            verbose_logging = true;
+        }
         llama_log_set(backend_log_message, nullptr);
         ggml_log_set(backend_log_message, nullptr);
         setenv("GGML_NO_BACKTRACE", "1", 1);
@@ -229,9 +243,11 @@ bool prepare() {
                                    : parse_kv_type_setting(requested_kv_setting);
     cp.type_k = kv_type;
     cp.type_v = kv_type;
-    cp.n_batch = prospero::read_inference_setting("/app0", "batch_size.txt", 256, 32, 2048);
-    cp.n_ubatch = std::min(cp.n_batch, prospero::read_inference_setting(
-        "/app0", "ubatch_size.txt", 256, 32, 2048));
+    cp.n_batch = requested_batch_setting ? requested_batch_setting
+        : prospero::read_inference_setting("/app0", "batch_size.txt", 256, 32, 2048);
+    cp.n_ubatch = requested_ubatch_setting ? requested_ubatch_setting
+        : prospero::read_inference_setting("/app0", "ubatch_size.txt", 256, 32, 2048);
+    cp.n_ubatch = std::min(cp.n_batch, cp.n_ubatch);
     cp.n_threads = prospero::read_inference_setting("/app0", "threads.txt", 4, 1, 16);
     cp.n_threads_batch = prospero::read_inference_setting("/app0", "threads_batch.txt", 4, 1, 16);
     // 0=auto, 1=disabled, 2=enabled. Auto retains backend support checks.
@@ -333,7 +349,13 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
                           "Context window must be between 512 and 262144 tokens.");
             return 1;
         }
-        configure_context(settings.context_tokens ? settings.context_tokens : settings.context_length, settings.kv_cache);
+        if ((settings.batch_length && (settings.batch_length < 32 || settings.batch_length > 2048)) ||
+            (settings.ubatch_length && (settings.ubatch_length < 32 || settings.ubatch_length > 2048))) {
+            std::snprintf(output, capacity, "Batch sizes must be between 32 and 2048.");
+            return 1;
+        }
+        configure_context(settings.context_tokens ? settings.context_tokens : settings.context_length,
+                          settings.kv_cache, settings.batch_length, settings.ubatch_length);
         if (!prepare()) { std::snprintf(output, capacity, "Unable to load a GGUF model on Vulkan."); return 1; }
         std::string prompt;
         const char *tmpl = llama_model_chat_template(model, nullptr);

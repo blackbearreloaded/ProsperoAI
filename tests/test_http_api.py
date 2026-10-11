@@ -159,6 +159,13 @@ class HttpApiTests(unittest.TestCase):
         _, response = self.request("/api/generate", {"model": "tiny.gguf", "prompt": "limits"})
         self.assertEqual(json.loads(response)["response"], "131072:0")
 
+    def test_ollama_benchmark_batch_overrides(self):
+        _, response = self.request('/api/generate', {
+            'model': 'tiny.gguf', 'prompt': 'benchmark-settings',
+            'options': {'num_batch': 512, 'num_ubatch': 128},
+        })
+        self.assertEqual(json.loads(response)['response'], '512:128')
+
     def test_public_ui_preserves_private_api(self):
         header, body = self.request("/", key="private")
         self.assertIn("200 OK", header)
