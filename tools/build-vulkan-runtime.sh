@@ -12,6 +12,7 @@ mkdir -p "$TMPDIR"
 options=(-DPROS_LLAMA_SOURCE="$source_tree" -DPROS_PRISM_RUNTIME=ON -DVulkan_INCLUDE_DIR="$root/.deps/Vulkan-Headers/include" -DGGML_CCACHE=ON)
 if [[ $mode == ps5 ]]; then
     python3 "$root/tools/prepare-llama-ps5-io.py" --source "$source_tree"
+    python3 "$root/tools/prepare-llama-ps5-vulkan.py" "$source_tree"
     mkdir -p "$root/build/llama-vulkan/include-shim/spirv"
     ln -sfn /usr/include/spirv/unified1 "$root/build/llama-vulkan/include-shim/spirv/unified1"
     options+=(-DCMAKE_TOOLCHAIN_FILE="$root/tools/ps5-llama-toolchain.cmake"
