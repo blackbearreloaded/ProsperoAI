@@ -119,8 +119,11 @@ void log_change(const Model &from, const Model &to)
                                        &free_bytes);
     char line[256];
     std::snprintf(line, sizeof(line),
-                  "[prosperoai] model change: %s -> %s, largest free block %zu MiB\n",
-                  from.id.c_str(), to.id.c_str(), free_bytes >> 20);
+                  "[prosperoai] model change: %s -> %s, largest free block %zu MiB, "
+                  "vulkan heap %llu MiB\n",
+                  from.id.c_str(), to.id.c_str(), free_bytes >> 20,
+                  static_cast<unsigned long long>(
+                      prospero_vulkan::gpt_runtime_vulkan_heap_bytes() >> 20));
     sceKernelDebugOutText(0, line);
 }
 void stop_media()

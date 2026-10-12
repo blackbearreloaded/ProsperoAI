@@ -87,6 +87,14 @@
         "highway"
       ],
       "setup_creates": "highway/CMakeLists.txt"
+    },
+    {
+      "name": "espeak-ng-headers",
+      "about": "espeak-ng 1.51 source, used only for its public headers. kokoro.cpp links espeak-ng directly and the PS5 build has no system copy; the symbols come from vendor/lib/libespeak-ng.a.",
+      "kind": "git",
+      "url": "https://github.com/espeak-ng/espeak-ng.git",
+      "commit": "2e9a5fccbb0095e87b2769e9249ea1f821918ecd",
+      "path": ".deps/espeak-ng"
     }
   ]
 }

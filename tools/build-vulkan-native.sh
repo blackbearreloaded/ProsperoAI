@@ -36,7 +36,7 @@ objects=()
 sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens.cpp src/native_ui_style.cpp
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
- src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
+ src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/kokoro_runtime_ps5.cpp src/agc_lifecycle.cpp
  vulkan/gpt_runtime_router.cpp vulkan/media_vulkan.cpp
  vulkan/storage.cpp vulkan/storage_paths.cpp vulkan/elevation/elevation.cpp vulkan/debug_tee.cpp src/debug_log.cpp
  src/native_ui_update.cpp vulkan/update_ps5.cpp
@@ -44,10 +44,14 @@ sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp 
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
 media_definitions=()
 media_definitions=(-DPROSPERO_PRISM_RUNTIME -DPROSPERO_MEDIA_VULKAN)
-# Kokoro's archived entrypoint asks for a backend reservation; bind it to Vulkan.
-kokoro_archive="$work/libkokoro-tts-vulkan.a"
-llvm-objcopy-18 --redefine-sym ps5_agc_backend_reserve=prospero_media_vk_reserve \
- "$root/vendor/lib/libkokoro-tts.a" "$kokoro_archive"
+# Speech is kokoro.cpp on the shared ggml/Vulkan backend (src/kokoro_runtime_ps5.cpp); the
+# prebuilt OpenCL archive it replaces is no longer linked.
+kokoro_archives=("$root/build/vulkan-runtime-ps5/kokoro/libkokoro.a"
+ "$root/build/vulkan-runtime-ps5/kokoro/highway/libhwy.a")
+# Not `archive`: that variable already holds RADV's library for radv_link_recipe below.
+for kokoro_input in "${kokoro_archives[@]}"; do
+ [[ -f $kokoro_input ]] || { echo "Run make vulkan-runtime-libs first: missing $kokoro_input" >&2; exit 2; }
+done
 while IFS= read -r relative; do
  [[ -n $relative && $relative != \#* ]] || continue
  [[ $relative != gfx/gl_program.cpp && $relative != platform/ps5/display_egl.cpp ]] || continue
@@ -64,6 +68,9 @@ for relative in "${sources[@]}"; do
  case "$relative" in
   src/sd_runtime_ps5.cpp)
    media_includes=(-I "$root/.deps/stable-diffusion-vulkan/include");;
+  src/kokoro_runtime_ps5.cpp)
+   media_includes=(-I "$root/.deps/kokoro.cpp/include"
+    -I "$root/build/prism-llama-source/ggml/include");;
  esac
  object="$work/obj/${relative//\//_}.o"
  ninja_inputs=("$root/$relative" "$root/tooling/prospero-clang18")
@@ -157,7 +164,7 @@ sd_archives=("$root/build/vulkan-runtime-ps5/sd/libstable-diffusion.a")
  "$llama_build/ggml/src/libggml.a" "$llama_build/ggml/src/libggml-base.a" \
  "$llama_build/ggml/src/libggml-cpu.a" "$llama_build/ggml/src/ggml-vulkan/libggml-vulkan.a" \
  "${sd_archives[@]}" \
- "$root/vendor/lib/libstable-audio.a" "$kokoro_archive" "$root/vendor/lib/libespeak-ng.a" \
+ "$root/vendor/lib/libstable-audio.a" "${kokoro_archives[@]}" "$root/vendor/lib/libespeak-ng.a" \
  "$root/vendor/lib/libcompat.a" --end-group \
  --defsym=vkGetInstanceProcAddr=radv_GetInstanceProcAddr --defsym=vkGetDeviceProcAddr=vk_common_GetDeviceProcAddr \
  --defsym=vkCmdCopyBuffer=vk_common_CmdCopyBuffer --defsym=vkGetPhysicalDeviceFeatures2=vk_common_GetPhysicalDeviceFeatures2 \

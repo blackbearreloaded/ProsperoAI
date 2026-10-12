@@ -41,6 +41,18 @@ Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
 - Run-to-run spread under this protocol is about `0.5` tokens/s; treat smaller deltas as
   noise. Evidence: `performance/2026-10-12/rdna2-*.json`.
 
+## Speech on ggml/Vulkan
+
+- Kokoro is no longer the prebuilt OpenCL archive: `src/kokoro_runtime_ps5.cpp` drives
+  kokoro.cpp (pinned `kokoro-cpp`) on the shared ggml Vulkan backend. Verified on
+  `PPSA99023`: 3.275 s of audio in `0.258` s warm against `130.5` s before, with the output
+  matching a host CPU reference (envelope correlation 0.9985). Text and SD unaffected.
+- Open: the download catalog still lists the old Adreno weights, so `kokoro-82m-f16.gguf` and
+  `kokoro-voice-af_heart.gguf` are not fetched by a fresh install; they were uploaded by hand.
+  `vendor/lib/libkokoro-tts.a` is unused but still in the tree. Deciding where the GGUFs come
+  from needs a repository choice, since a preset carries one repository and the espeak-ng data
+  lives in the existing one.
+
 ## Release preparation
 
 - The `01.003.000` Vulkan app initiated a real console self-update from a temporary GitHub

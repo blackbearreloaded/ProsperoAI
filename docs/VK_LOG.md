@@ -753,3 +753,81 @@ bounded residency move to the subsequent draft PR.
 - PS5 risks retired early: kokoro.cpp needs only `espeak_Initialize`, `espeak_SetVoiceByName`
   and `espeak_TextToPhonemes`, all three already defined by `vendor/lib/libespeak-ng.a`, and
   its CMake takes `ESPEAK_NG_INCLUDEDIR`/`ESPEAK_NG_LIB` for a cross build.
+
+## 2026-10-12 — Kokoro now runs on ggml/Vulkan: 130.5 s to 0.26 s
+
+- Replaced the prebuilt OpenCL speech archive with kokoro.cpp built from source against the
+  same pinned ggml and Vulkan backend as text. New `src/kokoro_runtime_ps5.cpp` implements
+  `ps5_kokoro_tts_generate` over kokoro.cpp's C ABI, writes the 16-bit mono WAV itself and
+  points espeak-ng at the model folder's `assets` through `KOKORO_ESPEAK_DATA_PATH`.
+- `tools/vulkan-runtime/CMakeLists.txt` adds kokoro.cpp next to llama and stable-diffusion.
+  It reuses the `ggml` target already created there, so there is still one ggml ABI and one
+  Vulkan backend. Cross-build details: `HWY_COMPILE_ONLY_STATIC` with AVX2/FMA/F16C, because
+  Highway's AVX-512 paths do not compile for `x86_64-sie-ps5` and the console is one fixed
+  CPU; and an explicit imported espeak-ng target, because pkg-config would otherwise hand the
+  cross compile the host's `/usr/include`.
+- `tools/build-vulkan-native.sh` links `libkokoro.a` and `libhwy.a` instead of
+  `libkokoro-tts.a`, and no longer rewrites that archive's backend-reservation symbol.
+- ELF foundation unchanged: entry `0x120`, 14 program headers, the same 15 NEEDED PRX modules
+  as the verified build, with no new dependency.
+- Measured on `PPSA99023`, same sentence as the earlier profile, 78600 samples at 24 kHz
+  (3.275 s of audio): cold `0.612214` s, warm `0.258404` s, backend reported as `Vulkan`,
+  459 tensors loaded. The prebuilt archive needed `130.5` s warm for the same sentence, so
+  this is roughly a 505x reduction and 12.7x faster than real time.
+- Output is correct, not just fast: the console WAV and the host CPU reference have identical
+  rate, channels, width and sample count, peaks of 13259 against 13468, RMS 1063.4 against
+  1061.6 and frame-envelope correlation `0.9985`.
+- Regressions checked after the link change: Mistral 7B Q4_0 decode `66.8337` tokens/s (same
+  band as before) and SD-Turbo `30.4` s, matching its `30.324` s baseline. The OpenCL shim
+  stays for image and audio; speech no longer touches it (`calls=0 cpu_kernel_calls=0`).
+- Not done yet: the download catalog still points at the old Adreno weights. A fresh install
+  does not fetch `kokoro-82m-f16.gguf` and `kokoro-voice-af_heart.gguf`; they were uploaded by
+  hand for this test. `vendor/lib/libkokoro-tts.a` is now unused but still in the tree.
+- Evidence: `performance/2026-10-12/kokoro-ggml-vulkan.json`.
+
+## 2026-10-12 — the speech download catalog, and two installer bugs it exposed
+
+- The Kokoro preset now installs the ggml runtime's own files: `kokoro-82m-f16.gguf` and
+  `kokoro-voice-af_heart.gguf` from `simonfxr/kokoro.cpp-GGUF` at revision
+  `c64650d0950e0b718b6eeb2f18620e25daf5c90b`, while the espeak-ng dictionaries and the licence
+  set stay in the existing pinned repository. The dead Adreno files (`weights/model.fp16.bin`
+  at 163.5 MB, the OpenCL kernels, `model.json`, the old voice pack and phoneme vocabulary)
+  are gone from the catalog, so the bundle is 165.2 MB of files the runtime actually reads.
+- `PresetFile` gained optional `repository`/`revision`, null unless a file comes from a
+  different repository than its preset. One speech preset can therefore span the two sources,
+  which the user agreed to, instead of mirroring the GGUFs or bundling dictionaries in the app.
+- Installing it on the console failed the first time: "Cannot install completed bundle:
+  Directory not empty (66)". `rename()` cannot move the staging folder onto an existing
+  bundle, so any upgrade of an installed preset was impossible, not just this one. The
+  installer now moves the old bundle aside, swaps the verified new one in, and puts the old one
+  back if that fails.
+- The swap then left `kokoro-82m-fp16.replaced` behind with the whole 163 MB of old weights:
+  `remove_tree` unlinked entries while the directory's own stream was open, which leaves
+  entries behind on this filesystem. It now reads the directory into a list first and deletes
+  afterwards.
+
+## 2026-10-12 — speech now faults on the console, and what is ruled out
+
+- After the preset switch, every speech request on `PPSA99023` ends in `SIGSEGV` on the
+  `prosperoai-http-conn` thread, right after kokoro.cpp logs the phonemes and builds its first
+  graph (`bert_predictor.graph_build` completes, the next bench stage never prints). The same
+  binary and the same model files produced five correct runs earlier in the day.
+- Ruled out by measurement, each with its own console run:
+  - the model files: the GGUFs on the console hash identically to the local copies that worked;
+  - the amount of free memory: `kokoro_memory free=7385 MiB total=11712 MiB` right before the
+    fault, and the fault also happens after loading only a 0.8B text model;
+  - a resident text model: it faults with no text model loaded at all (no `model ready` line);
+  - the Vulkan backend: it faults the same way with `KOKORO_BACKEND_CPU`;
+  - holding the ggml-vulkan device for the process lifetime (an extra backend reference taken
+    at startup, before any model);
+  - `GGML_MAX_NAME=160`: a host build with the console's ABI synthesizes correctly on both CPU
+    and Vulkan;
+  - my own later edits: the exact code of commit `16d47e2`, which produced the five good runs,
+    faults as well once the new preset is in place.
+- The one measurement that separates the working session from every run since: the title had
+  `11439 MiB` as its largest free block then, and has a stable `7385 MiB` now, across fresh
+  launches with nothing loaded. About 4 GB of direct memory is no longer available to the
+  title, which points at system state outside the process (the repeated faults and the two
+  165 MB installs happened in between) rather than at the speech code.
+- Next step is a console reboot to test that, since nothing in the process explains a missing
+  4 GB. A reboot needs the user's approval, so it has not been done.

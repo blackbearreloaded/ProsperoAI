@@ -637,82 +637,26 @@
         "sha256": "4c5f247313a4206d2d5b2b411b973a007b0617f0633add363a74717aba8d421c"
       },
       {
-        "source": "kokoro-82m-fp16/assets/phoneme_vocab.tsv",
-        "path": "assets/phoneme_vocab.tsv",
-        "size": 687,
-        "sha256": "14b75a949b914dab38c98a36dd13fa3e3db6ee63ec45ffce781064fda8b5011b"
-      },
-      {
-        "source": "kokoro-82m-fp16/assets/voice_pack_af_heart.bin",
-        "path": "assets/voice_pack_af_heart.bin",
-        "size": 522240,
-        "sha256": "d583ccff3cdca2f7fae535cb998ac07e9fcb90f09737b9a41fa2734ec44a8f0b"
-      },
-      {
-        "source": "kokoro-82m-fp16/kernels/conv_1d.cl",
-        "path": "kernels/conv_1d.cl",
-        "size": 1632,
-        "sha256": "62366b0fed7ace9b5e9eb7eb16d1963f545ffe919ee3ef39e17ae1a95c29398b"
-      },
-      {
-        "source": "kokoro-82m-fp16/kernels/conv_transpose_1d.cl",
-        "path": "kernels/conv_transpose_1d.cl",
-        "size": 2038,
-        "sha256": "ef5d6e7418a1868bcc2d807a40f720fdf52e692f29dda00df385103b2cf5c61f"
-      },
-      {
-        "source": "kokoro-82m-fp16/kernels/hifigan_residual_block.cl",
-        "path": "kernels/hifigan_residual_block.cl",
-        "size": 1960,
-        "sha256": "666464a7ba6bc13ee02511f634d216d17c6b42ce7f9ec0b7a1e1154d1906986e"
-      },
-      {
-        "source": "kokoro-82m-fp16/kernels/istft.cl",
-        "path": "kernels/istft.cl",
-        "size": 5273,
-        "sha256": "244bca707689f6b4b50442dc11f5711359cb146fc9cb8e164738cadec5c5b88e"
-      },
-      {
-        "source": "kokoro-82m-fp16/kernels/length_regulator.cl",
-        "path": "kernels/length_regulator.cl",
-        "size": 1950,
-        "sha256": "2284624b7c0b4ce1ad8b3fa31f45546771902d21999ec38fcab694dfc70d7a97"
-      },
-      {
-        "source": "kokoro-82m-fp16/kernels/text_encoder.cl",
-        "path": "kernels/text_encoder.cl",
-        "size": 1216,
-        "sha256": "b66f5c28b87e5d17cd0b67630ba1ff3fce72131f859338e250627a8da2f60059"
-      },
-      {
-        "source": "kokoro-82m-fp16/kernels/utils.cl",
-        "path": "kernels/utils.cl",
-        "size": 2596,
-        "sha256": "bfd2c788d317b2aa1a90451de11aaa3a9ef01ed954fcf80c120682849055ee53"
-      },
-      {
-        "source": "kokoro-82m-fp16/model.json",
-        "path": "model.json",
-        "size": 104,
-        "sha256": "884b43cd6953f07ce9b5a24e3c0da530c755e8227090f836cc4dd46996acf27f"
-      },
-      {
-        "source": "kokoro-82m-fp16/weights/model.fp16.bin",
-        "path": "weights/model.fp16.bin",
-        "size": 163526820,
-        "sha256": "631d59ff8174024e66598a98ff2ed96974ad2ce719840b1e56e6c8b20be27677"
-      },
-      {
-        "source": "kokoro-82m-fp16/weights/model.fp16.meta.json",
-        "path": "weights/model.fp16.meta.json",
-        "size": 120670,
-        "sha256": "d01ee4ba415b0e0dd8abfaa1dde9bc27f814db963b1aab52ce1be83b32e19e56"
-      },
-      {
         "source": "provenance/model-preparation.json",
         "path": "licenses/provenance/model-preparation.json",
         "size": 14562,
         "sha256": "f9e710c3079daa116b5341964acfb3e1aea5fc21909bfa7745709cdc56b3c996"
+      },
+      {
+        "source": "kokoro-82m-f16.gguf",
+        "path": "kokoro-82m-f16.gguf",
+        "size": 163728096,
+        "sha256": "597926de84f5550e1526ce0abde4e496209d464afc9274d8603d14f3c04d1f67",
+        "repository": "simonfxr/kokoro.cpp-GGUF",
+        "revision": "c64650d0950e0b718b6eeb2f18620e25daf5c90b"
+      },
+      {
+        "source": "voices/kokoro-voice-af_heart.gguf",
+        "path": "kokoro-voice-af_heart.gguf",
+        "size": 522560,
+        "sha256": "c2f44076dfb8f9c098a85d634f6d6b46b038f80e3afdf695ff3b90f6d9ef473f",
+        "repository": "simonfxr/kokoro.cpp-GGUF",
+        "revision": "c64650d0950e0b718b6eeb2f18620e25daf5c90b"
       }
     ]
   },

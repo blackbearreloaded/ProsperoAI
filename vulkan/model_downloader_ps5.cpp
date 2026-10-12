@@ -291,18 +291,31 @@ bool cancel_pending() { return cancel_requested.load(std::memory_order_acquire);
 // Removes a bundle's staging folder with what was downloaded into it.
 void remove_tree(const std::string &path, int depth = 0) {
     if (depth > 8) return;
+    // Read the whole directory before deleting anything: unlinking while its own stream is
+    // open left entries behind on the console, which is how a replaced model bundle kept
+    // occupying storage after its replacement had been installed.
+    std::vector<std::string> children;
     if (DIR *directory = opendir(path.c_str())) {
         while (const dirent *entry = readdir(directory)) {
             const std::string name = entry->d_name;
             if (name == "." || name == "..") continue;
-            const std::string child = path + "/" + name;
-            struct stat info{};
-            if (lstat(child.c_str(), &info) == 0 && S_ISDIR(info.st_mode)) remove_tree(child, depth + 1);
-            else unlink(child.c_str());
+            children.push_back(path + "/" + name);
         }
         closedir(directory);
     }
-    rmdir(path.c_str());
+    // Do not decide file-or-directory from lstat alone: on the console it reported nothing
+    // useful here, every child was treated as a file, and unlink refused all of them, which
+    // is why a replaced bundle survived. Try the cheap case and recurse when it is a folder.
+    for (const std::string &child : children) {
+        if (unlink(child.c_str()) == 0) continue;
+        const int reason = errno;
+        remove_tree(child, depth + 1);
+        if (access(child.c_str(), F_OK) == 0)
+            prospero::debug::line("download", "cannot remove %s errno=%d", child.c_str(), reason);
+    }
+    if (rmdir(path.c_str()) != 0 && access(path.c_str(), F_OK) == 0)
+        prospero::debug::line("download", "cannot remove directory %s errno=%d", path.c_str(),
+                              errno);
 }
 // The end of a cancelled download: nothing of it is kept, and the page says so.
 void finish_cancelled(State next) {
@@ -410,8 +423,12 @@ bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile
     const std::string part = target + ".part";
     // A file an interrupted bundle download already finished is checked again, not fetched again.
     if (access(target.c_str(), F_OK) == 0) rename(target.c_str(), part.c_str());
-    if (!fetch_verified(http, std::string("https://huggingface.co/") + preset.repository +
-                        "/resolve/" + preset.revision + "/" + encode_path(item.source),
+    // A file may name its own repository; the speech GGUFs come from a different one than
+    // the espeak dictionaries and licences beside them.
+    const char *repository = item.repository ? item.repository : preset.repository;
+    const char *revision = item.revision ? item.revision : preset.revision;
+    if (!fetch_verified(http, std::string("https://huggingface.co/") + repository +
+                        "/resolve/" + revision + "/" + encode_path(item.source),
                         part, item.size, item.sha256, completed, item.path))
         return false;
     if (rename(part.c_str(), target.c_str()) != 0) {
@@ -439,8 +456,23 @@ void install_preset() {
     }
     // A single file is in place by now; a bundle is still in its staging folder.
     if (preset.kind != 0 && cancel_pending()) { remove_tree(staging); return; }
-    if (preset.kind != 0 && rename(staging.c_str(), final.c_str()) != 0) {
-        storage_error("Cannot install completed bundle"); return;
+    if (preset.kind != 0) {
+        // An older bundle under the same id is replaced, not refused: rename cannot move a
+        // folder onto a non-empty one, which is what an upgrade always hits (the Adreno
+        // Kokoro bundle being replaced by the ggml one, for example). The new bundle is
+        // fully verified by now, and a failed swap puts the previous one back.
+        const std::string retired = final + ".replaced";
+        remove_tree(retired);
+        const bool had_previous = access(final.c_str(), F_OK) == 0;
+        if (had_previous && rename(final.c_str(), retired.c_str()) != 0) {
+            storage_error("Cannot replace the installed bundle"); return;
+        }
+        if (rename(staging.c_str(), final.c_str()) != 0) {
+            storage_error("Cannot install completed bundle");
+            if (had_previous) rename(retired.c_str(), final.c_str());
+            return;
+        }
+        if (had_previous) remove_tree(retired);
     }
     set_status(preset.kind == 0 ? "Preset verified and installed. Refreshing models."
                               : "Bundle verified and installed. Refreshing models.");

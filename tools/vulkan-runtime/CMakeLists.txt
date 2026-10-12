@@ -42,6 +42,35 @@ set_property(SOURCE "${PROS_ROOT}/.deps/stable-diffusion-vulkan/src/version.cpp"
     DIRECTORY "${PROS_ROOT}/.deps/stable-diffusion-vulkan"
     PROPERTY COMPILE_DEFINITIONS
     SDCPP_BUILD_COMMIT=f89d9b13d730eabeede7314ce49dacd18d3c90c2 SDCPP_BUILD_VERSION=prospero-pinned)
+# Speech on the same ggml/Vulkan backend. kokoro.cpp reuses the ggml target added above
+# instead of its bundled submodule, and espeak-ng comes from the pinned headers plus the
+# prebuilt PS5 archive, because the cross environment has no system copy.
+set(KOKORO_BUILD_CLI OFF CACHE BOOL "" FORCE)
+set(KOKORO_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(KOKORO_VULKAN ON CACHE BOOL "" FORCE)
+set(KOKORO_STATIC ON CACHE BOOL "" FORCE)
+set(KOKORO_GGML_DIR "${PROS_LLAMA_SOURCE}/ggml" CACHE PATH "" FORCE)
+set(ESPEAK_NG_INCLUDEDIR "${PROS_ROOT}/.deps/espeak-ng/src/include" CACHE PATH "" FORCE)
+if(CMAKE_CROSSCOMPILING)
+    set(ESPEAK_NG_LIB "${PROS_ROOT}/vendor/lib/libespeak-ng.a" CACHE FILEPATH "" FORCE)
+    # Without this, pkg-config finds the host's libespeak-ng-dev and drags /usr/include into
+    # the cross compile, where <stdint.h> then resolves to the host glibc header.
+    set(CMAKE_DISABLE_FIND_PACKAGE_PkgConfig ON)
+    set(ESPEAK_NG_FOUND TRUE)
+    add_library(PkgConfig::ESPEAK_NG STATIC IMPORTED)
+    set_target_properties(PkgConfig::ESPEAK_NG PROPERTIES
+        IMPORTED_LOCATION "${ESPEAK_NG_LIB}"
+        INTERFACE_INCLUDE_DIRECTORIES "${ESPEAK_NG_INCLUDEDIR}")
+endif()
+if(CMAKE_CROSSCOMPILING)
+    # The console is one fixed CPU, so Highway needs no runtime dispatch. Compiling only the
+    # static target also avoids its AVX-512 code paths, which the x86_64-sie-ps5 target
+    # rejects, and AVX2/FMA/F16C match what ggml is already built with here.
+    add_compile_definitions(HWY_COMPILE_ONLY_STATIC=1)
+    add_compile_options(-mavx2 -mfma -mf16c)
+endif()
+add_subdirectory("${PROS_ROOT}/.deps/kokoro.cpp" kokoro)
+
 if(NOT CMAKE_CROSSCOMPILING)
     include("${CMAKE_CURRENT_LIST_DIR}/sd-portability.cmake")
     add_executable(vulkan-runtime-abi-test "${PROS_ROOT}/tests/vulkan_runtime_abi_test.cpp")

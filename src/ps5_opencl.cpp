@@ -35,7 +35,11 @@ struct ApiTimer
     }
 };
 } // namespace
-#define PROSPERO_CL_TIMER(label) const ApiTimer prospero_cl_timer{label}
+#define PROSPERO_CL_TIMER(label)                                                                   \
+    const ApiTimer prospero_cl_timer                                                               \
+    {                                                                                              \
+        label                                                                                      \
+    }
 #else
 #define PROSPERO_CL_TIMER(label) ((void)0)
 #endif
@@ -2484,6 +2488,5 @@ cl_int run_kernel(cl_kernel kernel)
     return run_kernel_impl(kernel);
 #endif
 }
-
 
 } // namespace

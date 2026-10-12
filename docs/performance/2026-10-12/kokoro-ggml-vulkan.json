@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "about": "Kokoro speech on kokoro.cpp (ggml + Vulkan) versus the prebuilt OpenCL archive it replaces, measured on the authorized test title.",
+  "prompt": "Prospero speaks from the console with a clear voice.",
+  "audio": {
+    "samples": 78600,
+    "sample_rate": 24000,
+    "seconds": 3.275
+  },
+  "before_opencl_archive": {
+    "cold_seconds": 131.3,
+    "warm_seconds": 130.5,
+    "kernels_cpu_seconds": 1.11,
+    "kernels_gpu_seconds": 0.1,
+    "note": "about 99 percent of the wall time was inside the prebuilt archive, outside any kernel the shim could forward"
+  },
+  "after_kokoro_cpp_vulkan": {
+    "cold_seconds": 0.612214,
+    "warm_seconds": 0.258404,
+    "backend": "Vulkan",
+    "tensors": 459,
+    "voice": "af_heart",
+    "realtime_factor_warm": 12.67
+  },
+  "output_check": {
+    "reference": "host CPU build, same sentence",
+    "sample_rate": 24000,
+    "channels": 1,
+    "bits": 16,
+    "samples": 78600,
+    "peak_host": 13468,
+    "peak_ps5": 13259,
+    "rms_host": 1061.6,
+    "rms_ps5": 1063.4,
+    "frame_envelope_correlation": 0.9985
+  },
+  "regression_checks": {
+    "mistral_7b_q4_0_decode_tokens_per_second": 66.8337,
+    "sd_turbo_seconds": 30.4
+  }
+}

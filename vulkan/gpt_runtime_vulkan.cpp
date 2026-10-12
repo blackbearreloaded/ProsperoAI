@@ -9,6 +9,7 @@
 #include "runtime_vulkan.hpp"
 #endif
 #include "model_paths.hpp"
+#include "model_presets.hpp"
 #include "kv_budget.hpp"
 #include "prefix_reuse.hpp"
 #include "runtime_settings.hpp"
@@ -81,6 +82,13 @@ void backend_log_message(ggml_log_level level, const char *text, void *data) {
     if (verbose_logging || level == GGML_LOG_LEVEL_WARN || level == GGML_LOG_LEVEL_ERROR)
         log_message(level, text, data);
 }
+bool media_bundle(const char *name) {
+    for (std::size_t i = 0; i < prospero_model_download::preset_count; ++i)
+        if (prospero_model_download::presets[i].kind != 0 &&
+            std::strcmp(prospero_model_download::presets[i].id, name) == 0)
+            return true;
+    return false;
+}
 void scan(const std::string &root, int depth) {
     DIR *dir = opendir(root.c_str());
     if (!dir) {
@@ -99,7 +107,12 @@ void scan(const std::string &root, int depth) {
             log_message(GGML_LOG_LEVEL_ERROR, line, nullptr);
             continue;
         }
-        if (S_ISDIR(st.st_mode) && depth == 0) scan(path, 1);
+        if (S_ISDIR(st.st_mode) && depth == 0) {
+            // A media or speech bundle is not a folder of text models. The speech bundle
+            // carries its own GGUF model and voice pack, and letting llama.cpp see them
+            // put two bogus text models in the catalog.
+            if (!media_bundle(entry->d_name)) scan(path, 1);
+        }
         else if (S_ISREG(st.st_mode) && path.size() > 5 && path.substr(path.size() - 5) == ".gguf") {
             std::string id = path.substr(std::strlen(prospero::model_root()) + 1);
             if (id.find_first_of("\"\\\r\n") == std::string::npos) files.push_back({id, path});
