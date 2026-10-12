@@ -1002,6 +1002,7 @@ void handle_media_file(const NetApi &api, int sock, const char *path)
     std::rewind(file);
     const std::size_t path_length = std::strlen(path);
     const bool is_wav = path_length >= 4 && std::strcmp(path + path_length - 4, ".wav") == 0;
+    const bool is_png = path_length >= 4 && std::strcmp(path + path_length - 4, ".png") == 0;
     if (size < 0 || size > 64 * 1024 * 1024)
     {
         std::fclose(file);
@@ -1013,7 +1014,7 @@ void handle_media_file(const NetApi &api, int sock, const char *path)
                   "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n"
                   "X-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\nConnection: "
                   "close\r\n\r\n",
-                  is_wav ? "audio/wav" : "application/octet-stream", size);
+                  is_wav ? "audio/wav" : is_png ? "image/png" : "application/octet-stream", size);
     send_all(api, sock, header, std::strlen(header));
     char buffer[16384];
     for (std::size_t count; (count = std::fread(buffer, 1, sizeof(buffer), file)) != 0;)

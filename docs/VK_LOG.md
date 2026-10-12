@@ -831,3 +831,64 @@ bounded residency move to the subsequent draft PR.
   165 MB installs happened in between) rather than at the speech code.
 - Next step is a console reboot to test that, since nothing in the process explains a missing
   4 GB. A reboot needs the user's approval, so it has not been done.
+
+## 2026-10-12 — reboot recovery and Vulkan Kokoro preset
+
+- The user rebooted the console. FTP was available; `ps5vkctl` and klog needed their ELF payloads
+  resent before the test. The test title `PPSA99023` was stopped and unmounted before updating.
+- A new eboot was built and deployed to the test title. On a fresh app start, Kokoro generated
+  valid mono 24 kHz/16-bit audio repeatedly; the latest fresh run took `0.280395` s for
+  3.275 s of audio. The resulting WAV had 78,600 frames and peak 13,259.
+- A successful Mistral request followed by Kokoro still crashes the app during Kokoro graph
+  execution (`curl` sees an empty reply because the handler process exits). Thus a fresh-start
+  pass does not establish safe text-to-speech model switching; capture process state before
+  interpreting any subsequent connection refusal.
+- Renamed the catalog identity to `kokoro-82m-vulkan`, regenerated the preset header and updated
+  the benchmark/test references. The former preset is no longer offered. Its old installed
+  directory remains untouched and is explicitly excluded from text GGUF discovery.
+
+## 2026-10-12 — cross-media switch cycle and PNG output work
+
+- Rebuilt and deployed the current Vulkan source to `PPSA99023`, installed the pinned
+  `kokoro-82m-vulkan` preset, then ran the HTTP media harness. Text → SD-Turbo → text passed
+  (valid 512×512 TGA, 30.395 s); text → Stable Audio Open Small → text passed (valid stereo
+  44.1 kHz/16-bit WAV, 524,288 frames, 151.4 s).
+- The following Kokoro Vulkan request closed the HTTP connection and the app process exited
+  (`agent procs` was empty). This is reproducible after prior text, image and audio requests;
+  no Kokoro artifact was produced. A later klog window contained only system lines, not the
+  app trace. A persistent debug-log switch was placed in the test app's logs folder for the
+  next successful launch.
+- The runtime design uses a single process-wide `inference_mutex`; native UI and web requests
+  share the same selected-model router, and transitions release the previous text/media model
+  before preparation. This establishes serialization by code inspection, not successful
+  repeated-switch verification; the Kokoro crash remains a release gate.
+- SD now writes a PNG plus its existing TGA preview using the PNG encoder already present in
+  the Stable Diffusion archive. The API serves PNG with `image/png`; web rendering prefers the
+  PNG, while native preview/archive compatibility remains on TGA. Native build and PNG path
+  parser test pass. Console PNG generation is not yet verified because relaunch attempts now
+  return `0x80940033`.
+- Host native-controller and session-store tests pass with `ASAN_OPTIONS=detect_leaks=0`;
+  LeakSanitizer itself is unsupported under this environment's ptrace. The existing browser
+  history test still has two unrelated harness failures (`closeHistory` missing and a catalog
+  count mismatch).
+
+## 2026-10-12 — Kokoro scheduler cap restores complete modality switching
+
+- The first Kokoro BERT predictor graph was crashing in `ggml_backend_sched_alloc_graph` after
+  a successful text request. Vulkan heap trimming was ineffective (reported free memory stayed
+  at 7379 MiB), and a CPU-only control still crashed, ruling out a Vulkan-memory-only cause.
+- Capping Kokoro's scheduler graph and matching metadata reservation from 262144 to 131072
+  nodes fixed the failure. The change is applied by the guarded PS5 adapter
+  `tools/prepare-kokoro-ps5.py` during `build-vulkan-runtime.sh`, not by relying on an edit in
+  the downloaded source tree.
+- Final clean PS5 build passed a full API cycle on `PPSA99023`: text → SD-Turbo → text → Stable
+  Audio Open Small → text → Kokoro Vulkan → text. SD returned a valid 512×512 PNG (601520
+  bytes) alongside its TGA; Stable Audio returned stereo 44.1 kHz PCM (524288 frames); Kokoro
+  returned mono 24 kHz PCM (52200 frames). Every text round-trip passed. Stable Audio took
+  150.205 s, SD 29.764 s, and Kokoro 3.966 s. No samples clipped.
+- The runtime libraries and native app folder build completed; the PNG parser test and
+  `git diff --check` passed. The final deployed test title remains running on `PPSA99023`.
+- Upstream review: llama.cpp `v0.6.0` (`d812350`, ggml `v0.26.0`) is the latest release as of
+  this entry; our shared pin is `cb7934c` / ggml `v0.21.0`. Upgrade not yet attempted. Preserve
+  upstream behind adapters and verify supported ggml operations per backend; HIP's generic AMD
+  listing is not evidence of a PS5 ROCm/HIP runtime.

@@ -116,6 +116,10 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *prompt, cha
     // espeak-ng reads its dictionaries from the model folder's assets, not from a system path.
     const std::string espeak_data = base + "/assets";
     setenv("KOKORO_ESPEAK_DATA_PATH", espeak_data.c_str(), 1);
+    // Keep the Vulkan TTS stages serial on PS5. The harmonic source is CPU work,
+    // but running it concurrently with GGML's Vulkan scheduler is not safe on
+    // this console's single shared inference device.
+    setenv("KOKORO_HAR_OVERLAP", "0", 1);
 
     // The speech model needs room on the Vulkan heap; say how much there is before asking
     // for it, so a failure here is a number rather than a guess.

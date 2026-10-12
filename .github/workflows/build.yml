@@ -318,7 +318,7 @@ jobs:
       - name: Install host Vulkan toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang-18 cmake ninja-build ccache glslc spirv-headers libvulkan-dev mesa-vulkan-drivers vulkan-tools git unzip
+          sudo apt-get install --yes clang-18 cmake ninja-build ccache glslc spirv-headers libvulkan-dev libespeak-ng-dev mesa-vulkan-drivers vulkan-tools git unzip
       - name: Select the software Vulkan driver
         shell: bash
         run: |

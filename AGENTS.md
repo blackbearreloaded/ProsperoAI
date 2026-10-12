@@ -41,6 +41,11 @@ disagree about what to do next.
   input or UI navigation. Use Remote Play only when the task specifically requires visual UI
   verification or the title must be launched through the console UI. Never treat a successful
   HTTP response from P5 Manager as proof that the app backend is running.
+- Before polling port 11434, check `agent procs`; a stopped or crashed title has no HTTP listener,
+  so `curl: (7) Failed to connect ... port 11434` is expected in that state and is not a backend
+  feature result. Launch the authorized test title, confirm it appears in `agent procs`, then
+  retry `/api/settings/runtime` until startup completes. If it disappears during a request,
+  capture klog and check `agent procs` again before interpreting the HTTP error.
 - A user request to implement, debug or benchmark on the console authorizes the necessary
   test deployments, payloads, launches, closing/replacing the relevant test titles and
   cleanup of files created for that task. Continue through repeated test iterations
@@ -62,6 +67,13 @@ Use `tools/ps5ctl.py`. It covers status, payloads, FTP, title removal, klog, she
 port 2323), process list, launch and screenshots.
 
 - Ports: payload 9021, FTP 2120, klog 3232, shsrv 2323, P5 Manager 3001 (remote play).
+- After a console reboot, check each service instead of assuming the previous session survived:
+  the payload loader (9021) may be listening while FTP (2120) is not. If FTP is refused,
+  send the configured `zftpd` ELF to the payload port first. Then send
+  `build/ps5vkctl/ps5vkctl.elf` to restore the control service on 9111; the build source is
+  `.deps/mihawk-vulkan-review/tools/build-ps5vkctl.sh`. Start
+  `/data/payloads/klogsrv-ps5.elf` as a payload too when klog (3232) is unavailable.
+  These resident payloads do not survive a reboot and are separate from the title under test.
 - Never commit a real console IP. In docs and usage text, write `<PS5-IP>` (e.g.
   `http://<PS5-IP>:11434/`). In code, the address is a variable, not a default: `PS5_HOST` is a
   required environment variable with no fallback value (`tools/ps5ctl.py` exits with a clear

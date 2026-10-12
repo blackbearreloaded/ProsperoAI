@@ -1,6 +1,8 @@
 #include "ggml-vulkan.h"
 static_assert(GGML_MAX_NAME == 160, "SD and llama must share the tensor ABI");
 #include "stable-diffusion.h"
+#include "../third_party/miniz/miniz_tdef.h"
+#include "../third_party/miniz/miniz.h"
 
 #include "ggml-backend.h"
 
@@ -104,6 +106,27 @@ bool write_tga(const char *path, const sd_image_t &image)
     return std::fclose(file) == 0 && ok;
 }
 
+bool write_png(const char *path, const sd_image_t &image)
+{
+    if (!image.data || image.width == 0 || image.height == 0 ||
+        (image.channel != 3 && image.channel != 4))
+        return false;
+    std::size_t png_size = 0;
+    void *png = tdefl_write_image_to_png_file_in_memory(
+        image.data, static_cast<int>(image.width), static_cast<int>(image.height),
+        static_cast<int>(image.channel), &png_size);
+    if (!png || png_size == 0)
+    {
+        mz_free(png);
+        return false;
+    }
+    std::FILE *file = std::fopen(path, "wb");
+    const bool complete = file && std::fwrite(png, 1, png_size, file) == png_size;
+    const bool closed = !file || std::fclose(file) == 0;
+    mz_free(png);
+    return complete && closed;
+}
+
 void release_context()
 {
     if (context)
@@ -169,6 +192,9 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
     char display_output[64];
     std::snprintf(display_output, sizeof(display_output), "/download0/prosperoai-image-%u.tga",
                   image_serial++ % 4);
+    char png_output[64];
+    std::snprintf(png_output, sizeof(png_output), "%.*s.png",
+                  static_cast<int>(std::strlen(display_output) - 4), display_output);
     if (!root || !*root || !prompt || !*prompt || !response || response_capacity == 0)
         return 1;
     progress_callback = progress;
@@ -199,7 +225,8 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
     const bool generated = generate_image(context, &parameters, &images, &image_count);
     const bool written = generated && image_count == 1 && images &&
                          write_ppm(oracle_output, images[0]) &&
-                         write_tga(display_output, images[0]);
+                         write_tga(display_output, images[0]) &&
+                         write_png(png_output, images[0]);
     free_sd_images(images, image_count);
     const std::uint64_t elapsed = sceKernelGetProcessTime() - start;
     if (elapsed_microseconds)
@@ -211,7 +238,8 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
                       "SD-Turbo generation failed. Check the system log.");
         return 3;
     }
-    std::snprintf(response, response_capacity, "Image generated locally.\n%s", display_output);
+    std::snprintf(response, response_capacity,
+                  "Image generated locally.\nPNG: %s\nPreview: %s", png_output, display_output);
     sceKernelDebugOutText(0, "[prosperoai] sd_complete=1\n");
     return 0;
 }

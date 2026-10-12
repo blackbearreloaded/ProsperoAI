@@ -21,7 +21,7 @@ parser.add_argument('--label', required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--artifacts', type=Path, required=True)
 parser.add_argument('--warm-repeats', type=int, default=3)
-parser.add_argument('--models', nargs='+', default=['sd-turbo-fp16', 'stable-audio-open-small', 'kokoro-82m-fp16'])
+parser.add_argument('--models', nargs='+', default=['sd-turbo-fp16', 'stable-audio-open-small', 'kokoro-82m-vulkan'])
 args = parser.parse_args()
 if not os.environ.get('PS5_HOST'):
     parser.error('PS5_HOST is required')
@@ -36,7 +36,7 @@ assert f'title={title}' in status, status
 fixtures = {
     'sd-turbo-fp16': 'A red apple on a wooden table, natural window light, photographic detail.',
     'stable-audio-open-small': 'Gentle acoustic guitar melody with soft warm notes, no speech.',
-    'kokoro-82m-fp16': 'Hello from Prospero AI.'}
+    'kokoro-82m-vulkan': 'Hello from Prospero AI.'}
 args.artifacts.mkdir(parents=True, exist_ok=True)
 args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -116,6 +116,26 @@ def artifact(text, name):
     return info
 
 
+def png_artifact(text, name):
+    match = re.search(r'(/[^\s]+\.png)', text)
+    assert match, f'Stable Diffusion response did not include its PNG output: {text}'
+    sandbox = match.group(1)
+    remote = sandbox.replace('/download0/ProsperoAI/', '/data/prosperoai/').replace(
+        '/download0/', '/data/prosperoai/work/tmp/')
+    local = args.artifacts / (name + '.png')
+    ftp = ps5ctl.ftp_connect()
+    with local.open('wb') as target:
+        ftp.retrbinary('RETR ' + remote, target.write, blocksize=1024 * 1024)
+    ftp.quit()
+    data = local.read_bytes()
+    assert data[:8] == b'\x89PNG\r\n\x1a\n' and data[12:16] == b'IHDR', local
+    width, height = struct.unpack_from('>II', data, 16)
+    assert (width, height) == (512, 512), (width, height)
+    return {'sandbox_path': sandbox, 'mapped_path': remote, 'artifact': str(local),
+            'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest(),
+            'width': width, 'height': height}
+
+
 try:
     request('/api/settings/runtime', {'context': '4k', 'thinking': False, 'kv': 'auto'})
     installed = {m['id'] for m in request('/v1/models')['data']}
@@ -134,9 +154,11 @@ try:
             save()
             assert not response.get('error'), response
             record['output'] = artifact(response['response'], model + '-' + phase)
+            if model == 'sd-turbo-fp16':
+                record['png_output'] = png_artifact(response['response'], model + '-' + phase)
             if model == 'stable-audio-open-small':
                 assert record['output']['rate'] == 44100 and record['output']['channels'] == 2 and record['output']['frames'] == 524288
-            if model == 'kokoro-82m-fp16':
+            if model == 'kokoro-82m-vulkan':
                 assert record['output']['rate'] == 24000 and record['output']['channels'] == 1
             save()
             print('Completed', model, phase, round(elapsed, 3), record['output'], flush=True)

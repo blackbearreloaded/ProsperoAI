@@ -153,7 +153,7 @@ Everything the app keeps is under `/data/prosperoai/`:
 └── prosperoai/
     ├── models/
     │   ├── Mistral-7B-Instruct-v0.3.Q4_0.gguf
-    │   ├── kokoro-82m-fp16/
+    │   ├── kokoro-82m-vulkan/
     │   └── sd-turbo-fp16/
     ├── sessions/              conversations, generated images and audio
     ├── logs/                  the debug log, when it is switched on

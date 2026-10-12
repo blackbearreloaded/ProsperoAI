@@ -504,8 +504,8 @@
     ]
   },
   {
-    "id": "kokoro-82m-fp16",
-    "name": "Kokoro 82M FP16",
+    "id": "kokoro-82m-vulkan",
+    "name": "Kokoro 82M Vulkan",
     "kind": 3,
     "repository": "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5",
     "revision": "a06dcbed88d1d04f7653d899e95d025daa55f16d",

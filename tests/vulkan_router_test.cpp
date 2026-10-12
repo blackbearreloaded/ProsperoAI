@@ -116,7 +116,7 @@ extern "C"
     int ps5_kokoro_tts_generate(const char *root, const char *prompt, char *out, std::size_t n,
                                 std::uint64_t *elapsed, gpt_runtime_progress_fn)
     {
-        assert(std::string(root) == std::string(prospero::model_root()) + "/kokoro-82m-fp16");
+        assert(std::string(root) == std::string(prospero::model_root()) + "/kokoro-82m-vulkan");
         assert(std::strcmp(prompt, "Hello") == 0);
         ++generated;
         if (block_voice.load())
@@ -162,7 +162,7 @@ int main()
 #endif
     block_voice.store(true);
     gpt_runtime_settings_t voice_settings{};
-    voice_settings.model_id = "kokoro-82m-fp16";
+    voice_settings.model_id = "kokoro-82m-vulkan";
     std::thread worker(
         [&]
         {

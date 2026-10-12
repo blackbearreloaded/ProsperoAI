@@ -44,14 +44,40 @@ Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
 ## Speech on ggml/Vulkan
 
 - Kokoro is no longer the prebuilt OpenCL archive: `src/kokoro_runtime_ps5.cpp` drives
-  kokoro.cpp (pinned `kokoro-cpp`) on the shared ggml Vulkan backend. Verified on
-  `PPSA99023`: 3.275 s of audio in `0.258` s warm against `130.5` s before, with the output
-  matching a host CPU reference (envelope correlation 0.9985). Text and SD unaffected.
-- Open: the download catalog still lists the old Adreno weights, so `kokoro-82m-f16.gguf` and
-  `kokoro-voice-af_heart.gguf` are not fetched by a fresh install; they were uploaded by hand.
-  `vendor/lib/libkokoro-tts.a` is unused but still in the tree. Deciding where the GGUFs come
-  from needs a repository choice, since a preset carries one repository and the espeak-ng data
-  lives in the existing one.
+  kokoro.cpp (pinned `kokoro-cpp`) on the shared ggml Vulkan backend. The catalog preset is now
+  `kokoro-82m-vulkan`; it downloads the GGUF model, voice and espeak-ng assets. The retired
+  `kokoro-82m-fp16` directory is ignored by text-model discovery and left intact for users.
+- Switching failure was caused by Kokoro's 262144-node scheduler/metadata reservation. The
+  PS5 adapter now caps both at 131072; a full text → SD PNG → text → Stable Audio → text →
+  Kokoro → text cycle passed on `PPSA99023`. Kokoro emitted valid mono 24 kHz WAV; Stable Audio
+  emitted valid stereo 44.1 kHz WAV; SD emitted a verified 512×512 PNG and TGA preview. The
+  benchmark record and artifacts are in `/tmp/prospero-final-all-modalities.json` and its
+  sibling artifact directory for this session. The shared router's one-model-at-a-time
+  serialization is now verified across these web API transitions.
+- The adjustment is an explicit PS5 dependency adapter (`tools/prepare-kokoro-ps5.py`) invoked by
+  `tools/build-vulkan-runtime.sh`, so a fresh dependency checkout gets the same guarded patch.
+  Host reference comparison remains `0.9985` envelope correlation. `vendor/lib/libkokoro-tts.a`
+  remains unused and can be removed separately.
+  `vendor/lib/libkokoro-tts.a` remains unused and can be removed separately.
+
+## PNG output
+
+- SD-Turbo writes a PNG alongside its TGA preview; HTTP media responses use `image/png`,
+  and the web UI displays/downloads the PNG directly. The native PS5 UI retains its TGA preview
+  and archives it alongside the direct PNG path. Console verification now confirms the PNG
+  signature and 512×512 dimensions on `PPSA99023`.
+
+## Upstream llama.cpp update strategy
+
+- Upstream's latest release checked 2026-10-12 is llama.cpp `v0.6.0` (`d812350`, 2026-10-05),
+  with ggml `v0.26.0`; this checkout's shared llama pin is `cb7934c` / ggml `v0.21.0`. The
+  upgrade is researched but not yet applied.
+- Keep upstream pinned and project integration in narrow adapters: runtime wrappers for text,
+  image, audio and TTS; guarded PS5 source-preparation scripts only for unavoidable platform
+  hooks; and a compatibility test matrix before advancing the pin. The upstream backend table
+  includes Vulkan and HIP, but generic HIP support does not establish a usable PS5 ROCm/HIP tool
+  chain; Vulkan remains the supported console path. Recheck the upstream op-support matrix when
+  moving ggml, since backend coverage is operation-specific.
 
 ## Release preparation
 

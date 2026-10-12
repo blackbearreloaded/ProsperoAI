@@ -61,7 +61,8 @@ class MiniCPM5Tests(unittest.TestCase):
     def test_existing_defaults_and_optional_catalog(self):
         models = json.loads((ROOT/'model-tools/presets.json').read_text())
         self.assertEqual([m['id'] for m in models[:3]], [
-            'sd-turbo-fp16', 'stable-audio-open-small', 'kokoro-82m-fp16'])
+            'sd-turbo-fp16', 'stable-audio-open-small', 'kokoro-82m-vulkan'])
+        self.assertNotIn('kokoro-82m-fp16', [model['id'] for model in models])
         self.assertEqual(models[3]['id'], 'minicpm5-2b-q8-0.gguf')
         header = (ROOT/'include/model_presets.hpp').read_text()
         self.assertLess(header.index('"mistral-7b-instruct'), header.index('"minicpm5-2b'))

@@ -9,6 +9,8 @@ const historyCode = source.slice(source.indexOf('function renderHistory(){'), so
 const createCode = source.slice(source.indexOf('function newConversation(){'), source.indexOf('function startKind('));
 const syncStart = source.indexOf('async function persistConversation(');
 const syncCode = source.slice(syncStart, source.indexOf("$('delete-dialog').addEventListener", syncStart));
+const mediaStart = source.indexOf('function extractMedia(');
+const mediaCode = source.slice(mediaStart, source.indexOf('function decodeTGA(', mediaStart));
 function element() {
     return { value: '', textContent: '', children: [], events: {},
         classList: { toggle() {}, remove() {} }, setAttribute() {}, focus() {},
@@ -89,4 +91,15 @@ test('browser history migrates to the console and receives native conversations'
     assert.equal(context.conversations.find(item => item.id === local.id).messages[0].content, 'Saved in browser');
     assert.equal(context.conversations.find(item => item.id === native.id).messages[0].content, 'Saved on console');
     assert.equal(saved['prospero-sync-initialized'], true);
+});
+
+test('generated PNG is preferred while saved conversations use their archived image', () => {
+    const context = {};
+    runInNewContext(mediaCode, context);
+    const generated = context.extractMedia(
+        'Image generated locally.\nPNG: /download0/prosperoai-image-0.png\nPreview: /download0/prosperoai-image-0.tga');
+    assert.equal(generated.path, '/download0/prosperoai-image-0.png');
+    const saved = context.extractMedia(
+        'PNG: /download0/prosperoai-image-0.png\nPreview: /download0/ProsperoAI/sessions/abc/media/2-image.tga');
+    assert.equal(saved.path, '/download0/ProsperoAI/sessions/abc/media/2-image.tga');
 });

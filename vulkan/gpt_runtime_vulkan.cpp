@@ -27,6 +27,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
+
 #include <vector>
 
 #ifdef PROSPERO_VULKAN_RUNTIME
@@ -83,6 +84,9 @@ void backend_log_message(ggml_log_level level, const char *text, void *data) {
         log_message(level, text, data);
 }
 bool media_bundle(const char *name) {
+    // Keep bundles installed by older releases out of text-model discovery even though
+    // their retired catalog preset is no longer offered. Do not delete user model data.
+    if (std::strcmp(name, "kokoro-82m-fp16") == 0) return true;
     for (std::size_t i = 0; i < prospero_model_download::preset_count; ++i)
         if (prospero_model_download::presets[i].kind != 0 &&
             std::strcmp(prospero_model_download::presets[i].id, name) == 0)

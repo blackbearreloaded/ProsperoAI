@@ -198,11 +198,16 @@ int model_of(const State &state, prospero_session::Record *record)
 
 std::string media_path(const char *text, const char *suffix)
 {
-    const char *start = std::strstr(text, "/download0/");
-    const char *end = start ? std::strstr(start, suffix) : nullptr;
-    if (!end || (std::strchr(start, '\n') && std::strchr(start, '\n') < end))
-        return {};
-    return std::string(start, static_cast<std::size_t>(end - start) + std::strlen(suffix));
+    constexpr char prefix[] = "/download0/";
+    for (const char *start = text ? std::strstr(text, prefix) : nullptr; start;
+         start = std::strstr(start + sizeof(prefix) - 1, prefix))
+    {
+        const char *end = std::strstr(start, suffix);
+        const char *newline = std::strchr(start, '\n');
+        if (end && (!newline || newline > end))
+            return std::string(start, static_cast<std::size_t>(end - start) + std::strlen(suffix));
+    }
+    return {};
 }
 } // namespace
 
@@ -869,6 +874,7 @@ void App::generate()
     else
     {
         const bool image = model.capability == Capability::Image;
+        const auto png_source = image ? media_path(response.data(), ".png") : std::string();
         const auto source = image ? media_path(response.data(), ".tga")
                                   : std::string("/download0/prosperoai-audio.wav");
         char path[320]{};
@@ -880,8 +886,15 @@ void App::generate()
                                                                : "audio",
                        source.c_str(), path, sizeof(path), &metadata);
         if (archived)
-            std::snprintf(response.data(), response.size(), "%s generated locally.\n%s",
-                          image ? "Image" : "Audio", path);
+        {
+            if (image && !png_source.empty())
+                std::snprintf(response.data(), response.size(),
+                              "Image generated locally.\nPNG: %s\nPreview: %s",
+                              png_source.c_str(), path);
+            else
+                std::snprintf(response.data(), response.size(), "%s generated locally.\n%s",
+                              image ? "Image" : "Audio", path);
+        }
     }
     result_.messages.push_back(message("assistant", response.data()));
     refresh_images();
