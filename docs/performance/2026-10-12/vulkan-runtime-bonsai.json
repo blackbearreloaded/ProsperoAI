@@ -1,0 +1,347 @@
+{
+  "runtime": "Prism e8fd209c975c80aa7fb36a8423571ff3b1b7e955",
+  "title": "PPSA99023",
+  "method": "resident Vulkan, greedy, 4K, automatic KV; warm repeats; no model transfer during timing",
+  "original_settings": {
+    "context": "4k",
+    "kv": "auto",
+    "thinking": false
+  },
+  "presets": {
+    "data": [
+      {
+        "id": "mistral-7b-instruct-v0.3-q4-0.gguf",
+        "index": 0,
+        "installed": false,
+        "kind": 0,
+        "name": "Mistral 7B Instruct v0.3 Q4_0",
+        "size": 4113289152,
+        "source_filename": "Mistral-7B-Instruct-v0.3.Q4_0.gguf"
+      },
+      {
+        "id": "qwen3.5-9b-q4-0.gguf",
+        "index": 1,
+        "installed": true,
+        "kind": 0,
+        "name": "Qwen3.5 9B Q4_0",
+        "size": 5379417312,
+        "source_filename": "Qwen3.5-9B-Q4_0.gguf"
+      },
+      {
+        "id": "sd-turbo-fp16",
+        "index": 2,
+        "installed": true,
+        "kind": 1,
+        "name": "SD-Turbo FP16",
+        "size": 2580079090,
+        "source_filename": ""
+      },
+      {
+        "id": "stable-audio-3-small-sfx-vulkan",
+        "index": 3,
+        "installed": true,
+        "kind": 2,
+        "name": "Stable Audio 3 Small SFX (Vulkan)",
+        "size": 1683570688,
+        "source_filename": ""
+      },
+      {
+        "id": "kokoro-82m-vulkan",
+        "index": 4,
+        "installed": true,
+        "kind": 3,
+        "name": "Kokoro 82M Vulkan",
+        "size": 165234523,
+        "source_filename": ""
+      },
+      {
+        "id": "minicpm5-2b-q8-0.gguf",
+        "index": 5,
+        "installed": true,
+        "kind": 0,
+        "name": "MiniCPM5 2B Q8_0",
+        "size": 2679710688,
+        "source_filename": "MiniCPM5-2B-Q8_0.gguf"
+      },
+      {
+        "id": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "index": 6,
+        "installed": true,
+        "kind": 0,
+        "name": "Ternary Bonsai 2 27B PTQ1_0",
+        "size": 5946648928,
+        "source_filename": "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
+      }
+    ]
+  },
+  "runs": [
+    {
+      "name": "cold-correctness",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt": "What is two plus two? Give a one-word answer.",
+        "stream": false,
+        "options": {
+          "num_predict": 64,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:11Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 148700000,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt_eval_count": 24,
+        "prompt_eval_duration": 831396000,
+        "response": "Four"
+      },
+      "http_seconds": 5.792840566995437,
+      "decode_tokens_per_second": 6.724949562878279
+    },
+    {
+      "name": "warm-benchmark-0",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt": "Explain why the sky appears blue during the day in three concise sentences.",
+        "stream": false,
+        "options": {
+          "num_predict": 256,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:19Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 94,
+        "eval_duration": 7071324000,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt_eval_count": 27,
+        "prompt_eval_duration": 728826000,
+        "response": "Sunlight contains all colors of the visible spectrum, but the atmosphere scatters shorter wavelengths, such as blue and violet, much more strongly than longer wavelengths like red. Although violet light is scattered even more than blue, our eyes are more sensitive to blue and the sun emits less violet light, so we perceive the sky as blue. This phenomenon, known as Rayleigh scattering, occurs because air molecules are small enough to interact with and deflect these shorter wavelengths in all directions."
+      },
+      "http_seconds": 7.804819468001369,
+      "decode_tokens_per_second": 13.293125870063372
+    },
+    {
+      "name": "warm-benchmark-1",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt": "Explain why the sky appears blue during the day in three concise sentences.",
+        "stream": false,
+        "options": {
+          "num_predict": 256,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:27Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 94,
+        "eval_duration": 7076142000,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt_eval_count": 27,
+        "prompt_eval_duration": 733104000,
+        "response": "Sunlight contains all colors of the visible spectrum, but the atmosphere scatters shorter wavelengths, such as blue and violet, much more strongly than longer wavelengths like red. Although violet light is scattered even more than blue, our eyes are more sensitive to blue and the sun emits less violet light, so we perceive the sky as blue. This phenomenon, known as Rayleigh scattering, occurs because air molecules are small enough to interact with and deflect these shorter wavelengths in all directions."
+      },
+      "http_seconds": 7.814862461993471,
+      "decode_tokens_per_second": 13.284074853218039
+    },
+    {
+      "name": "warm-benchmark-2",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt": "Explain why the sky appears blue during the day in three concise sentences.",
+        "stream": false,
+        "options": {
+          "num_predict": 256,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:35Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 94,
+        "eval_duration": 6999113000,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt_eval_count": 27,
+        "prompt_eval_duration": 725973000,
+        "response": "Sunlight contains all colors of the visible spectrum, but the atmosphere scatters shorter wavelengths, such as blue and violet, much more strongly than longer wavelengths like red. Although violet light is scattered even more than blue, our eyes are more sensitive to blue and the sun emits less violet light, so we perceive the sky as blue. This phenomenon, known as Rayleigh scattering, occurs because air molecules are small enough to interact with and deflect these shorter wavelengths in all directions."
+      },
+      "http_seconds": 7.729273482007557,
+      "decode_tokens_per_second": 13.430273236051482
+    },
+    {
+      "name": "thinking",
+      "context": "4k",
+      "thinking": true,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt": "A box has three red balls and two blue balls. What fraction of the balls is blue? Explain briefly.",
+        "stream": false,
+        "options": {
+          "num_predict": 768,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:43Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 103,
+        "eval_duration": 7745125000,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt_eval_count": 32,
+        "prompt_eval_duration": 770157000,
+        "response": "<think>\nThe user asks for the fraction of blue balls in a box containing 3 red balls and 2 blue balls.\n\nTotal balls = 3 + 2 = 5\nBlue balls = 2\nFraction of blue balls = 2/5\n\nThis is straightforward. I'll explain briefly as requested.\n</think>\n\nThere are 3 red + 2 blue = **5** balls total. Since 2 of those 5 are blue, the fraction of blue balls is **2/5**."
+      },
+      "http_seconds": 8.520571537999786,
+      "decode_tokens_per_second": 13.298687884314326
+    },
+    {
+      "name": "context-16k",
+      "context": "16k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt": "Write a short greeting.",
+        "stream": false,
+        "options": {
+          "num_predict": 64,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:45Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 9,
+        "eval_duration": 723257000,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt_eval_count": 17,
+        "prompt_eval_duration": 658873000,
+        "response": "Hello! How can I help you today?"
+      },
+      "http_seconds": 1.4672225090034772,
+      "decode_tokens_per_second": 12.443709497453879
+    },
+    {
+      "name": "regression-Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "prompt": "What is two plus two? Answer briefly.",
+        "stream": false,
+        "options": {
+          "num_predict": 64,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:48Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 2,
+        "eval_duration": 48792000,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "prompt_eval_count": 14,
+        "prompt_eval_duration": 80150000,
+        "response": " Four."
+      },
+      "http_seconds": 3.132544225998572,
+      "decode_tokens_per_second": 40.99032628299721
+    },
+    {
+      "name": "regression-minicpm5-2b-q8-0.gguf",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "minicpm5-2b-q8-0.gguf",
+        "prompt": "What is two plus two? Answer briefly.",
+        "stream": false,
+        "options": {
+          "num_predict": 64,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:50Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 2,
+        "eval_duration": 23334000,
+        "model": "minicpm5-2b-q8-0.gguf",
+        "prompt_eval_count": 22,
+        "prompt_eval_duration": 111585000,
+        "response": "Four."
+      },
+      "http_seconds": 2.2756960289989365,
+      "decode_tokens_per_second": 85.71183680466272
+    },
+    {
+      "name": "return-bonsai",
+      "context": "4k",
+      "thinking": false,
+      "request": {
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt": "What is two plus two? Answer briefly.",
+        "stream": false,
+        "options": {
+          "num_predict": 64,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T16:39:56Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 81586000,
+        "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "prompt_eval_count": 21,
+        "prompt_eval_duration": 709802000,
+        "response": "4"
+      },
+      "http_seconds": 5.717832600013935,
+      "decode_tokens_per_second": 12.257004878287942
+    }
+  ],
+  "benchmark": {
+    "runs": 3,
+    "median_decode_tokens_per_second": 13.293125870063372,
+    "decode_tokens_per_second": [
+      13.293125870063372,
+      13.284074853218039,
+      13.430273236051482
+    ],
+    "prompt_tokens_per_second": [
+      37.045879263363275,
+      36.829699469652326,
+      37.191465798314816
+    ],
+    "generated_tokens": [
+      94,
+      94,
+      94
+    ]
+  },
+  "passed": true,
+  "restored_settings": {
+    "context": "4k",
+    "kv": "auto",
+    "thinking": false
+  }
+}

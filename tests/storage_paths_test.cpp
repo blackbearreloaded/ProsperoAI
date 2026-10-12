@@ -23,6 +23,10 @@ int main(int argc, char **argv)
     state.model_root = state.data_root + "/models";
     assert(prospero::real_path("/download0/ProsperoAI/work/voice/result.wav") ==
            state.data_root + "/work/voice/result.wav");
+    assert(prospero::real_path("/download0/ProsperoAI/work/audio/result.wav") ==
+           state.data_root + "/work/audio/result.wav");
+    assert(prospero::real_path("/download0/ProsperoAI/work/image/result.png") ==
+           state.data_root + "/work/image/result.png");
     assert(prospero::real_path("/download0/prosperoai-audio.wav") ==
            state.data_root + "/work/tmp/prosperoai-audio.wav");
     assert(prospero::real_path("/download0/ProsperoAI/sessions/old/media/a.wav") ==

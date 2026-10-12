@@ -74,8 +74,8 @@ how it is built, and what a run on a console showed.
 | [Mistral 7B Instruct v0.3 Q4_0](https://huggingface.co/blackbearreloaded/ProsperoAI-Mistral-7B-Instruct-v0.3-Q4_0-PS5) | Text to text | 4.35 GiB | About 1.4–1.5 s load and 25–29 tokens/s for short, resident-context replies |
 | [Qwen3.5 9B Q4_0](https://huggingface.co/blackbearreloaded/ProsperoAI-Qwen3.5-9B-Q4_0-PS5) | Text to text | 6.37 GiB | 3.72 s switch/load; 1.46 s measured 44-token prefill and about 30 tokens/s decode |
 | [SD-Turbo FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5) | Text to image | 2.40 GiB | 512 × 512 image in about 76 seconds |
-| [Stable Audio Open Small FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-Stable-Audio-Open-Small-FP16-PS5) | Text to audio | 1.32 GiB | 0.372-second stereo clip in about 62 seconds |
-| [Kokoro 82M FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5) | Text to speech | 165 MiB | 1.975 seconds of 24 kHz speech in about 79 seconds |
+| [Stable Audio 3 Small SFX Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Stable-Audio-3-Small-SFX-GGUF) | Text to audio (experimental) | 1.57 GiB | 4-second stereo WAV in 19.15 s cold / 5.84 s warm; two randomized full modality cycles passed |
+| [Kokoro 82M Vulkan](https://huggingface.co/blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5) | Text to speech | 165 MiB | 2.175 seconds of 24 kHz speech in 3.97 seconds cold, 0.26 seconds warm |
 
 The linked repositories contain the exact directory layout, integrity hashes,
 upstream provenance, licenses, and preparation recipe for each model. Do not
@@ -403,9 +403,15 @@ see [Pull-request builds](docs/PULL_REQUEST_BUILDS.md).
 ## Project layout
 
 ```text
-src/                 ProsperoAI UI, sessions, model routing, and GPU runtimes
-vulkan/              Shared GGUF/media inference and RADV interface
-include/             Application interfaces
+src/                 ProsperoAI UI, sessions, app lifecycle, and platform integration
+include/             Stable application-facing interfaces and model catalog types
+inference/           Unified model router, typed adapter contract, and inference backends
+  router.cpp         Model discovery, one-model lifecycle, and API compatibility facade
+  adapters/          llama.cpp/Vulkan text, SD, Stable Audio, and Kokoro PS5 adapters
+  backends/vulkan/   Shared ggml/Vulkan media bridge
+vulkan/              HTTP/OpenAI API, storage, RADV/PS5 platform services, and Vulkan UI
+tools/vulkan-runtime/ CMake composition and host ABI tests for the shared ggml/Vulkan stack
+runtime/             Bundled PS5 libc runtime and integrity record (not inference code)
 assets/              The last-resort bitmap font (other fonts and sounds come from the kit)
 ui-kit/              Which sources of the fetched interface kit are compiled
 host/                Deterministic native-frontend capture harness
@@ -414,10 +420,17 @@ sce_sys/             PS5 title metadata, artwork, icon, and selection music
 models/README.txt    Model-free release placeholder and install guidance
 model-tools/         GGUF converter, validated recipes, and porting guide
 vendor/              Pinned headers and static runtime dependencies
-runtime/             Clean-room libc runtime inputs and integrity record
 tooling/native/      Native ELF/FSELF and runtime build tools
 tools/               Build, dependency, validation, packaging, and deploy scripts
 ```
+
+Stable Audio's OpenCL retirement, SA3 PS5 TLS teardown fix, and console evidence are tracked in
+[`docs/OPENCL_TO_VULKAN_RESEARCH.md`](docs/OPENCL_TO_VULKAN_RESEARCH.md).
+
+Generated files are saved by modality under `work/image/`, `work/audio/`, and `work/voice/`
+in ProsperoAI's persistent data folder; they no longer go to the shared temporary directory.
+
+For responsibilities and the adapter contract, see [Inference layers and adapters](docs/INFERENCE_ADAPTERS.md).
 
 ## Identity
 

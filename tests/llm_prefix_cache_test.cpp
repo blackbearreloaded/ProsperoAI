@@ -51,7 +51,7 @@ static int32_t runtime_test_decode(llama_context *ctx, llama_batch batch)
 #define llama_model_is_hybrid runtime_test_hybrid
 #define llama_memory_seq_pos_min runtime_test_pos_min
 #define llama_model_chat_template runtime_test_template
-#include "../vulkan/gpt_runtime_vulkan.cpp"
+#include "../inference/adapters/llama/vulkan.cpp"
 #undef llama_decode
 #undef llama_memory_seq_rm
 #undef llama_model_is_recurrent

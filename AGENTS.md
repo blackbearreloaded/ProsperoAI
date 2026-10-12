@@ -32,6 +32,13 @@ disagree about what to do next.
 
 ## Build and verify
 
+- Keep generated user-facing outputs in their persistent modality folders: `work/image/`,
+  `work/audio/`, and `work/voice/` (sandbox paths `/download0/ProsperoAI/work/<category>/`).
+  Do not route generated media to `/tmp` or the legacy `work/tmp/` scratch mapping.
+- Keep build trees and generated build outputs under this repository's `build/` directory;
+  don't use `/tmp` as a build directory. Use `/tmp` only for task-scoped scratch files when
+  needed, and remove only the specific temporary files/directories created for that task.
+  Never clear all of `/tmp` or broadly delete another shared scratch location.
 - `make deps`, `make app`, and `make test` work on the host. `make app` builds the app folder
   and ZIP; read `docs/BUILDING.md` first.
 - A build that links is not a build that runs. Check the NEEDED list (`readelf -d`) and the
@@ -74,6 +81,10 @@ port 2323), process list, launch and screenshots.
   `.deps/mihawk-vulkan-review/tools/build-ps5vkctl.sh`. Start
   `/data/payloads/klogsrv-ps5.elf` as a payload too when klog (3232) is unavailable.
   These resident payloads do not survive a reboot and are separate from the title under test.
+- If `agent status` / `agent procs` returns connection refused on port 9111, first send
+  `build/ps5vkctl/ps5vkctl.elf` with `tools/ps5ctl.py payload`, then retry the agent command.
+  A refused control port alone means the resident control payload is absent; it does not
+  prove that the console is frozen or unavailable. Check the payload loader separately.
 - Never commit a real console IP. In docs and usage text, write `<PS5-IP>` (e.g.
   `http://<PS5-IP>:11434/`). In code, the address is a variable, not a default: `PS5_HOST` is a
   required environment variable with no fallback value (`tools/ps5ctl.py` exits with a clear

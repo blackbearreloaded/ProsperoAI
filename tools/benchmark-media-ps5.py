@@ -21,7 +21,7 @@ parser.add_argument('--label', required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--artifacts', type=Path, required=True)
 parser.add_argument('--warm-repeats', type=int, default=3)
-parser.add_argument('--models', nargs='+', default=['sd-turbo-fp16', 'stable-audio-open-small', 'kokoro-82m-vulkan'])
+parser.add_argument('--models', nargs='+', default=['sd-turbo-fp16', 'stable-audio-3-small-sfx-vulkan', 'kokoro-82m-vulkan'])
 args = parser.parse_args()
 if not os.environ.get('PS5_HOST'):
     parser.error('PS5_HOST is required')
@@ -35,7 +35,7 @@ status = subprocess.check_output(['python3', str(Path(__file__).with_name('ps5ct
 assert f'title={title}' in status, status
 fixtures = {
     'sd-turbo-fp16': 'A red apple on a wooden table, natural window light, photographic detail.',
-    'stable-audio-open-small': 'Gentle acoustic guitar melody with soft warm notes, no speech.',
+    'stable-audio-3-small-sfx-vulkan': 'A short, clear bell chime with a soft resonant decay.',
     'kokoro-82m-vulkan': 'Hello from Prospero AI.'}
 args.artifacts.mkdir(parents=True, exist_ok=True)
 args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -156,8 +156,8 @@ try:
             record['output'] = artifact(response['response'], model + '-' + phase)
             if model == 'sd-turbo-fp16':
                 record['png_output'] = png_artifact(response['response'], model + '-' + phase)
-            if model == 'stable-audio-open-small':
-                assert record['output']['rate'] == 44100 and record['output']['channels'] == 2 and record['output']['frames'] == 524288
+            if model == 'stable-audio-3-small-sfx-vulkan':
+                assert record['output']['rate'] == 44100 and record['output']['channels'] == 2 and record['output']['frames'] == 176400
             if model == 'kokoro-82m-vulkan':
                 assert record['output']['rate'] == 24000 and record['output']['channels'] == 1
             save()
@@ -169,7 +169,14 @@ try:
         'median_repeat_http_seconds': statistics.median(r['http_seconds'] for r in result['runs'] if r['model'] == model and r['phase'] != 'initial') if args.warm_repeats else None}
         for model in args.models}
     result['passed'] = True
+except Exception as error:
+    result['passed'] = False
+    result['failure'] = {'type': type(error).__name__, 'message': str(error)}
+    raise
 finally:
-    request('/api/settings/runtime', original)
-    result['restored_settings'] = request('/api/settings/runtime')
+    try:
+        request('/api/settings/runtime', original)
+        result['restored_settings'] = request('/api/settings/runtime')
+    except Exception as error:
+        result['restore_error'] = {'type': type(error).__name__, 'message': str(error)}
     save()

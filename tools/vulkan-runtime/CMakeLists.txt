@@ -79,10 +79,9 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(vulkan-runtime-abi-test PRIVATE -UNDEBUG
         "-include${CMAKE_CURRENT_LIST_DIR}/sd-constant-tls.hpp")
     add_executable(vulkan-runtime-media-test "${PROS_ROOT}/tests/media_vulkan_test.cpp"
-        "${PROS_ROOT}/vulkan/media_vulkan.cpp")
+        "${PROS_ROOT}/inference/backends/vulkan/media_bridge.cpp")
     target_include_directories(vulkan-runtime-media-test BEFORE PRIVATE
         "${PROS_LLAMA_SOURCE}/ggml/include" "${PROS_ROOT}/include" "${PROS_ROOT}/vendor/include")
-    target_compile_definitions(vulkan-runtime-media-test PRIVATE CL_TARGET_OPENCL_VERSION=120)
     target_compile_options(vulkan-runtime-media-test PRIVATE -UNDEBUG)
     target_link_libraries(vulkan-runtime-media-test PRIVATE ggml-vulkan ggml)
 endif()

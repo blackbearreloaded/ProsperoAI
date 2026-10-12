@@ -179,15 +179,13 @@ and [current evidence](VK_ACTIVE.md).
 ### Download presets
 
 The native Models library includes pinned Text (Mistral 7B Q4_0, Qwen3.5 9B Q4_0),
-Image (SD-Turbo FP16), Audio (Stable Audio Open Small FP16), and Voice (Kokoro 82M FP16)
+Image (SD-Turbo FP16), experimental Audio (Stable Audio 3 Small SFX Q8_0), and Voice (Kokoro 82M Vulkan)
 presets. Cross downloads the selected preset; L2/R2 change category and arrows select
 cards. The progress bar shows bytes and percentage for the entire bundle. Search typing
 uses Triangle for Space and R2 for Done.
 
-Text presets download standalone GGUF files for Vulkan. Media presets download complete
-prepared folders, including their licenses, for the AGC media backend in the same native
-Vulkan title. Only one inference backend owns model allocations at a time. The hybrid
-build isolates the older SD ggml symbols from the newer Vulkan llama.cpp ABI. Every
+Text presets download standalone GGUF files for Vulkan. Media presets download pinned
+model files for their Vulkan adapters. Only one inference model is active at a time. Every
 file is pinned to a repository commit and checked against its size and SHA-256. Media
 bundles are staged in hidden directories until all files pass verification. Failed
 staging files are overwritten on retry and never appear as usable model bundles.

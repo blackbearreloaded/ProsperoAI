@@ -35,7 +35,7 @@ class NativeController(unittest.TestCase):
                             "-I" + str(ROOT / "build/prism-llama-source/ggml/include"),
                             "-I" + str(ROOT / "include"),
                             "-I" + str(ROOT / "src"), str(ROOT / "tests/native_catalog_test.cpp"),
-                            str(ROOT / "vulkan/gpt_runtime_vulkan.cpp"), "-o", str(binary)], check=True)
+                            str(ROOT / "inference/adapters/llama/vulkan.cpp"), "-o", str(binary)], check=True)
             subprocess.run([str(binary), str(models)], check=True, timeout=15)
 
     def test_allocator_realloc(self):

@@ -11,7 +11,8 @@ and [ps5-opengl](https://github.com/blackbearreloaded/ps5-opengl).
 remains for media and system helpers. Model runtimes incorporate work from
 [llama.cpp](https://github.com/ggml-org/llama.cpp),
 [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp),
-[Stable Audio Open Small](https://huggingface.co/stabilityai/stable-audio-open-small),
+[audio.cpp](https://github.com/0xShug0/audio.cpp) and its Stable Audio 3 model source
+([model repository](https://huggingface.co/audio-cpp/audio.cpp-gguf)),
 and [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M).
 
 The shared-Vulkan SD compile probe fetches stable-diffusion.cpp (MIT) at
@@ -79,7 +80,7 @@ OpenSSL.
 
 The model execution paths incorporate code or static build
 artifacts derived from llama.cpp, stable-diffusion.cpp, ggml, espeak-ng,
-Kokoro, and the Stable Audio compatibility work in a8nova/adreno-llms. Those
+kokoro.cpp, and audio.cpp. Those
 projects retain their respective copyrights and licenses.
 
 No model weights are included in this repository or its automated release.
@@ -89,7 +90,7 @@ recipe, integrity hashes, and model-specific license:
 - [Mistral 7B Instruct v0.3 Q4_0](https://huggingface.co/blackbearreloaded/ProsperoAI-Mistral-7B-Instruct-v0.3-Q4_0-PS5)
 - [Qwen3.5 9B Q4_0](https://huggingface.co/blackbearreloaded/ProsperoAI-Qwen3.5-9B-Q4_0-PS5)
 - [SD-Turbo FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5)
-- [Stable Audio Open Small FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-Stable-Audio-Open-Small-FP16-PS5)
+- [Stable Audio 3 Small SFX Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Stable-Audio-3-Small-SFX-GGUF)
 - [Kokoro 82M FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5)
 
 PlayStation and PS5 are trademarks of Sony Interactive Entertainment.

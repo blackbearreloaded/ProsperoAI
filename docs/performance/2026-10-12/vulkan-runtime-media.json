@@ -1,0 +1,279 @@
+{
+  "label": "2026-10-12 Vulkan full modality cycle and repeated SA3",
+  "test_title": "PPSA99023",
+  "original_settings": {
+    "context": "4k",
+    "kv": "auto",
+    "thinking": false
+  },
+  "method": "one initial request per model then 2 repeated requests; elapsed HTTP includes actual runtime loading; no console transfers during generation",
+  "fixtures": {
+    "sd": {
+      "width": 512,
+      "height": 512,
+      "steps": 1,
+      "seed": 42,
+      "cfg": 1
+    },
+    "audio": {
+      "latent_length": 256,
+      "expected_rate": 44100
+    },
+    "tts": {
+      "expected_rate": 24000
+    }
+  },
+  "runs": [
+    {
+      "model": "sd-turbo-fp16",
+      "phase": "initial",
+      "request": {
+        "model": "sd-turbo-fp16",
+        "prompt": "A red apple on a wooden table, natural window light, photographic detail.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T17:32:38Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 29684184000,
+        "model": "sd-turbo-fp16",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": "Image generated locally.\nPNG: /download0/ProsperoAI/work/image/prosperoai-image-0.png\nPreview: /download0/ProsperoAI/work/image/prosperoai-image-0.tga"
+      },
+      "http_seconds": 29.702429858996766,
+      "output": {
+        "sandbox_path": "/download0/ProsperoAI/work/image/prosperoai-image-0.tga",
+        "mapped_path": "/data/prosperoai/work/image/prosperoai-image-0.tga",
+        "artifact": "build/media-compare/vulkan-runtime-2026-10-12/full-switch/sd-turbo-fp16-initial.tga",
+        "bytes": 1048594,
+        "sha256": "2ade3463cf12df5b65a958bc4f19f7bf26e774dc7ccf6be2fff902c449513bcd",
+        "rgb_stddev": 45.22174846825571,
+        "width": 512,
+        "height": 512
+      },
+      "png_output": {
+        "sandbox_path": "/download0/ProsperoAI/work/image/prosperoai-image-0.png",
+        "mapped_path": "/data/prosperoai/work/image/prosperoai-image-0.png",
+        "artifact": "build/media-compare/vulkan-runtime-2026-10-12/full-switch/sd-turbo-fp16-initial.png",
+        "bytes": 601520,
+        "sha256": "e40f9e4770e92c7695bdaf9888f10419452f4dd9bf67a86e10519c15d46a35be",
+        "width": 512,
+        "height": 512
+      }
+    },
+    {
+      "model": "sd-turbo-fp16",
+      "phase": "repeat-1",
+      "request": {
+        "model": "sd-turbo-fp16",
+        "prompt": "A red apple on a wooden table, natural window light, photographic detail.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T17:32:39Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 1041051000,
+        "model": "sd-turbo-fp16",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": "Image generated locally.\nPNG: /download0/ProsperoAI/work/image/prosperoai-image-1.png\nPreview: /download0/ProsperoAI/work/image/prosperoai-image-1.tga"
+      },
+      "http_seconds": 1.059413445997052,
+      "output": {
+        "sandbox_path": "/download0/ProsperoAI/work/image/prosperoai-image-1.tga",
+        "mapped_path": "/data/prosperoai/work/image/prosperoai-image-1.tga",
+        "artifact": "build/media-compare/vulkan-runtime-2026-10-12/full-switch/sd-turbo-fp16-repeat-1.tga",
+        "bytes": 1048594,
+        "sha256": "2ade3463cf12df5b65a958bc4f19f7bf26e774dc7ccf6be2fff902c449513bcd",
+        "rgb_stddev": 45.22174846825571,
+        "width": 512,
+        "height": 512
+      },
+      "png_output": {
+        "sandbox_path": "/download0/ProsperoAI/work/image/prosperoai-image-1.png",
+        "mapped_path": "/data/prosperoai/work/image/prosperoai-image-1.png",
+        "artifact": "build/media-compare/vulkan-runtime-2026-10-12/full-switch/sd-turbo-fp16-repeat-1.png",
+        "bytes": 601520,
+        "sha256": "e40f9e4770e92c7695bdaf9888f10419452f4dd9bf67a86e10519c15d46a35be",
+        "width": 512,
+        "height": 512
+      }
+    },
+    {
+      "model": "sd-turbo-fp16",
+      "phase": "repeat-2",
+      "request": {
+        "model": "sd-turbo-fp16",
+        "prompt": "A red apple on a wooden table, natural window light, photographic detail.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T17:32:41Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 1041459000,
+        "model": "sd-turbo-fp16",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": "Image generated locally.\nPNG: /download0/ProsperoAI/work/image/prosperoai-image-2.png\nPreview: /download0/ProsperoAI/work/image/prosperoai-image-2.tga"
+      },
+      "http_seconds": 1.0584454430063488,
+      "output": {
+        "sandbox_path": "/download0/ProsperoAI/work/image/prosperoai-image-2.tga",
+        "mapped_path": "/data/prosperoai/work/image/prosperoai-image-2.tga",
+        "artifact": "build/media-compare/vulkan-runtime-2026-10-12/full-switch/sd-turbo-fp16-repeat-2.tga",
+        "bytes": 1048594,
+        "sha256": "2ade3463cf12df5b65a958bc4f19f7bf26e774dc7ccf6be2fff902c449513bcd",
+        "rgb_stddev": 45.22174846825571,
+        "width": 512,
+        "height": 512
+      },
+      "png_output": {
+        "sandbox_path": "/download0/ProsperoAI/work/image/prosperoai-image-2.png",
+        "mapped_path": "/data/prosperoai/work/image/prosperoai-image-2.png",
+        "artifact": "build/media-compare/vulkan-runtime-2026-10-12/full-switch/sd-turbo-fp16-repeat-2.png",
+        "bytes": 601520,
+        "sha256": "e40f9e4770e92c7695bdaf9888f10419452f4dd9bf67a86e10519c15d46a35be",
+        "width": 512,
+        "height": 512
+      }
+    },
+    {
+      "model": "stable-audio-3-small-sfx-vulkan",
+      "phase": "initial",
+      "request": {
+        "model": "stable-audio-3-small-sfx-vulkan",
+        "prompt": "A short, clear bell chime with a soft resonant decay.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-12T17:33:03Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 19072106000,
+        "model": "stable-audio-3-small-sfx-vulkan",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": "Audio generated locally at /download0/ProsperoAI/work/audio/stable-audio-3.wav"
+      },
+      "http_seconds": 19.08439323499624,
+      "output": {
+        "sandbox_path": "/download0/ProsperoAI/work/audio/stable-audio-3.wav",
+        "mapped_path": "/data/prosperoai/work/audio/stable-audio-3.wav",
+        "artifact": "build/media-compare/vulkan-runtime-2026-10-12/full-switch/stable-audio-3-small-sfx-vulkan-initial.wav",
+        "bytes": 705644,
+        "sha256": "bf6c60a513a948805a1b1e8ea9bc32ee6be6ce8533fd0f52915ec1aed4b55e31",
+        "channels": 2,
+        "rate": 44100,
+        "width": 2,
+        "frames": 176400,
+        "peak": 9656,
+        "rms": 1013.471306098573,
+        "clipped_fraction": 0.0,
+        "seconds": 4.0
+      }
+    }
+  ],
+  "switch_checks": [
+    {
+      "name": "before-media",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 32,
+        "context_tokens": 4096
+      },
+      "response": {
+        "id": "chatcmpl-1791826328-3",
+        "object": "chat.completion",
+        "created": 1791826328,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 14,
+          "completion_tokens": 2,
+          "total_tokens": 16
+        }
+      }
+    },
+    {
+      "name": "after-sd-turbo-fp16",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 32,
+        "context_tokens": 4096
+      },
+      "response": {
+        "id": "chatcmpl-1791826361-4",
+        "object": "chat.completion",
+        "created": 1791826361,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 14,
+          "completion_tokens": 2,
+          "total_tokens": 16
+        }
+      }
+    }
+  ],
+  "passed": false,
+  "failure": {
+    "type": "RemoteDisconnected",
+    "message": "Remote end closed connection without response"
+  },
+  "restore_error": {
+    "type": "URLError",
+    "message": "<urlopen error [Errno 111] Connection refused>"
+  }
+}

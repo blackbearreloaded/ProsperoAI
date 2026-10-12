@@ -715,7 +715,7 @@ bounded residency move to the subsequent draft PR.
 
 - Kokoro does not use ggml at all. It is the prebuilt `vendor/lib/libkokoro-tts.a` (an Adreno
   OpenCL port of kokoro-82m) running against the hand-written OpenCL implementation in
-  `src/ps5_opencl.cpp`, which already forwards mat-mul and unary kernels to Vulkan through
+  `inference/backends/vulkan/opencl_compat.cpp`, which already forwards mat-mul and unary kernels to Vulkan through
   `prospero_media_vk` and runs everything else on the CPU.
 - Added per-kernel accounting to that bridge (`begin_kernel`/`end_kernel`/`record_host`) plus
   timers on the data-moving OpenCL entry points, and routed `print_stats()` into klog through
@@ -892,3 +892,100 @@ bounded residency move to the subsequent draft PR.
   this entry; our shared pin is `cb7934c` / ggml `v0.21.0`. Upgrade not yet attempted. Preserve
   upstream behind adapters and verify supported ggml operations per backend; HIP's generic AMD
   listing is not evidence of a PS5 ROCm/HIP runtime.
+
+## 2026-10-12 — Stable Audio 3 PS5 C API smoke launch
+
+- Built the pinned audio.cpp SA3 C API/runtime and ggml Vulkan static archives, then linked a
+  minimal `audiocpp_registry_create` test with ProsperoAI's native RADV recipe. The PS5 native
+  converter accepted the PIE and emitted `eboot.elf`; NEEDED includes the RADV PS5 winsys' AGC
+  platform-driver imports. This is not the retired AGC inference backend.
+- Backed up the registered, folder-backed `PPSA99023` eboot, confirmed `mounted:false`, replaced
+  only `eboot.bin`, and launched via `ps5vkctl` (`0x00000018`). The user observed that the app
+  crashed; immediately afterward `agent procs` was empty and ShadowMount reported `mounted:false`.
+  Restored the exact original eboot and verified the title is unmounted with no process running.
+- The klog receiver was unavailable (`3232` connection refused); the documented console
+  `/data/payloads/klogsrv-ps5.elf` did not exist. The ps5vkctl log records only the successful
+  launch call, so it does not distinguish a pre-main crash from a failure during registry
+  initialization. No checkpoint was loaded and no SA3 inference was attempted. Next diagnose the
+  PS5 runtime/import failure with klog available before making another launch attempt.
+
+## 2026-10-12 — restored test title boots
+
+- After restoring the saved PPSA99023 `eboot.bin`, the user launched the title successfully.
+  `ps5vkctl agent procs` reports PID 111 and `shadow info` reports `mounted:true`. The console
+  eboot size (114,253,716 bytes) matches the saved original exactly. This confirms the restored
+  app boots; it does not change the failed SA3 smoke result because the smoke eboot was no longer
+  installed for this launch.
+
+## 2026-10-12 — SA3 staged load and close diagnostics
+
+- Added compile-time `SA3_SMOKE_STAGE` to the PS5 C API harness: stage 1 initializes only the
+  audio.cpp registry; stage 2 loads the SA3 GGUF; stage 3 creates the Vulkan session; stage 4
+  generates audio. Each successful stage logs a marker and idles with `sceKernelUsleep` rather
+  than a tight `pause` loop. Stage 1 ELF passed the RADV/native conversion and signed ELF checks.
+- Restored the saved original eboot to `PPSA99023` and verified the remote SHA-256 exactly matched
+  the local backup. Stage 1 was then deployed to this folder-backed test title; its remote file
+  hash matched the local signed binary. Launch reached the registry-only ready marker. Stopping
+  via `ps5vkctl agent kill` yielded normal ShellCore suspend, process exit, `end_app_mount`, and
+  `mounted:false`; no kernel failure was seen at this stage.
+- Deployed stage 2 and verified the remote SHA-256. Klog confirmed the call to load the 1.68 GB
+  Stable Audio 3 Q8 GGUF, but no model-loaded marker followed. Kernel output reported `LOW FMEM`
+  (about 1,000 free system pages), swap increasing beyond 700 MB, and ShellCore main-thread
+  heartbeat freezes. A subsequent `agent procs` request stopped responding. No Vulkan session or
+  inference was reached. Stage 2 remains installed on PPSA99023; original eboot backup remains
+  unchanged in `build/audio-cpp-sa3-ps5-link-smoke/eboot-original.bin`. Wait for console recovery,
+  confirm `mounted:false`, then restore the original eboot before further runs.
+## 2026-10-12 — Stable Audio GGUF bounded reads
+
+- Reproduced the host PS5 adapter path with an explicit streaming-GGUF define. The GGUF source
+  now retains metadata and reads each tensor range with `fseeko`/bounded `fread` rather than
+  retaining a checkpoint-sized `mmap`; single tensor reads above 256 MiB fail before allocating.
+- Regression executable passed exact tensor bytes, release and reread, truncated-file rejection,
+  oversized sparse fixture rejection, and metadata-only load of the 1.68 GB Stable Audio model.
+  Process peak RSS was 116,208 KiB.
+- Rebuilt and signed PS5 stage-2 diagnostic eboot. Deployed to the unmounted PPSA99023 folder
+  title, chmod 755, downloaded it back and verified SHA-256 `2c910464fe9c43dc164b93ec6e90ee794705014b301e3fc81005e6583abc488a`.
+- Console control payload had to be reloaded after it was absent; afterwards it reported healthy.
+  PPSA99023 remains unmounted while the unrelated ProsperoEden PPSA99008 is active. No launch or
+  PS5 runtime verification was done in this run. Await approval before switching titles.
+
+## 2026-10-12 — Stable Audio 3 Vulkan inference verified on PS5
+
+- Raised the bounded per-tensor read limit from 256 MiB to 512 MiB after the stage-4 attempt
+  correctly rejected the largest tensor. The largest SA3 tensor is 393,216,000 bytes (375 MiB),
+  so 512 MiB provides bounded headroom; this limit is per tensor and is unrelated to the PS5's
+  available VRAM capacity. Host tests pass for exact reads, release/re-read, truncation, oversized
+  sparse tensors and SA3 metadata load; peak RSS stayed below 128 MiB.
+- Rebuilt, linked and signed the stage-4 PS5 harness, deployed it to the folder-backed test title
+  PPSA99023, and launched it. Klog confirmed `generating on Vulkan device 0`, then
+  `AUDIO_OK rate=44100 channels=2 frames=44100 peak=0.3198` and the ready marker indicating the
+  WAV was written and the runtime released. This verifies a non-silent one-second stereo 44.1 kHz
+  output generated by Stable Audio 3 on the console Vulkan path.
+- A subsequent `agent procs` check confirmed PPSA99023 was running (PID 99). After collecting the
+  result, stopped the test process cleanly and confirmed `mounted:false`. Restored the original
+  test eboot and downloaded it back; its SHA-256 matches the preserved local original
+  (`298326198b243711adae6476d7dbebb0c04e7d8e461cfb0639a18686b65a75cc`).
+
+## 2026-10-12 — SA3 HTTP-thread teardown fix and randomized modality cycles
+
+- The integrated SA3 request generated and sent a valid WAV, then the title received SIGSEGV as
+  its short-lived HTTP connection worker exited. Added temporary checkpoints around adapter
+  return, response serialization/send and worker teardown; the last completed checkpoint was
+  HTTP response sent. This isolated the failure to post-response thread teardown, not Vulkan
+  generation or WAV writing.
+- The pinned audio.cpp C API has a `thread_local std::string` error value; its model-spec package
+  cache also contains non-trivial TLS objects. The PS5 adaptation converts both groups to static
+  state. ProsperoAI serializes audio.cpp calls and model loads with its inference mutex. The patch
+  is reproducible in `tools/prepare-audio-cpp-sa3.py` and limited to the pinned dependency source.
+- With the TLS adaptation, two repeated SA3 requests plus text → SA3 → text passed; the title
+  remained alive. Then two full randomized cycles passed on PPSA99023, each with repeated requests
+  per media model and text round-trips:
+  1. Kokoro → text → SD → text → SA3 (19.15 s cold, 5.84 s warm) → text.
+  2. SA3 (19.15 s cold, 5.84 s warm) → text → SD → text → Kokoro → text.
+- SD generated valid 512×512 PNG/TGA, Kokoro generated valid mono 24 kHz PCM16 WAV, and SA3
+  generated valid non-silent stereo 44.1 kHz PCM16 WAV. The repeated outputs were deterministic.
+  JSON evidence: `vulkan-runtime-random-cycle-1.json`, `vulkan-runtime-random-cycle-2.json`, and
+  `vulkan-runtime-sa3.json` under `docs/performance/2026-10-12/`.
+- Console stayed responsive; no reboot was performed. Temporary diagnostic logging is being
+  removed from the final build. The test title PPSA99023 was the only title changed; PPSA99004
+  was not touched.

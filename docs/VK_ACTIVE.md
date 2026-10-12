@@ -43,22 +43,19 @@ Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
 
 ## Speech on ggml/Vulkan
 
-- Kokoro is no longer the prebuilt OpenCL archive: `src/kokoro_runtime_ps5.cpp` drives
+- `inference/adapters/media/kokoro_ps5.cpp` drives
   kokoro.cpp (pinned `kokoro-cpp`) on the shared ggml Vulkan backend. The catalog preset is now
   `kokoro-82m-vulkan`; it downloads the GGUF model, voice and espeak-ng assets. The retired
   `kokoro-82m-fp16` directory is ignored by text-model discovery and left intact for users.
-- Switching failure was caused by Kokoro's 262144-node scheduler/metadata reservation. The
-  PS5 adapter now caps both at 131072; a full text → SD PNG → text → Stable Audio → text →
-  Kokoro → text cycle passed on `PPSA99023`. Kokoro emitted valid mono 24 kHz WAV; Stable Audio
-  emitted valid stereo 44.1 kHz WAV; SD emitted a verified 512×512 PNG and TGA preview. The
-  benchmark record and artifacts are in `/tmp/prospero-final-all-modalities.json` and its
-  sibling artifact directory for this session. The shared router's one-model-at-a-time
-  serialization is now verified across these web API transitions.
+- The PS5 adapter caps Kokoro's scheduler/metadata reservation at 131072 nodes. On 2026-10-12,
+  repeated Kokoro requests passed (first 3.97 s, warm median 0.268 s) and text → Kokoro → text
+  succeeded. The utterance was valid mono 24 kHz WAV. SD-Turbo likewise passed repeated
+  text → SD PNG → text checks with verified 512×512 PNGs. Current reports are in
+  `docs/performance/2026-10-12/`.
 - The adjustment is an explicit PS5 dependency adapter (`tools/prepare-kokoro-ps5.py`) invoked by
   `tools/build-vulkan-runtime.sh`, so a fresh dependency checkout gets the same guarded patch.
-  Host reference comparison remains `0.9985` envelope correlation. `vendor/lib/libkokoro-tts.a`
-  remains unused and can be removed separately.
-  `vendor/lib/libkokoro-tts.a` remains unused and can be removed separately.
+  Host reference comparison remains `0.9985` envelope correlation. The old Kokoro/OpenCL
+  archive and its unused GGML archives have been removed from the repository.
 
 ## PNG output
 
@@ -66,6 +63,36 @@ Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
   and the web UI displays/downloads the PNG directly. The native PS5 UI retains its TGA preview
   and archives it alongside the direct PNG path. Console verification now confirms the PNG
   signature and 512×512 dimensions on `PPSA99023`.
+
+## Stable Audio 3 Vulkan adapter
+
+- Pinned audio.cpp cross-builds as a static C API/runtime plus ggml Vulkan and links through the
+  native RADV recipe. The staged smoke harness verified registry/model/session/generation steps;
+  production inference and repeat generation are now verified below.
+- Stage 2 (load the 1.68 GB Q8 GGUF, no Vulkan session) initially stalled because the tensor
+  source retained a whole-file mapping. The PS5 adapter now stores GGUF metadata only and reads
+  tensor byte ranges on demand, with a 512 MiB per-tensor bound. This covers the largest SA3
+  tensor (375 MiB); it is a bounded host-read limit, not a VRAM budget. Host regression checks for
+  exact reads, release/re-read, truncated input and oversized tensor pass; metadata-only SA3 model
+  load stayed below 128 MiB RSS.
+- The production app on `PPSA99023` loads the new preset and generates a non-silent,
+  unclipped 4-second stereo WAV (44.1 kHz PCM16) in about 19.1 seconds. The output is in
+  `/data/prosperoai/work/audio/`.
+- The post-response SIGSEGV was traced to audio.cpp C API/model-spec `thread_local` objects with
+  non-trivial destructors on the short-lived PS5 HTTP worker. The pinned-source preparation now
+  uses process-static cache objects; calls remain serialized by the inference mutex.
+- The fix passed two randomized complete modality cycles, each with two requests per media model
+  and text round-trips before/between/after modalities. Orders: Kokoro → SD → SA3, then SA3 → SD →
+  Kokoro. Reports: `docs/performance/2026-10-12/vulkan-runtime-random-cycle-1.json` and `...-2.json`.
+- Isolated SA3 on the final clean build: 4-second 44.1 kHz stereo PCM16 WAV, 19.09 s cold / 5.83 s warm; repeated
+  output hash identical. Full cycle and text switch verified on PPSA99023. Earlier crash attempt
+  remains in `vulkan-runtime-media.json` as regression history.
+- Original eboot is preserved at
+  `build/audio-cpp-sa3-ps5-link-smoke/eboot-original.bin` (SHA-256
+  `298326198b243711adae6476d7dbebb0c04e7d8e461cfb0639a18686b65a75cc`). It is retained for
+  recovery; do not replace the active test eboot while the title remains mounted.
+- RADV NEEDED includes the PS5 AGC platform-driver imports; AGC inference is removed, but this
+  Vulkan stack is not AGC-platform-free. See [SA3/OpenCL research](OPENCL_TO_VULKAN_RESEARCH.md).
 
 ## Upstream llama.cpp update strategy
 

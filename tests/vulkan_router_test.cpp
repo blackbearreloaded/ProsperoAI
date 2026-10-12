@@ -12,22 +12,8 @@
 namespace
 {
 unsigned text_selected = 0, released = 0, stopped = 0, generated = 0;
-unsigned media_released = 0;
 std::atomic<bool> block_voice{false}, voice_entered{false}, voice_release{false};
 } // namespace
-namespace prospero_media_vk
-{
-void release()
-{
-    ++media_released;
-}
-void print_stats()
-{
-}
-void set_log_sink(void (*)(const char *))
-{
-}
-} // namespace prospero_media_vk
 namespace prospero_vulkan
 {
 unsigned gpt_runtime_model_count()
@@ -103,6 +89,9 @@ extern "C"
     void ps5_sd_shutdown()
     {
     }
+    void ps5_stable_audio_release()
+    {
+    }
     int ps5_sd_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
                         gpt_runtime_progress_fn)
     {
@@ -157,9 +146,6 @@ int main()
     assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
     assert(generated == 1 && stats.generated_tokens == 1 && stats.elapsed_microseconds == 123);
     assert(std::strcmp(out, "voice.wav") == 0);
-#ifdef PROSPERO_MEDIA_VULKAN
-    assert(media_released > 0);
-#endif
     block_voice.store(true);
     gpt_runtime_settings_t voice_settings{};
     voice_settings.model_id = "kokoro-82m-vulkan";

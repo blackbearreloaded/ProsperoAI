@@ -604,6 +604,16 @@ bool start() {
 bool preset_installed(std::size_t index) {
     if (index >= preset_count) return false;
     const auto &preset = presets[index];
+    // Accept a pre-existing single-file media model in the shared models/ root. The
+    // inference router uses the same compatibility layout, avoiding a needless second
+    // copy of large GGUF files when their catalog preset is introduced later.
+    if (preset.kind != 0 && preset.count == 1 &&
+        std::string(preset.files[0].path).find('/') == std::string::npos) {
+        const std::string direct = std::string(prospero::model_root()) + "/" + preset.files[0].path;
+        struct stat file{};
+        if (stat(direct.c_str(), &file) == 0 && S_ISREG(file.st_mode) &&
+            static_cast<std::uint64_t>(file.st_size) == preset.files[0].size) return true;
+    }
     for (std::size_t i = 0; i < preset.count; ++i) {
         const std::string path = std::string(prospero::model_root()) + "/" + preset.id +
                                 (preset.kind == 0 ? "" : std::string("/") + preset.files[i].path);

@@ -89,6 +89,14 @@
       "setup_creates": "highway/CMakeLists.txt"
     },
     {
+      "name": "audio-cpp",
+      "about": "Pinned audio.cpp C API for Stable Audio 3 on the shared PS5 ggml/Vulkan runtime",
+      "kind": "git",
+      "url": "https://github.com/0xShug0/audio.cpp.git",
+      "commit": "886076fc89c09b9902592aa4bfbd12922d4a9e26",
+      "path": "build/audio-cpp-upstream"
+    },
+    {
       "name": "espeak-ng-headers",
       "about": "espeak-ng 1.51 source, used only for its public headers. kokoro.cpp links espeak-ng directly and the PS5 build has no system copy; the symbols come from vendor/lib/libespeak-ng.a.",
       "kind": "git",

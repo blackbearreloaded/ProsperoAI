@@ -4,7 +4,7 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 mode=${1:-ps5}
 [[ $mode == ps5 || $mode == host ]] || { echo "usage: $0 [ps5|host]" >&2; exit 2; }
-python3 "$root/tools/deps.py" fetch stable-diffusion-vulkan llama-prism kokoro-cpp espeak-ng-headers
+python3 "$root/tools/deps.py" fetch stable-diffusion-vulkan llama-prism kokoro-cpp audio-cpp espeak-ng-headers
 source_tree="$root/build/prism-llama-source"
 export CCACHE_DIR=${CCACHE_DIR:-$root/build/ccache}
 export TMPDIR="$root/build/compiler-tmp"
@@ -26,3 +26,6 @@ targets=(llama stable-diffusion kokoro)
 [[ $mode != host ]] || targets+=(vulkan-runtime-abi-test vulkan-runtime-media-test)
 cmake --build "$root/build/vulkan-runtime-$mode" --target "${targets[@]}" \
     --parallel "${BUILD_JOBS:-4}"
+if [[ $mode == ps5 ]]; then
+    bash "$root/tools/build-audio-cpp-sa3-ps5.sh"
+fi

@@ -976,8 +976,7 @@ bool media_path_allowed(const std::string &path)
         return false;
     static const char *prefixes[] = {
         "/download0/ProsperoAI/sessions/", "/download0/ProsperoAI/work/image/",
-        "/download0/ProsperoAI/work/audio/", "/download0/ProsperoAI/work/voice/",
-        "/download0/prosperoai-image-", "/download0/prosperoai-audio.wav"};
+        "/download0/ProsperoAI/work/audio/", "/download0/ProsperoAI/work/voice/"};
     for (const char *prefix : prefixes)
         if (path.compare(0, std::strlen(prefix), prefix) == 0)
             return true;

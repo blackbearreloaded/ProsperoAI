@@ -36,15 +36,16 @@ objects=()
 sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens.cpp src/native_ui_style.cpp
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
- src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/kokoro_runtime_ps5.cpp src/agc_lifecycle.cpp
- vulkan/gpt_runtime_router.cpp vulkan/media_vulkan.cpp
+ src/agc_lifecycle.cpp inference/router.cpp inference/adapters/registry.cpp
+ inference/adapters/media/stable_diffusion_ps5.cpp inference/adapters/media/stable_audio_ps5.cpp
+ inference/adapters/media/kokoro_ps5.cpp
  vulkan/storage.cpp vulkan/storage_paths.cpp vulkan/elevation/elevation.cpp vulkan/debug_tee.cpp src/debug_log.cpp
  src/native_ui_update.cpp vulkan/update_ps5.cpp
- vulkan/gpt_runtime_vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
+ inference/adapters/llama/vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
 media_definitions=()
-media_definitions=(-DPROSPERO_PRISM_RUNTIME -DPROSPERO_MEDIA_VULKAN)
-# Speech is kokoro.cpp on the shared ggml/Vulkan backend (src/kokoro_runtime_ps5.cpp); the
+media_definitions=(-DPROSPERO_PRISM_RUNTIME)
+# Speech is kokoro.cpp on the shared ggml/Vulkan backend (inference/adapters/media/kokoro_ps5.cpp); the
 # prebuilt OpenCL archive it replaces is no longer linked.
 kokoro_archives=("$root/build/vulkan-runtime-ps5/kokoro/libkokoro.a"
  "$root/build/vulkan-runtime-ps5/kokoro/highway/libhwy.a")
@@ -66,9 +67,11 @@ for relative in "${sources[@]}"; do
  abi_definitions=()
  abi_definitions+=(-DGGML_MAX_NAME=160)
  case "$relative" in
-  src/sd_runtime_ps5.cpp)
+  inference/adapters/media/stable_diffusion_ps5.cpp)
    media_includes=(-I "$root/.deps/stable-diffusion-vulkan/include");;
-  src/kokoro_runtime_ps5.cpp)
+  inference/adapters/media/stable_audio_ps5.cpp)
+   media_includes=(-I "$root/build/audio-cpp-upstream/include");;
+  inference/adapters/media/kokoro_ps5.cpp)
    media_includes=(-I "$root/.deps/kokoro.cpp/include"
     -I "$root/build/prism-llama-source/ggml/include");;
  esac
@@ -85,10 +88,10 @@ for relative in "${sources[@]}"; do
  ninja_edge CXX "$object" env PS5_PAYLOAD_SDK="$sdk" USE_CCACHE="${USE_CCACHE:-1}" sh "$root/tooling/prospero-clang18" \
   -std=c++20 -O2 -fexceptions -fcxx-exceptions -frtti -Wall -Wextra -Wno-missing-field-initializers \
   -ffunction-sections -fdata-sections -DPS5_LLAMA_VULKAN -DPROSPERO_UI_VULKAN -DPROSPERO_VULKAN_RUNTIME \
-  -DPS5_MEDIA_AUDIO -DPS5_MEDIA_IMAGE -DPS5_SANDBOX_APP -DPS5_APP_HAS_DSO_HANDLE -DPS5_SD_GENERATE -DCL_TARGET_OPENCL_VERSION=120 -DGL_GLEXT_PROTOTYPES \
+  -DPS5_MEDIA_AUDIO -DPS5_MEDIA_IMAGE -DPS5_SANDBOX_APP -DPS5_APP_HAS_DSO_HANDLE -DPS5_SD_GENERATE -DGL_GLEXT_PROTOTYPES \
   -DSDL_MAIN_HANDLED -DSDL_STATIC_LIB -DUSING_GENERATED_CONFIG_H \
   "${media_definitions[@]}" "${abi_definitions[@]}" "${media_includes[@]}" -I "$root/include" -I "$root/vulkan" -I "$root/vulkan/ui" -I "$kit_stage/src" -I "$work/generated" \
-  -I "$root/vendor/ps5/sdl/include" -I "$root/vendor/ps5/sdl/include/SDL2" \
+  -I "$root/vendor/ps5/sdl/include" -I "$root/vendor/ps5/sdl/include/SDL2" -I "$root/inference" \
   -I "$llama_source/vendor" -I "$llama_source/include" -I "$llama_source/ggml/include" \
   -I "$root/vendor/include" -I "$root/src" -I "$root/third_party/update-check" "${update_definitions[@]}" -I "$root/.deps/Vulkan-Headers/include" -I "$root/.deps/ps5-opengl/current/include" \
   -MD -MF "$object.d" -c "$root/$relative" -o "$object"
@@ -156,6 +159,13 @@ cat > "$work/app-compat.map" <<'MAP'
 { local: pthread_once; strtof; strtod; fseek; ftell; strcasestr; gl*; hui_release_splash; __wrap_*; };
 MAP
 sd_archives=("$root/build/vulkan-runtime-ps5/sd/libstable-diffusion.a")
+audio_build="$root/build/audio-cpp-sa3-ps5-repro"
+audio_archives=("$audio_build/bin/libaudiocpp.a" "$audio_build/libengine_runtime.a"
+ "$audio_build/external/sentencepiece/src/libsentencepiece.a" "$audio_build/libcjson_vendor.a"
+ "$audio_build/libyaml_vendor.a")
+for audio_input in "${audio_archives[@]}"; do
+ [[ -f $audio_input ]] || { echo "Run make vulkan-runtime-libs first: missing $audio_input" >&2; exit 2; }
+done
 "$sdk/bin/prospero-lld" "${radv_linker_script[@]}" --eh-frame-hdr "${radv_link_flags[@]}" --wrap=sceAgcInit \
  --version-script "$work/app-compat.map" --version-script "$ref/tooling/native/app-symbols.map" --exclude-libs=ALL -e _start \
  -o "$work/llvm-pie.elf" "$work/obj/app_crt.o" "$work/obj/app_cpp_runtime.o" "${objects[@]}" "$work/obj/llama_compat.o" \
@@ -163,8 +173,10 @@ sd_archives=("$root/build/vulkan-runtime-ps5/sd/libstable-diffusion.a")
  --start-group "$root/vendor/ps5/sdl/lib/libSDL2.a" "$llama_build/src/libllama.a" \
  "$llama_build/ggml/src/libggml.a" "$llama_build/ggml/src/libggml-base.a" \
  "$llama_build/ggml/src/libggml-cpu.a" "$llama_build/ggml/src/ggml-vulkan/libggml-vulkan.a" \
- "${sd_archives[@]}" \
- "$root/vendor/lib/libstable-audio.a" "${kokoro_archives[@]}" "$root/vendor/lib/libespeak-ng.a" \
+ "${sd_archives[@]}" "${audio_archives[@]}" \
+ "$audio_build/ggml/src/libggml.a" "$audio_build/ggml/src/libggml-cpu.a" \
+ "$audio_build/ggml/src/ggml-vulkan/libggml-vulkan.a" "$audio_build/ggml/src/libggml-base.a" \
+ "${kokoro_archives[@]}" "$root/vendor/lib/libespeak-ng.a" \
  "$root/vendor/lib/libcompat.a" --end-group \
  --defsym=vkGetInstanceProcAddr=radv_GetInstanceProcAddr --defsym=vkGetDeviceProcAddr=vk_common_GetDeviceProcAddr \
  --defsym=vkCmdCopyBuffer=vk_common_CmdCopyBuffer --defsym=vkGetPhysicalDeviceFeatures2=vk_common_GetPhysicalDeviceFeatures2 \
