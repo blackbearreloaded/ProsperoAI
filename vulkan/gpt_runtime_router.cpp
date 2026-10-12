@@ -8,6 +8,7 @@
 #include "model_paths.hpp"
 #include "model_presets.hpp"
 #include <mutex>
+#include <atomic>
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -261,10 +262,25 @@ int gpt_runtime_prepare()
         return prospero_vulkan::gpt_runtime_prepare();
     return 0;
 }
+namespace
+{
+// Read by the interface loop, which draws fewer frames while one runs (src/main.cpp).
+std::atomic<unsigned> generations_running{0};
+struct GenerationRunning
+{
+    GenerationRunning() { generations_running.fetch_add(1); }
+    ~GenerationRunning() { generations_running.fetch_sub(1); }
+};
+} // namespace
+unsigned gpt_runtime_generations_running()
+{
+    return generations_running.load();
+}
 int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
                          const gpt_runtime_settings_t &settings, char *output, std::size_t capacity,
                          gpt_runtime_stats_t *stats, gpt_runtime_progress_fn progress)
 {
+    const GenerationRunning running;
     if (!messages || !count || !output || !capacity)
         return 1;
     std::unique_lock<std::mutex> inference(inference_mutex, std::try_to_lock);
