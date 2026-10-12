@@ -25,6 +25,8 @@
 #include <SDL2/SDL.h>
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 void prospero_setup_sdl_memory();
@@ -112,6 +114,33 @@ void input_event(const gpt_input_event_t &event, hui::InputFrame &input, prosper
     else if (event.key == GPT_INPUT_ENTER)
         ui.submit(feedback);
 }
+
+// KEY=VALUE lines from vulkan_env.txt next to eboot.bin become environment variables
+// before any GPU work: llama.cpp, ggml-vulkan (docs/PS5_PRO_TUNING.md) and RADV read
+// their switches from there. Without the file nothing changes.
+void load_vulkan_env()
+{
+    std::FILE *file = std::fopen("/app0/vulkan_env.txt", "r");
+    if (file == nullptr)
+        return;
+    char line[512];
+    while (std::fgets(line, sizeof(line), file) != nullptr)
+    {
+        char *start = line;
+        while (*start == ' ' || *start == '\t')
+            ++start;
+        char *end = start + std::strlen(start);
+        while (end > start && (end[-1] == '\n' || end[-1] == '\r' || end[-1] == ' '))
+            *--end = 0;
+        char *equals = std::strchr(start, '=');
+        if (*start == '#' || equals == nullptr || equals == start)
+            continue;
+        *equals = 0;
+        setenv(start, equals + 1, 1);
+        prospero::debug::line("app", "vulkan_env %s=%s", start, equals + 1);
+    }
+    std::fclose(file);
+}
 } // namespace
 
 int main()
@@ -123,6 +152,7 @@ int main()
 #endif
     // The debug log's switch is read here, before anything else can go wrong.
     prospero::debug::start("/download0/ProsperoAI/logs");
+    load_vulkan_env();
 #ifdef PROSPERO_UI_VULKAN
     prospero::debug::line("app", "filesystem access=%d route=%s app=%s data=%s models=%s moved=%u",
                           storage.access, storage.route, storage.app_dir.c_str(),
