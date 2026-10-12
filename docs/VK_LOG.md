@@ -710,3 +710,23 @@ bounded residency move to the subsequent draft PR.
   the experiment.
 - Evidence: `performance/2026-10-12/rdna2-dmmv-wave32-rejected.json`,
   `rdna2-combined-restored.json`.
+
+## 2026-10-12 — Kokoro profile: the GPU is not where its time goes
+
+- Kokoro does not use ggml at all. It is the prebuilt `vendor/lib/libkokoro-tts.a` (an Adreno
+  OpenCL port of kokoro-82m) running against the hand-written OpenCL implementation in
+  `src/ps5_opencl.cpp`, which already forwards mat-mul and unary kernels to Vulkan through
+  `prospero_media_vk` and runs everything else on the CPU.
+- Added per-kernel accounting to that bridge (`begin_kernel`/`end_kernel`/`record_host`) plus
+  timers on the data-moving OpenCL entry points, and routed `print_stats()` into klog through
+  a log sink, since a PS5 title drops libc's stderr.
+- Measured on `PPSA99023`, one sentence, 79800 samples at 24 kHz (3.3 s of audio), 131.3 s
+  wall: all OpenCL kernels together account for `1.69` s on the CPU and `0.29` s on the GPU,
+  and the OpenCL API timers are too small to reach the top sixteen. The most expensive CPU
+  kernels are `lstm_seq` (12 calls, 0.84 s), `weightnorm_recon` (38, 0.42 s), `pad_rows`
+  (10, 0.11 s) and `im2col_ncl` (33, 0.065 s).
+- So about 98.5% of the wall time is inside the prebuilt archive's own CPU code, which never
+  reaches our OpenCL layer. Porting the remaining shim kernels to Vulkan can save at most
+  about 1.7 s of 131 s, which also explains why the earlier AGC/Vulkan media comparison
+  measured voice as roughly 0.5% slower: it optimized the wrong layer.
+- Evidence: `performance/2026-10-12/kokoro-kernel-profile.txt`.

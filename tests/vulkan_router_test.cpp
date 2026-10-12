@@ -24,6 +24,9 @@ void release()
 void print_stats()
 {
 }
+void set_log_sink(void (*)(const char *))
+{
+}
 } // namespace prospero_media_vk
 namespace prospero_vulkan
 {

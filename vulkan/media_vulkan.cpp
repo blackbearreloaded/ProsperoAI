@@ -9,13 +9,28 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <algorithm>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <vector>
 namespace {
 std::mutex mutex;
 ggml_backend_t backend;
 unsigned calls, cpu_calls;
 std::uint64_t elapsed_us;
+void (*log_sink)(const char *);
+thread_local bool kernel_on_cpu;
+struct KernelCost {
+    unsigned cpu_calls, gpu_calls;
+    std::uint64_t cpu_us, gpu_us;
+};
+std::map<std::string, KernelCost> kernels;
+void emit(const char *line) {
+    if (log_sink) log_sink(line);
+    else std::fprintf(stderr, "%s", line);
+}
 using Context = std::unique_ptr<ggml_context, decltype(&ggml_free)>;
 using Buffer = std::unique_ptr<ggml_backend_buffer, decltype(&ggml_backend_buffer_free)>;
 bool shape(std::size_t rows, std::size_t columns) {
@@ -107,16 +122,69 @@ int unary(Unary op, const float *in, float *out, std::size_t rows,
         return compute(graph, result, out);
     } catch (...) { return -1; }
 }
-void record_cpu_fallback() { std::lock_guard<std::mutex> lock(mutex); ++cpu_calls; }
+void record_cpu_fallback() {
+    kernel_on_cpu = true;
+    std::lock_guard<std::mutex> lock(mutex);
+    ++cpu_calls;
+}
+void begin_kernel() { kernel_on_cpu = false; }
+void record_host(const char *name, unsigned long long microseconds) {
+    if (!name) return;
+    std::lock_guard<std::mutex> lock(mutex);
+    auto &cost = kernels[name];
+    ++cost.cpu_calls;
+    cost.cpu_us += microseconds;
+}
+void end_kernel(const char *name, unsigned long long microseconds) {
+    if (!name) return;
+    const bool on_cpu = kernel_on_cpu;
+    std::lock_guard<std::mutex> lock(mutex);
+    auto &cost = kernels[name];
+    if (on_cpu) { ++cost.cpu_calls; cost.cpu_us += microseconds; }
+    else { ++cost.gpu_calls; cost.gpu_us += microseconds; }
+}
+void set_log_sink(void (*sink)(const char *)) {
+    std::lock_guard<std::mutex> lock(mutex);
+    log_sink = sink;
+}
 void print_stats() {
     std::lock_guard<std::mutex> lock(mutex);
-    std::fprintf(stderr, "[prosperoai:media-vulkan] calls=%u cpu_kernel_calls=%u bridge_us=%llu backend=Vulkan\n",
-                 calls, cpu_calls, static_cast<unsigned long long>(elapsed_us));
+    char line[512];
+    std::snprintf(line, sizeof(line),
+                  "media-vulkan calls=%u cpu_kernel_calls=%u bridge_us=%llu backend=Vulkan\n",
+                  calls, cpu_calls, static_cast<unsigned long long>(elapsed_us));
+    emit(line);
+    // The expensive kernels decide what is worth porting next, so name them with their
+    // own measured wall time instead of only counting the fallbacks.
+    std::vector<std::pair<std::string, KernelCost>> sorted(kernels.begin(), kernels.end());
+    std::sort(sorted.begin(), sorted.end(), [](const auto &a, const auto &b) {
+        return a.second.cpu_us + a.second.gpu_us > b.second.cpu_us + b.second.gpu_us;
+    });
+    std::uint64_t total_cpu = 0, total_gpu = 0;
+    for (const auto &entry : sorted) {
+        total_cpu += entry.second.cpu_us;
+        total_gpu += entry.second.gpu_us;
+    }
+    std::snprintf(line, sizeof(line), "media-vulkan kernel totals cpu_us=%llu gpu_us=%llu kinds=%zu\n",
+                  static_cast<unsigned long long>(total_cpu),
+                  static_cast<unsigned long long>(total_gpu), sorted.size());
+    emit(line);
+    unsigned shown = 0;
+    for (const auto &entry : sorted) {
+        if (shown++ >= 16) break;
+        std::snprintf(line, sizeof(line),
+                      "media-vulkan kernel %-28s cpu=%ux/%llu us gpu=%ux/%llu us\n",
+                      entry.first.c_str(), entry.second.cpu_calls,
+                      static_cast<unsigned long long>(entry.second.cpu_us), entry.second.gpu_calls,
+                      static_cast<unsigned long long>(entry.second.gpu_us));
+        emit(line);
+    }
 }
 void release() {
     std::lock_guard<std::mutex> lock(mutex);
     if (backend) ggml_backend_free(backend);
     backend = nullptr;
     calls = 0; cpu_calls = 0; elapsed_us = 0;
+    kernels.clear();
 }
 }

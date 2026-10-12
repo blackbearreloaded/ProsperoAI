@@ -317,6 +317,11 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
                                                     &elapsed, progress);
 #ifdef PROSPERO_MEDIA_VULKAN
     // Do not keep media Vulkan buffers or backend state across a switch to text.
+    prospero_media_vk::set_log_sink([](const char *text) {
+        char line[512];
+        std::snprintf(line, sizeof(line), "[ProsperoAI/Vulkan] %s", text);
+        sceKernelDebugOutText(0, line);
+    });
     prospero_media_vk::print_stats();
     prospero_media_vk::release();
 #endif

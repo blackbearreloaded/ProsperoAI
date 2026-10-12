@@ -16,6 +16,30 @@
 #include <string>
 #include <vector>
 
+#ifdef PROSPERO_MEDIA_VULKAN
+// Kokoro's wall time turned out to sit outside the kernels, so the OpenCL entry points that
+// move or convert data are measured by name as well.
+namespace
+{
+struct ApiTimer
+{
+    const char *name;
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+    ~ApiTimer()
+    {
+        const auto spent = std::chrono::duration_cast<std::chrono::microseconds>(
+                               std::chrono::steady_clock::now() - started)
+                               .count();
+        prospero_media_vk::record_host(name,
+                                       static_cast<unsigned long long>(spent < 0 ? 0 : spent));
+    }
+};
+} // namespace
+#define PROSPERO_CL_TIMER(label) const ApiTimer prospero_cl_timer{label}
+#else
+#define PROSPERO_CL_TIMER(label) ((void)0)
+#endif
+
 struct _cl_platform_id
 {
 };
@@ -245,6 +269,7 @@ void set_event(cl_event *event, uint64_t start)
     (*event)->end_ns = now_ns();
 }
 
+cl_int run_kernel_impl(cl_kernel kernel);
 cl_int run_kernel(cl_kernel kernel);
 
 } // namespace
@@ -359,6 +384,7 @@ clCreateCommandQueue(cl_context context, cl_device_id, cl_command_queue_properti
 extern "C" CL_API_ENTRY cl_mem CL_API_CALL clCreateBuffer(cl_context, cl_mem_flags flags,
                                                           size_t size, void *host, cl_int *error)
 {
+    PROSPERO_CL_TIMER("api:clCreateBuffer");
     if (!size || ((flags & (CL_MEM_COPY_HOST_PTR | CL_MEM_USE_HOST_PTR)) && !host))
     {
         if (error)
@@ -397,6 +423,7 @@ extern "C" CL_API_ENTRY cl_mem CL_API_CALL clCreateImage(cl_context context, cl_
                                                          const cl_image_desc *desc, void *host,
                                                          cl_int *error)
 {
+    PROSPERO_CL_TIMER("api:clCreateImage");
     if (!format || !desc || desc->image_width == 0)
     {
         if (error)
@@ -426,6 +453,7 @@ extern "C" CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBuffer(cl_mem parent, cl_m
                                                              cl_buffer_create_type type,
                                                              const void *info, cl_int *error)
 {
+    PROSPERO_CL_TIMER("api:clCreateSubBuffer");
     if (!parent || type != CL_BUFFER_CREATE_TYPE_REGION || !info)
     {
         if (error)
@@ -462,6 +490,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfo(cl_mem memory, cl_
 
 extern "C" CL_API_ENTRY cl_int CL_API_CALL clReleaseMemObject(cl_mem memory)
 {
+    PROSPERO_CL_TIMER("api:clReleaseMemObject");
     if (!memory)
         return CL_INVALID_MEM_OBJECT;
     release_mem(memory);
@@ -473,6 +502,7 @@ extern "C" CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithSource(cl_cont
                                                                          const size_t *lengths,
                                                                          cl_int *error)
 {
+    PROSPERO_CL_TIMER("api:clCreateProgramWithSource");
     auto *program = new _cl_program;
     for (cl_uint i = 0; i < count; ++i)
         program->source.append(strings[i],
@@ -498,6 +528,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clBuildProgram(cl_program, cl_uint, c
                                                           void(CL_CALLBACK *)(cl_program, void *),
                                                           void *)
 {
+    PROSPERO_CL_TIMER("api:clBuildProgram");
     return CL_SUCCESS;
 }
 
@@ -534,6 +565,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clReleaseProgram(cl_program program)
 extern "C" CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel(cl_program, const char *name,
                                                              cl_int *error)
 {
+    PROSPERO_CL_TIMER("api:clCreateKernel");
     if (!name)
     {
         if (error)
@@ -550,6 +582,7 @@ extern "C" CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernel(cl_program, const c
 extern "C" CL_API_ENTRY cl_int CL_API_CALL clSetKernelArg(cl_kernel kernel, cl_uint index,
                                                           size_t size, const void *value)
 {
+    PROSPERO_CL_TIMER("api:clSetKernelArg");
     if (!kernel)
         return CL_INVALID_KERNEL;
     if (kernel->args.size() <= index)
@@ -602,6 +635,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBuffer(cl_command_queue,
                                                                void *out, cl_uint, const cl_event *,
                                                                cl_event *event)
 {
+    PROSPERO_CL_TIMER("api:clEnqueueReadBuffer");
     const uint64_t start = now_ns();
     if (!out || !span_ok(memory, offset, size))
         return CL_INVALID_VALUE;
@@ -615,6 +649,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBuffer(cl_command_queue
                                                                 const void *input, cl_uint,
                                                                 const cl_event *, cl_event *event)
 {
+    PROSPERO_CL_TIMER("api:clEnqueueWriteBuffer");
     const uint64_t start = now_ns();
     if (!input || !span_ok(memory, offset, size))
         return CL_INVALID_VALUE;
@@ -627,6 +662,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBuffer(
     cl_command_queue, cl_mem source, cl_mem destination, size_t source_offset,
     size_t destination_offset, size_t size, cl_uint, const cl_event *, cl_event *event)
 {
+    PROSPERO_CL_TIMER("api:clEnqueueCopyBuffer");
     const uint64_t start = now_ns();
     if (!span_ok(source, source_offset, size) || !span_ok(destination, destination_offset, size))
         return CL_INVALID_VALUE;
@@ -639,6 +675,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferToImage(
     cl_command_queue, cl_mem source, cl_mem destination, size_t source_offset,
     const size_t origin[3], const size_t region[3], cl_uint, const cl_event *, cl_event *event)
 {
+    PROSPERO_CL_TIMER("api:clEnqueueCopyBufferToImage");
     const uint64_t start = now_ns();
     if (!source || !destination || !origin || !region || !destination->pixel_bytes)
         return CL_INVALID_VALUE;
@@ -666,6 +703,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillBuffer(cl_command_queue,
                                                                size_t size, cl_uint,
                                                                const cl_event *, cl_event *event)
 {
+    PROSPERO_CL_TIMER("api:clEnqueueFillBuffer");
     const uint64_t start = now_ns();
     if (!pattern || !pattern_size || size % pattern_size || !span_ok(memory, offset, size))
         return CL_INVALID_VALUE;
@@ -677,6 +715,7 @@ extern "C" CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillBuffer(cl_command_queue,
 
 extern "C" CL_API_ENTRY cl_int CL_API_CALL clFinish(cl_command_queue)
 {
+    PROSPERO_CL_TIMER("api:clFinish");
     return CL_SUCCESS;
 }
 
@@ -861,7 +900,7 @@ extern "C" int ps5cl_gemv(int half_storage, int transpose_a, size_t m, size_t n,
 namespace
 {
 
-cl_int run_kernel(cl_kernel kernel)
+cl_int run_kernel_impl(cl_kernel kernel)
 {
     if (!kernel)
         return CL_INVALID_KERNEL;
@@ -2423,5 +2462,28 @@ cl_int run_kernel(cl_kernel kernel)
     std::fprintf(stderr, "[ps5cl] unsupported kernel: %s\n", kernel->name.c_str());
     return CL_INVALID_KERNEL_NAME;
 }
+
+// Measure every kernel by name. prospero_media_vk::record_cpu_fallback() marks the ones that
+// fall through to the CPU path, so the profile separates what the GPU already serves from
+// what is still worth porting.
+cl_int run_kernel(cl_kernel kernel)
+{
+#ifdef PROSPERO_MEDIA_VULKAN
+    if (!kernel)
+        return CL_INVALID_KERNEL;
+    prospero_media_vk::begin_kernel();
+    const auto started = std::chrono::steady_clock::now();
+    const cl_int result = run_kernel_impl(kernel);
+    const auto spent = std::chrono::duration_cast<std::chrono::microseconds>(
+                           std::chrono::steady_clock::now() - started)
+                           .count();
+    prospero_media_vk::end_kernel(kernel->name.c_str(),
+                                  static_cast<unsigned long long>(spent < 0 ? 0 : spent));
+    return result;
+#else
+    return run_kernel_impl(kernel);
+#endif
+}
+
 
 } // namespace

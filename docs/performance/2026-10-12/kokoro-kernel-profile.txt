@@ -1,0 +1,18 @@
+media-vulkan calls=486 cpu_kernel_calls=423 bridge_us=422966 backend=Vulkan
+media-vulkan kernel totals cpu_us=1687813 gpu_us=289129 kinds=49
+media-vulkan kernel lstm_seq                     cpu=12x/840308 us gpu=0x/0 us
+media-vulkan kernel weightnorm_recon             cpu=38x/424735 us gpu=0x/0 us
+media-vulkan kernel k_softmax_rowwise            cpu=0x/0 us gpu=12x/142923 us
+media-vulkan kernel pad_rows                     cpu=10x/114186 us gpu=0x/0 us
+media-vulkan kernel k_scaled_attn_ctx            cpu=0x/0 us gpu=12x/70419 us
+media-vulkan kernel im2col_ncl                   cpu=33x/64868 us gpu=0x/0 us
+media-vulkan kernel k_bias_add_2d                cpu=73x/34719 us gpu=0x/0 us
+media-vulkan kernel conv1d_dilated               cpu=2x/30412 us gpu=0x/0 us
+media-vulkan kernel instnorm_NCL                 cpu=22x/28788 us gpu=0x/0 us
+media-vulkan kernel k_scaled_attn_scores         cpu=0x/0 us gpu=12x/26505 us
+media-vulkan kernel bias_add_NCL                 cpu=33x/24195 us gpu=0x/0 us
+media-vulkan kernel layernorm_rowwise            cpu=0x/0 us gpu=25x/23997 us
+media-vulkan kernel adain_combine                cpu=22x/23514 us gpu=0x/0 us
+media-vulkan kernel transpose_TN                 cpu=33x/19091 us gpu=0x/0 us
+media-vulkan kernel k_gelu                       cpu=0x/0 us gpu=12x/14721 us
+media-vulkan kernel leaky_relu                   cpu=22x/14620 us gpu=0x/0 us

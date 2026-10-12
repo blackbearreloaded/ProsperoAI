@@ -9,6 +9,14 @@ int matmul(const float *a, const float *b, float *out, std::size_t m,
 int unary(Unary op, const float *in, float *out, std::size_t rows,
           std::size_t columns, float epsilon = 0);
 void record_cpu_fallback();
+// Per-kernel accounting for the OpenCL shim: begin_kernel() clears the fallback mark that
+// record_cpu_fallback() sets, so end_kernel() can tell a GPU-served kernel from a CPU one.
+void begin_kernel();
+void end_kernel(const char *name, unsigned long long microseconds);
+// Host-side work that is not a kernel at all: buffer creation, uploads, readbacks, conversions.
+void record_host(const char *name, unsigned long long microseconds);
+// Where print_stats() writes. Without a sink it writes to stderr, which PS5 titles drop.
+void set_log_sink(void (*sink)(const char *));
 void print_stats();
 void release();
 }
