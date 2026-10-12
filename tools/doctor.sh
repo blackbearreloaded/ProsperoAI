@@ -75,6 +75,13 @@ optional curl 'FTP deployment'
 optional pkg-config 'PacBrew dependency resolution'
 optional ffmpeg 'presentation-audio preparation'
 
+# The host kokoro.cpp build links espeak-ng directly; the PS5 build uses vendor/lib instead.
+if [[ -f /usr/include/espeak-ng/espeak_ng.h ]]; then
+    printf '[OK] %-18s %s\n' 'espeak-ng headers' 'host speech runtime build available'
+else
+    printf '[OPTIONAL] %-11s %s\n' 'espeak-ng' 'install libespeak-ng-dev for the host kokoro.cpp build'
+fi
+
 if [[ -f $root/sce_sys/param.json ]]; then
     printf '[OK] %-18s %s\n' 'param.json' 'application metadata found'
 else

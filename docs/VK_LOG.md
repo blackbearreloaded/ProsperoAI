@@ -730,3 +730,26 @@ bounded residency move to the subsequent draft PR.
   about 1.7 s of 131 s, which also explains why the earlier AGC/Vulkan media comparison
   measured voice as roughly 0.5% slower: it optimized the wrong layer.
 - Evidence: `performance/2026-10-12/kokoro-kernel-profile.txt`.
+
+## 2026-10-12 — kokoro.cpp (ggml/Vulkan speech) builds and runs on the host
+
+- Pinned `kokoro.cpp` at `a9e31430838c8bdc3d4beaaab62753681b9f7839` as `kokoro-cpp` in
+  `tools/deps.json`, checking out only its Highway submodule: `KOKORO_GGML_DIR` points at the
+  pinned Prism ggml this build already uses, so no second ggml copy enters the tree.
+- `tools/build-kokoro-host.sh` configures it against `build/prism-llama-source/ggml` with
+  `.deps/Vulkan-Headers`. Without the pinned headers ggml-vulkan fails to compile, because
+  Debian's 1.3.239 headers have no `VK_EXT_layer_settings`. CMake reports
+  "using external ggml checkout" and "Vulkan backend: enabled"; its own 7 tests pass.
+- Host measurement, `kokoro-82m-f16.gguf` plus the `af_heart` voice pack, one sentence,
+  78600 samples at 24 kHz (3.28 s of audio), `KOKORO_BENCH=1`:
+  CPU (4 threads) `3959.81 ms` total, of which the generator is `3578.89 ms` and the decoder
+  `131.13 ms`. The same run on this host's Intel HD 630 Vulkan takes `8335.10 ms`, which says
+  nothing about RDNA2 and only proves the Vulkan path works end to end.
+  For contrast the console's current prebuilt OpenCL Kokoro needs about 130 s for the same
+  sentence, so even a weak host CPU on ggml is roughly 33x faster than what ships today.
+- CPU and Vulkan output: identical length and RMS (1061.6 vs 1062.6), frame-envelope
+  correlation `0.9983`, while raw samples differ (correlation 0.33). That is the model's
+  stochastic harmonic noise source, which kokoro.cpp documents as expected.
+- PS5 risks retired early: kokoro.cpp needs only `espeak_Initialize`, `espeak_SetVoiceByName`
+  and `espeak_TextToPhonemes`, all three already defined by `vendor/lib/libespeak-ng.a`, and
+  its CMake takes `ESPEAK_NG_INCLUDEDIR`/`ESPEAK_NG_LIB` for a cross build.

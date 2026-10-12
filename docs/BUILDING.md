@@ -52,12 +52,14 @@ The clean-room runtime shim (`runtime/libc.prx`) is generated from `tooling/nati
 
 `make doctor` lists what is missing. For the current build you need `clang-18`, `lld-18`, `cmake`,
 `ninja`, `make`, `python3` (3.11+), `curl`, `unzip`, `sha256sum`. For the Vulkan backend work you
-also need `glslc` (shaderc), `spirv-headers`, and `glslangValidator`. `ccache` is optional.
+also need `glslc` (shaderc), `spirv-headers`, and `glslangValidator`. The speech runtime
+(kokoro.cpp) links espeak-ng directly, so the host build needs `libespeak-ng-dev`; the PS5 build
+uses the pinned headers and `vendor/lib/libespeak-ng.a` instead. `ccache` is optional.
 
 Ubuntu/Debian example:
 
 ```bash
-sudo apt-get install -y clang-18 lld-18 cmake ninja-build ccache glslc spirv-headers glslang-tools python3-mako
+sudo apt-get install -y clang-18 lld-18 cmake ninja-build ccache glslc spirv-headers glslang-tools python3-mako libespeak-ng-dev
 ```
 
 ## vulkan-runtime

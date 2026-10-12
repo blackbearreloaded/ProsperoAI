@@ -69,6 +69,24 @@
       "extract": "build/prism-llama-source",
       "strip": 1,
       "creates": "build/prism-llama-source/CMakeLists.txt"
+    },
+    {
+      "name": "kokoro-cpp",
+      "about": "kokoro.cpp: ggml/Vulkan runtime for Kokoro-82M speech; replaces the prebuilt OpenCL archive. Only Highway is checked out as a submodule, because KOKORO_GGML_DIR points at the pinned ggml this build already uses.",
+      "kind": "git",
+      "url": "https://github.com/simonfxr/kokoro.cpp.git",
+      "commit": "a9e31430838c8bdc3d4beaaab62753681b9f7839",
+      "path": ".deps/kokoro.cpp",
+      "setup": [
+        "git",
+        "submodule",
+        "update",
+        "--init",
+        "--depth",
+        "1",
+        "highway"
+      ],
+      "setup_creates": "highway/CMakeLists.txt"
     }
   ]
 }
