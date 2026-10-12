@@ -28,6 +28,23 @@ inline constexpr PresetFile preset_files_3[] = {
     {"Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-q8_0.gguf", "stable-audio-3-small-sfx-q8_0.gguf", "5bb1ec653134e63dac46264e336ae198a2590195fc996fcd0605021215e9b26f", 1683570688ULL, nullptr, nullptr},
 };
 inline constexpr PresetFile preset_files_4[] = {
+    {"ACE-Step1.5-GGUF/turbo/ace-step-1.5-turbo-q8_0.gguf", "ace-step-1.5-turbo-q8_0.gguf", "cd7bf272588f548d4a253f57483132ef0f8f54a549f26471b09caa72c654270b", 6185460032ULL, nullptr, nullptr},
+    {"Qwen3-Embedding-0.6B/chat_template.jinja", "Qwen3-Embedding-0.6B/chat_template.jinja", "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5", 4116ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"Qwen3-Embedding-0.6B/config.json", "Qwen3-Embedding-0.6B/config.json", "bb23c1607cfe059a58d8f0196cf1cebb52082b1056b8e358a579da80a5759420", 1359ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"Qwen3-Embedding-0.6B/merges.txt", "Qwen3-Embedding-0.6B/merges.txt", "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5", 1671853ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"Qwen3-Embedding-0.6B/tokenizer.json", "Qwen3-Embedding-0.6B/tokenizer.json", "def76fb086971c7867b829c23a26261e38d9d74e02139253b38aeb9df8b4b50a", 11423705ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"Qwen3-Embedding-0.6B/tokenizer_config.json", "Qwen3-Embedding-0.6B/tokenizer_config.json", "443bfa629eb16387a12edbf92a76f6a6f10b2af3b53d87ba1550adfcf45f7fa0", 5404ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"Qwen3-Embedding-0.6B/vocab.json", "Qwen3-Embedding-0.6B/vocab.json", "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", 2776833ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"acestep-5Hz-lm-1.7B/chat_template.jinja", "acestep-5Hz-lm-1.7B/chat_template.jinja", "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8", 4168ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"acestep-5Hz-lm-1.7B/config.json", "acestep-5Hz-lm-1.7B/config.json", "73515ca4bfd86a5b56f28bf680311d1911e159c85d7f7ceb2188e310007c9010", 1385ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"acestep-5Hz-lm-1.7B/merges.txt", "acestep-5Hz-lm-1.7B/merges.txt", "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5", 1671853ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"acestep-5Hz-lm-1.7B/tokenizer.json", "acestep-5Hz-lm-1.7B/tokenizer.json", "35af56c3f5cb3ea2cc578aa28a8937770981d504f183ac5c8c38baf4bbd4af4d", 24321939ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"acestep-5Hz-lm-1.7B/tokenizer_config.json", "acestep-5Hz-lm-1.7B/tokenizer_config.json", "6cd70cdd89425971794f5235562edcc608b0629a6c4686ae51a8b8c8b8ba5e95", 14072925ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"acestep-5Hz-lm-1.7B/vocab.json", "acestep-5Hz-lm-1.7B/vocab.json", "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", 2776833ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"acestep-v15-turbo/config.json", "acestep-v15-turbo/config.json", "74745ff704ea49164c3d2d1c99fc0670f3fc635a869f0aec2d1311e6a52d400a", 1968ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+    {"vae/config.json", "vae/config.json", "14e019904df567f26df750317a70e2bd08f9f8f3c40ff4a24c97d1cd3f20ccd2", 425ULL, "ACE-Step/Ace-Step1.5", "19671f406d603126926c1b7e2adc169acbcade22"},
+};
+inline constexpr PresetFile preset_files_5[] = {
     {"LICENSE-ADRENO-LLMS", "licenses/LICENSE-ADRENO-LLMS", "cc07e69b4e40ee657c2e4562a344b967d88c5a8c622840cf224f5816d2e6186b", 11278ULL, nullptr, nullptr},
     {"LICENSE-ESPEAK-NG", "licenses/LICENSE-ESPEAK-NG", "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986", 35149ULL, nullptr, nullptr},
     {"LICENSE.md", "licenses/LICENSE.md", "cc07e69b4e40ee657c2e4562a344b967d88c5a8c622840cf224f5816d2e6186b", 11278ULL, nullptr, nullptr},
@@ -53,24 +70,29 @@ inline constexpr PresetFile preset_files_4[] = {
     {"kokoro-82m-f16.gguf", "kokoro-82m-f16.gguf", "597926de84f5550e1526ce0abde4e496209d464afc9274d8603d14f3c04d1f67", 163728096ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
     {"voices/kokoro-voice-af_heart.gguf", "kokoro-voice-af_heart.gguf", "c2f44076dfb8f9c098a85d634f6d6b46b038f80e3afdf695ff3b90f6d9ef473f", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
 };
-inline constexpr PresetFile preset_files_5[] = {
+inline constexpr PresetFile preset_files_6[] = {
     {"MiniCPM5-2B-Q8_0.gguf", "", "c5415f8989bf88a8288f1b55a3cc371af53c07b0faa220a63bd7a990cfaba078", 2679710688ULL, nullptr, nullptr},
 };
 #ifdef PROSPERO_PRISM_RUNTIME
-inline constexpr PresetFile preset_files_6[] = {
+inline constexpr PresetFile preset_files_7[] = {
     {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "", "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3", 5946648928ULL, nullptr, nullptr},
 };
 #endif
+inline constexpr PresetFile preset_files_8[] = {
+    {"granite-4.0-h-tiny-Q4_K_M.gguf", "", "5a38b08c441ae1adbafb1d2b8a7167e0d48734d83af68b268cefea1eec553dcd", 4230976352ULL, nullptr, nullptr},
+};
 inline constexpr Preset presets[] = {
     {"mistral-7b-instruct-v0.3-q4-0.gguf", "Mistral 7B Instruct v0.3 Q4_0", "QuantFactory/Mistral-7B-Instruct-v0.3-GGUF", "a83fbb7c79c1afd59dfcce75272591cbe5a2412f", 0, 4113289152ULL, preset_files_0, 1},
     {"qwen3.5-9b-q4-0.gguf", "Qwen3.5 9B Q4_0", "unsloth/Qwen3.5-9B-GGUF", "3885219b6810b007914f3a7950a8d1b469d598a5", 0, 5379417312ULL, preset_files_1, 1},
     {"sd-turbo-fp16", "SD-Turbo FP16", "blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5", "77d748daee145ea432a0cc20744ba18b5ef4c137", 1, 2580079090ULL, preset_files_2, 8},
     {"stable-audio-3-small-sfx-vulkan", "Stable Audio 3 Small SFX (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 1683570688ULL, preset_files_3, 1},
-    {"kokoro-82m-vulkan", "Kokoro 82M Vulkan", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 165234523ULL, preset_files_4, 24},
-    {"minicpm5-2b-q8-0.gguf", "MiniCPM5 2B Q8_0", "openbmb/MiniCPM5-2B-GGUF", "2079a22f3beaa4e306449978533478fe0522f4b3", 0, 2679710688ULL, preset_files_5, 1},
+    {"ace-step-1.5-turbo-q8-0", "ACE-Step 1.5 Turbo Q8_0 (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 6244194798ULL, preset_files_4, 15},
+    {"kokoro-82m-vulkan", "Kokoro 82M Vulkan", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 165234523ULL, preset_files_5, 24},
+    {"minicpm5-2b-q8-0.gguf", "MiniCPM5 2B Q8_0", "openbmb/MiniCPM5-2B-GGUF", "2079a22f3beaa4e306449978533478fe0522f4b3", 0, 2679710688ULL, preset_files_6, 1},
 #ifdef PROSPERO_PRISM_RUNTIME
-    {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "Ternary Bonsai 2 27B PTQ1_0", "prism-ml/Ternary-Bonsai-2-27B-gguf", "b072e1d3b35a0a630cece372c2127528e0994386", 0, 5946648928ULL, preset_files_6, 1},
+    {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "Ternary Bonsai 2 27B PTQ1_0", "prism-ml/Ternary-Bonsai-2-27B-gguf", "b072e1d3b35a0a630cece372c2127528e0994386", 0, 5946648928ULL, preset_files_7, 1},
 #endif
+    {"granite-4.0-h-tiny-q4-k-m.gguf", "Granite 4.0 H-Tiny Q4_K_M", "ibm-granite/granite-4.0-h-tiny-GGUF", "08d5a8a9741dd5c1a95d2d39e25253226aa1464e", 0, 4230976352ULL, preset_files_8, 1},
 };
 inline constexpr std::size_t preset_count = sizeof(presets) / sizeof(presets[0]);
 }

@@ -58,12 +58,42 @@ class MiniCPM5Tests(unittest.TestCase):
         for value in [entry['id'],entry['revision'],entry['files'][0]['sha256']]:
             self.assertIn(value,header)
 
+    def test_granite_h_tiny_preset_is_pinned(self):
+        models = json.loads((ROOT/'model-tools/presets.json').read_text())
+        entry = next(model for model in models if model['id']=='granite-4.0-h-tiny-q4-k-m.gguf')
+        self.assertEqual(entry['kind'], 0)
+        self.assertEqual(entry['repository'], 'ibm-granite/granite-4.0-h-tiny-GGUF')
+        self.assertEqual(entry['revision'], '08d5a8a9741dd5c1a95d2d39e25253226aa1464e')
+        self.assertEqual(entry['files'][0]['source'], 'granite-4.0-h-tiny-Q4_K_M.gguf')
+        self.assertEqual(entry['files'][0]['size'], 4230976352)
+        self.assertEqual(entry['files'][0]['sha256'],
+                         '5a38b08c441ae1adbafb1d2b8a7167e0d48734d83af68b268cefea1eec553dcd')
+        header = (ROOT/'include/model_presets.hpp').read_text()
+        for value in [entry['id'], entry['revision'], entry['files'][0]['sha256']]:
+            self.assertIn(value, header)
+
+    def test_ace_step_15_turbo_bundle_is_pinned(self):
+        models = json.loads((ROOT/'model-tools/presets.json').read_text())
+        entry = next(model for model in models if model['id']=='ace-step-1.5-turbo-q8-0')
+        self.assertEqual(entry['kind'], 2)
+        self.assertEqual(entry['repository'], 'audio-cpp/audio.cpp-gguf')
+        self.assertEqual(entry['revision'], 'f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5')
+        gguf = next(file for file in entry['files'] if file['path'].endswith('.gguf'))
+        self.assertEqual(gguf['size'], 6185460032)
+        self.assertEqual(gguf['sha256'],
+                         'cd7bf272588f548d4a253f57483132ef0f8f54a549f26471b09caa72c654270b')
+        self.assertEqual(len(entry['files']), 15)
+        header = (ROOT/'include/model_presets.hpp').read_text()
+        for value in [entry['id'], entry['revision'], gguf['sha256']]:
+            self.assertIn(value, header)
+
     def test_existing_defaults_and_optional_catalog(self):
         models = json.loads((ROOT/'model-tools/presets.json').read_text())
-        self.assertEqual([m['id'] for m in models[:3]], [
-            'sd-turbo-fp16', 'stable-audio-3-small-sfx-vulkan', 'kokoro-82m-vulkan'])
+        self.assertEqual([m['id'] for m in models[:4]], [
+            'sd-turbo-fp16', 'stable-audio-3-small-sfx-vulkan',
+            'ace-step-1.5-turbo-q8-0', 'kokoro-82m-vulkan'])
         self.assertNotIn('kokoro-82m-fp16', [model['id'] for model in models])
-        self.assertEqual(models[3]['id'], 'minicpm5-2b-q8-0.gguf')
+        self.assertEqual(models[4]['id'], 'minicpm5-2b-q8-0.gguf')
         header = (ROOT/'include/model_presets.hpp').read_text()
         self.assertLess(header.index('"mistral-7b-instruct'), header.index('"minicpm5-2b'))
         self.assertLess(header.index('"qwen3.5-9b'), header.index('"minicpm5-2b'))

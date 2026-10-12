@@ -94,6 +94,17 @@ Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
 - RADV NEEDED includes the PS5 AGC platform-driver imports; AGC inference is removed, but this
   Vulkan stack is not AGC-platform-free. See [SA3/OpenCL research](OPENCL_TO_VULKAN_RESEARCH.md).
 
+## ACE-Step 1.5 Vulkan adapter
+
+- Added a dedicated adapter using the ACE-Step family in the already-pinned audio.cpp C API.
+  The PS5 build links `stable_audio` and `ace_step` against the same audio.cpp/ggml-Vulkan
+  runtime. Its router path, WAV output, release hook and a PS5 cross-build pass.
+- The curated Turbo Q8_0 bundle pins the GGUF and upstream tokenizer/config sidecars. The host
+  router test verifies dispatch; no real-model inference, PS5 generation, artifact quality, or
+  modality-switch benchmark is claimed yet. `PS5_HOST` was unset during this run.
+- The decoder compatibility patch uses a pinned-GGML BF16 cast round-trip where this audio.cpp
+  revision's fused round operator is unavailable. Retest parity and performance on PS5.
+
 ## Upstream llama.cpp update strategy
 
 - Upstream's latest release checked 2026-10-12 is llama.cpp `v0.6.0` (`d812350`, 2026-10-05),

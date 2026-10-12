@@ -58,20 +58,14 @@ def omit_cmake_sources(path: Path) -> None:
         "src/framework/modules/attention/common_relative_attention.cpp",
         "src/framework/modules/speaker_encoders/ecapa_tdnn_runtime.cpp",
         "src/framework/modules/speaker_encoders/titanet_runtime.cpp",
-        "src/framework/modules/transformers/decoder.cpp",
         "src/framework/modules/transformers/causal_decoder.cpp",
         "src/framework/modules/transformers/causal_decoder_runtime.cpp",
         "src/framework/modules/transformers/qwen35_decoder_runtime.cpp",
         "src/framework/modules/text_encoders/qwen3_vl_encoder_runtime.cpp",
         "src/framework/modules/speech_encoders/qwen3_audio_encoder_runtime.cpp",
         "src/framework/modules/transformers/gemma_decoder.cpp",
-        "src/framework/modules/optimizations/fast_kv_modules.cpp",
         "src/framework/tokenizers/hf_tokenizer_json.cpp",
-        "src/framework/tokenizers/llama_bpe.cpp",
         "src/framework/tokenizers/qwen_bpe_bundle.cpp",
-        "external/llama_tokenizer/bpe-core.cpp",
-        "external/llama_tokenizer/unicode.cpp",
-        "external/llama_tokenizer/unicode-data.cpp",
         "$<TARGET_OBJECTS:engine_model_silero_vad>",
         "$<TARGET_OBJECTS:engine_model_marblenet_vad>",
     }
@@ -103,16 +97,55 @@ def include_sa3_dependencies(path: Path) -> None:
     path.write_text(source.replace(anchor, insertion, 1))
 
 
+def include_ace_step_dependencies(path: Path) -> None:
+    """Restore shared runtime pieces omitted from the smaller Stable Audio build."""
+    source = path.read_text()
+    required = {
+        "src/framework/modules/transformers/decoder.cpp":
+            "    src/framework/modules/transformers/transformer_blocks.cpp\n",
+        "src/framework/modules/optimizations/fast_kv_modules.cpp":
+            "    src/framework/modules/structural_modules.cpp\n",
+        "src/framework/tokenizers/llama_bpe.cpp":
+            "    src/framework/tokenizers/sentencepiece.cpp\n",
+        "external/llama_tokenizer/bpe-core.cpp":
+            "    src/framework/tokenizers/llama_bpe.cpp\n",
+        "external/llama_tokenizer/unicode.cpp":
+            "    external/llama_tokenizer/bpe-core.cpp\n",
+        "external/llama_tokenizer/unicode-data.cpp":
+            "    external/llama_tokenizer/unicode.cpp\n",
+    }
+    for entry, anchor in required.items():
+        line = f"    {entry}\n"
+        if line in source:
+            continue
+        if source.count(anchor) != 1:
+            raise SystemExit(f"{path}: cannot restore ACE-Step dependency {entry}")
+        source = source.replace(anchor, anchor + line, 1)
+    path.write_text(source)
+
+
+def adapt_ace_step_ggml_round(source: Path) -> None:
+    replace_once(
+        source / "src/framework/modules/transformers/decoder.cpp",
+        "return core::wrap_tensor(ggml_round_bf16(ctx.ggml, input.tensor), input.shape, GGML_TYPE_F32);",
+        "return core::wrap_tensor(ggml_cast(ctx.ggml, ggml_cast(ctx.ggml, input.tensor, GGML_TYPE_BF16), GGML_TYPE_F32), input.shape, GGML_TYPE_F32);",
+    )
+
+
 def adapt_gguf_streaming(path: Path) -> None:
     """Keep PS5 model inspection metadata-only; never map/copy the whole checkpoint."""
     source = path.read_text()
     marker = "// ProsperoAI: bounded GGUF tensor reads"
     if marker in source:
-        old_budget = "constexpr size_t max_tensor_bytes = 256ull * 1024 * 1024;"
-        new_budget = "constexpr size_t max_tensor_bytes = 512ull * 1024 * 1024;"
+        new_budget = "constexpr size_t max_tensor_bytes = 1024ull * 1024 * 1024;"
         if new_budget in source:
             return
-        if source.count(old_budget) != 1:
+        old_budgets = (
+            "constexpr size_t max_tensor_bytes = 256ull * 1024 * 1024;",
+            "constexpr size_t max_tensor_bytes = 512ull * 1024 * 1024;",
+        )
+        old_budget = next((budget for budget in old_budgets if source.count(budget) == 1), None)
+        if old_budget is None:
             raise SystemExit(f"{path}: expected one known GGUF read budget")
         path.write_text(source.replace(old_budget, new_budget, 1))
         return
@@ -134,7 +167,7 @@ def adapt_gguf_streaming(path: Path) -> None:
     patch("""        if (bytes_.empty()) bytes_ = engine::io::read_binary_blob(source_path_);
         const size_t offset = data_begin_ + info.data_offset;""", """        // ProsperoAI: bounded GGUF tensor reads
 #if defined(__FreeBSD__) || defined(AUDIOCPP_PS5_STREAM_GGUF)
-        constexpr size_t max_tensor_bytes = 512ull * 1024 * 1024;
+        constexpr size_t max_tensor_bytes = 1024ull * 1024 * 1024;
         if (data_begin_ > file_size_ || info.data_offset > file_size_ - data_begin_)
             throw std::runtime_error("GGUF tensor offset is out of bounds: " + info.logical_name);
         const size_t offset = data_begin_ + info.data_offset;
@@ -187,6 +220,8 @@ def main() -> None:
     cmake = source / "CMakeLists.txt"
     omit_cmake_sources(cmake)
     include_sa3_dependencies(cmake)
+    include_ace_step_dependencies(cmake)
+    adapt_ace_step_ggml_round(source)
     replace_once(
         cmake,
         "add_library(audiocpp SHARED src/capi/audiocpp.cpp)",

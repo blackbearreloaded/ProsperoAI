@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "runtime_vulkan.hpp"
+#include "runtime_adapter.hpp"
 #include "model_paths.hpp"
 #include "model_presets.hpp"
 #include <cassert>
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <atomic>
 #include <thread>
 #include <chrono>
 namespace
 {
-unsigned text_selected = 0, released = 0, stopped = 0, generated = 0;
+unsigned text_selected = 0, released = 0, stopped = 0, generated = 0, ace_generated = 0;
 std::atomic<bool> block_voice{false}, voice_entered{false}, voice_release{false};
 } // namespace
 namespace prospero_vulkan
@@ -92,6 +95,19 @@ extern "C"
     void ps5_stable_audio_release()
     {
     }
+    void ps5_ace_step_release()
+    {
+    }
+    int ps5_ace_step_generate(const char *root, const char *prompt, char *out, std::size_t n,
+                              std::uint64_t *elapsed, gpt_runtime_progress_fn)
+    {
+        assert(std::strcmp(root, "/models/ace-step-1.5-turbo-q8-0") == 0);
+        assert(std::strcmp(prompt, "A bright synth melody") == 0);
+        ++ace_generated;
+        *elapsed = 456;
+        std::snprintf(out, n, "ace-step.wav");
+        return 0;
+    }
     int ps5_sd_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
                         gpt_runtime_progress_fn)
     {
@@ -121,10 +137,31 @@ extern "C"
 }
 int main()
 {
+    {
+        const auto *adapter = prospero::inference::find_adapter(prospero::inference::Modality::Audio);
+        assert(adapter);
+        prospero::inference::Model ace_model{"ace-step-1.5-turbo-q8-0", "ACE-Step 1.5",
+                                              "/models/ace-step-1.5-turbo-q8-0",
+                                              prospero::inference::Modality::Audio, 0};
+        const gpt_runtime_message_t ace_messages[] = {{"user", "A bright synth melody"}};
+        gpt_runtime_settings_t ace_settings{};
+        char ace_output[64]{};
+        gpt_runtime_stats_t ace_stats{};
+        const prospero::inference::GenerationRequest ace_request{
+            ace_model, ace_messages, 1, ace_settings, ace_output, sizeof(ace_output),
+            &ace_stats, nullptr};
+        assert(adapter->generate(ace_request) == 0);
+        assert(ace_generated == 1 && ace_stats.elapsed_microseconds == 456);
+        assert(std::strcmp(ace_output, "ace-step.wav") == 0);
+    }
     assert(gpt_runtime_model_count() == 2);
     assert(gpt_runtime_select_model(1));
     assert(text_selected == 1);
-    const auto &voice = prospero_model_download::presets[4];
+    const auto voice_preset = std::find_if(
+        std::begin(prospero_model_download::presets), std::end(prospero_model_download::presets),
+        [](const auto &preset) { return std::strcmp(preset.id, "kokoro-82m-vulkan") == 0; });
+    assert(voice_preset != std::end(prospero_model_download::presets));
+    const auto &voice = *voice_preset;
     for (std::size_t i = 0; i < voice.count; ++i)
     {
         const std::string relative = voice.files[i].path;
@@ -158,6 +195,8 @@ int main()
     for (int i = 0; i < 1000 && !voice_entered.load(); ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     assert(voice_entered.load());
+    gpt_runtime_check_idle_unload(0);
+    assert(released == 1); // an in-flight generation owns the runtime lock
     assert(gpt_runtime_model_count() == 3);
     gpt_runtime_refresh_models();
     assert(!gpt_runtime_select_model(0));
@@ -185,4 +224,6 @@ int main()
     assert(std::strcmp(out, "text0") == 0);
     assert(std::filesystem::file_size(legacy) > 0);
     assert(gpt_runtime_select_model(0));
+    gpt_runtime_check_idle_unload(0);
+    assert(released == 2);
 }

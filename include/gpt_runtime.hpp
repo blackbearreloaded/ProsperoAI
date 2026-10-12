@@ -51,6 +51,11 @@ const char *gpt_runtime_model_id(unsigned index);
 const char *gpt_runtime_model_name(unsigned index);
 const char *gpt_runtime_model_purpose(unsigned index);
 bool gpt_runtime_select_model(unsigned index);
+// Release the selected runtime after it has been idle for timeout_seconds. A later
+// generation lazily prepares that same model again. Safe to call from the UI loop.
+void gpt_runtime_check_idle_unload(unsigned timeout_seconds);
+void gpt_runtime_check_configured_idle_unload();
+void gpt_runtime_set_idle_unload_timeout(unsigned timeout_seconds);
 void gpt_runtime_refresh_models();
 int gpt_runtime_prepare();
 bool gpt_runtime_context_full();

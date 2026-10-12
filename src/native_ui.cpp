@@ -965,6 +965,7 @@ void NativeUI::Impl::build_form()
     p.context_length = runtime.context;
     p.kv_cache = runtime.kv;
     p.thinking = runtime.thinking;
+    p.idle_unload_minutes = runtime.idle_unload_minutes;
     form_.clear();
     if (category_ == 0)
     {
@@ -998,6 +999,15 @@ void NativeUI::Impl::build_form()
                          {"Auto", "4K", "8K", "16K", "32K", "64K", "128K", "256K"},
                          selected_context);
         form_.add_toggle(19, "Thinking", p.thinking);
+        form_.add_value(21, "Model memory", "Release the runtime when idle.");
+        constexpr unsigned idle_minutes[] = {1, 2, 5, 10, 30, 60};
+        int selected_idle = 1;
+        for (int i = 0; i < 6; ++i)
+            if (idle_minutes[i] == p.idle_unload_minutes)
+                selected_idle = i;
+        form_.add_choice(20, "Unload model after",
+                         {"1 minute", "2 minutes", "5 minutes", "10 minutes", "30 minutes",
+                          "60 minutes"}, selected_idle);
         form_.add_value(9, "Processing", "On this console");
     }
     else if (category_ == 2)
@@ -1046,6 +1056,8 @@ void NativeUI::Impl::apply_form()
         p.context_length = contexts[std::clamp(form_.choice_index(17), 0, 7)];
         p.kv_cache = 0;
         p.thinking = form_.toggle_value(19);
+        constexpr unsigned idle_minutes[] = {1, 2, 5, 10, 30, 60};
+        p.idle_unload_minutes = idle_minutes[std::clamp(form_.choice_index(20), 0, 5)];
     }
     else if (category_ == 2)
         p.volume = static_cast<unsigned>(form_.slider_value(3));

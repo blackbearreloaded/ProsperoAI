@@ -944,6 +944,15 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                 p.thinking = it.value().get<bool>();
                 valid = true;
             }
+            else if (it.key() == "idle_unload_minutes" && it.value().is_number_integer())
+            {
+                const auto minutes = it.value().get<unsigned>();
+                if (prospero_settings::valid_idle_unload_minutes(minutes))
+                {
+                    p.idle_unload_minutes = minutes;
+                    valid = true;
+                }
+            }
             if (!valid)
             {
                 openai_error(api, sock, "400 Bad Request", "invalid_settings",
@@ -957,14 +966,55 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                          "Could not save runtime settings.");
             return;
         }
+        gpt_runtime_set_idle_unload_timeout(p.idle_unload_minutes * 60);
     }
     const std::string context = p.context ? std::to_string(p.context / 1024) + "k" : "auto";
     const auto response = nlohmann::json{
         {"context", context},
         {"kv", prospero_settings::kv_name(p.kv)},
         {"thinking",
-         p.thinking}}.dump();
+         p.thinking},
+        {"idle_unload_minutes", p.idle_unload_minutes}}.dump();
     send_json(api, sock, response.c_str());
+}
+
+void handle_model_selection(const NetApi &api, int sock, const char *method,
+                            const char *body = nullptr)
+{
+    if (std::strcmp(method, "GET") == 0)
+    {
+        const unsigned selected = gpt_runtime_selected_model();
+        const char *id = gpt_runtime_model_id(selected);
+        const auto response = nlohmann::json{{"id", id ? id : ""}}.dump();
+        send_json(api, sock, response.c_str());
+        return;
+    }
+    const auto request = nlohmann::json::parse(body ? body : "", nullptr, false);
+    if (!request.is_object() || !request.value("id", nlohmann::json()).is_string())
+    {
+        send_status(api, sock, "400 Bad Request", "application/json",
+                    "{\"error\":\"Expected a model id.\"}");
+        return;
+    }
+    const std::string id = request["id"].get<std::string>();
+    for (unsigned index = 0; index < gpt_runtime_model_count(); ++index)
+    {
+        const char *candidate = gpt_runtime_model_id(index);
+        if (candidate && id == candidate)
+        {
+            if (!gpt_runtime_select_model(index))
+            {
+                send_status(api, sock, "409 Conflict", "application/json",
+                            "{\"error\":\"The model cannot be switched while generation is busy.\"}");
+                return;
+            }
+            const auto response = nlohmann::json{{"id", candidate}}.dump();
+            send_json(api, sock, response.c_str());
+            return;
+        }
+    }
+    send_status(api, sock, "404 Not Found", "application/json",
+                "{\"error\":\"Model is not installed.\"}");
 }
 
 // Same allowlist the native app uses to recognize a generated-media reference inside a
@@ -1251,6 +1301,9 @@ void handle_connection(const NetApi &api, int sock)
         handle_runtime_settings(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/settings/runtime") == 0)
         handle_runtime_settings(api, sock, body);
+    else if ((std::strcmp(method, "GET") == 0 || std::strcmp(method, "POST") == 0) &&
+             std::strcmp(path, "/api/models/selection") == 0)
+        handle_model_selection(api, sock, method, body);
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/presets") == 0)
         handle_model_presets(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/presets") == 0)

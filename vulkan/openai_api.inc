@@ -81,6 +81,8 @@ std::string api_content(const ApiJson &message) {
 
 struct ApiChatRequest {
     std::string model;
+    std::string output_session_id;
+    unsigned output_message_index = 0;
     std::vector<std::string> roles, contents;
     ApiJson tools = ApiJson::array();
     std::string forced_tool;
@@ -95,6 +97,17 @@ ApiChatRequest parse_api_chat(const ApiJson &body) {
     if (!body.is_object()) throw ApiError("400 Bad Request", "invalid_json", "Expected a JSON object.");
     ApiChatRequest result;
     result.model = body.at("model").get<std::string>();
+    if (body.contains("output_session_id")) {
+        if (!body["output_session_id"].is_string() ||
+            !prospero_session::valid_id(body["output_session_id"].get<std::string>().c_str()))
+            throw ApiError("400 Bad Request", "invalid_output_session", "output_session_id is invalid.");
+        result.output_session_id = body["output_session_id"].get<std::string>();
+        const auto index = body.value("output_message_index", ApiJson(0));
+        if (!index.is_number_integer() || index.get<long long>() < 0 ||
+            index.get<long long>() >= prospero_session::MessageCapacity)
+            throw ApiError("400 Bad Request", "invalid_output_message_index", "output_message_index is invalid.");
+        result.output_message_index = static_cast<unsigned>(index.get<unsigned>());
+    }
     result.stream = body.value("stream", false);
     result.temperature = body.value("temperature", 0.0f);
     if (!std::isfinite(result.temperature) || result.temperature < 0 || result.temperature > 2)
@@ -339,6 +352,24 @@ void handle_openai_chat(const NetApi &api, int sock, const char *body) {
             output.data(), output.size(), &stats, active_api_stream ? api_stream_progress : nullptr);
         if (result != 0) throw ApiError("400 Bad Request", "generation_failed", output[0] ? output.data() : "Model generation failed.");
         auto message = api_assistant(request, output.data(), stream.id);
+        if (!request.output_session_id.empty() && !message.contains("tool_calls") &&
+            std::strcmp(gpt_runtime_model_purpose(selected), "text-to-text") == 0) {
+            const auto content = message.value("content", std::string());
+            if (!content.empty()) {
+                char saved_path[384]{};
+                prospero_session::OutputMetadata metadata{};
+                metadata.model_id = request.model.c_str();
+                metadata.model_name = gpt_runtime_model_name(selected);
+                metadata.prompt = request.contents.empty() ? "" : request.contents.back().c_str();
+                metadata.output_limit = request.max_tokens;
+                metadata.requested_context = request.context_tokens;
+                metadata.thinking = runtime.thinking;
+                // The archive is best-effort: a full work partition must not invalidate a response.
+                prospero_session::archive_text(request.output_session_id.c_str(),
+                    request.output_message_index, content.c_str(), metadata, saved_path,
+                    sizeof(saved_path));
+            }
+        }
         const std::string finish = message.contains("tool_calls") ? "tool_calls" : stats.output_limit_reached ? "length" : "stop";
         ApiJson usage = {{"prompt_tokens", stats.prompt_tokens}, {"completion_tokens", stats.generated_tokens},
                          {"total_tokens", stats.prompt_tokens + stats.generated_tokens}};

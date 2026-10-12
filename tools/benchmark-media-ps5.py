@@ -21,7 +21,8 @@ parser.add_argument('--label', required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--artifacts', type=Path, required=True)
 parser.add_argument('--warm-repeats', type=int, default=3)
-parser.add_argument('--models', nargs='+', default=['sd-turbo-fp16', 'stable-audio-3-small-sfx-vulkan', 'kokoro-82m-vulkan'])
+parser.add_argument('--models', nargs='+', default=['sd-turbo-fp16', 'stable-audio-3-small-sfx-vulkan',
+    'ace-step-1.5-turbo-q8-0', 'kokoro-82m-vulkan'])
 args = parser.parse_args()
 if not os.environ.get('PS5_HOST'):
     parser.error('PS5_HOST is required')
@@ -36,6 +37,7 @@ assert f'title={title}' in status, status
 fixtures = {
     'sd-turbo-fp16': 'A red apple on a wooden table, natural window light, photographic detail.',
     'stable-audio-3-small-sfx-vulkan': 'A short, clear bell chime with a soft resonant decay.',
+    'ace-step-1.5-turbo-q8-0': 'A short instrumental track with warm piano, soft strings, and a gentle steady rhythm.',
     'kokoro-82m-vulkan': 'Hello from Prospero AI.'}
 args.artifacts.mkdir(parents=True, exist_ok=True)
 args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -158,6 +160,8 @@ try:
                 record['png_output'] = png_artifact(response['response'], model + '-' + phase)
             if model == 'stable-audio-3-small-sfx-vulkan':
                 assert record['output']['rate'] == 44100 and record['output']['channels'] == 2 and record['output']['frames'] == 176400
+            if model == 'ace-step-1.5-turbo-q8-0':
+                assert record['output']['rate'] == 48000 and record['output']['channels'] == 2
             if model == 'kokoro-82m-vulkan':
                 assert record['output']['rate'] == 24000 and record['output']['channels'] == 1
             save()

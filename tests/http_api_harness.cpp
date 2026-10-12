@@ -143,6 +143,9 @@ unsigned gpt_runtime_selected_model()
 void gpt_runtime_refresh_models()
 {
 }
+void gpt_runtime_set_idle_unload_timeout(unsigned)
+{
+}
 const char *gpt_runtime_model_id(unsigned i)
 {
     return i == 0 ? "tiny.gguf" : "second.gguf";

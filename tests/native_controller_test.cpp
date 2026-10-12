@@ -50,6 +50,9 @@ void gpt_runtime_refresh_models()
 {
     off_ui();
 }
+void gpt_runtime_set_idle_unload_timeout(unsigned)
+{
+}
 unsigned gpt_runtime_model_count()
 {
     off_ui();

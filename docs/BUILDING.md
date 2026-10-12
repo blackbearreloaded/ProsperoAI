@@ -71,7 +71,11 @@ packages the same runtime for the configured
 release title. The app links one complete Prism llama/ggml pin
 `e8fd209c975c80aa7fb36a8423571ff3b1b7e955`, `GGML_MAX_NAME=160`, source-built SD and
 the Vulkan media bridge. AGC inference and private SD/TTS ggml archives are removed;
-RADV still requires the console's AGC platform driver. See [runtime details](VULKAN_RUNTIME.md).
+RADV still requires the console's AGC platform driver. Only one modality runtime stays
+resident at a time; after two minutes without inference activity by default, the active
+runtime is released and prepared again when the next request arrives. The timeout is
+configurable from one to 60 minutes in console or web Settings. See
+[runtime details](VULKAN_RUNTIME.md).
 
 ## Vulkan backend development helpers
 
@@ -178,8 +182,9 @@ and [current evidence](VK_ACTIVE.md).
 
 ### Download presets
 
-The native Models library includes pinned Text (Mistral 7B Q4_0, Qwen3.5 9B Q4_0),
-Image (SD-Turbo FP16), experimental Audio (Stable Audio 3 Small SFX Q8_0), and Voice (Kokoro 82M Vulkan)
+The native Models library includes pinned Text (Mistral 7B Q4_0, Qwen3.5 9B Q4_0,
+Granite 4.0 H-Tiny Q4_K_M),
+Image (SD-Turbo FP16), experimental Audio (Stable Audio 3 Small SFX Q8_0 and ACE-Step 1.5 Turbo Q8_0), and Voice (Kokoro 82M Vulkan)
 presets. Cross downloads the selected preset; L2/R2 change category and arrows select
 cards. The progress bar shows bytes and percentage for the entire bundle. Search typing
 uses Triangle for Space and R2 for Done.
@@ -190,8 +195,8 @@ file is pinned to a repository commit and checked against its size and SHA-256. 
 bundles are staged in hidden directories until all files pass verification. Failed
 staging files are overwritten on retry and never appear as usable model bundles.
 
-`model-tools/presets.json` records the pinned media manifests; Text uses the source
-entries in the existing conversion recipes. Run `python3 tools/generate-model-presets.py`
+`model-tools/presets.json` records the pinned curated model manifests; the original
+Text presets also use source entries in the conversion recipes. Run `python3 tools/generate-model-presets.py`
 after changing these records to regenerate `include/model_presets.hpp` without network
 access. Refreshing manifests requires fetching every repository tree page and computing
 SHA-256 for small files whose Hub entry has no LFS hash. Never use a truncated tree as

@@ -73,13 +73,39 @@ how it is built, and what a run on a console showed.
 | --- | --- | ---: | --- |
 | [Mistral 7B Instruct v0.3 Q4_0](https://huggingface.co/blackbearreloaded/ProsperoAI-Mistral-7B-Instruct-v0.3-Q4_0-PS5) | Text to text | 4.35 GiB | About 1.4–1.5 s load and 25–29 tokens/s for short, resident-context replies |
 | [Qwen3.5 9B Q4_0](https://huggingface.co/blackbearreloaded/ProsperoAI-Qwen3.5-9B-Q4_0-PS5) | Text to text | 6.37 GiB | 3.72 s switch/load; 1.46 s measured 44-token prefill and about 30 tokens/s decode |
-| [SD-Turbo FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5) | Text to image | 2.40 GiB | 512 × 512 image in about 76 seconds |
+| [Granite 4.0 H-Tiny Q4_K_M](https://huggingface.co/ibm-granite/granite-4.0-h-tiny-GGUF) | Text to text | 3.94 GiB | Host CPU smoke: 0.9 prompt / 0.6 decode tokens/s (single short run); PS5/Vulkan benchmark pending ([report](docs/performance/2026-10-12/granite-host-smoke.json)) |
+| [SD-Turbo FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5) | Text to image | 2.40 GiB | PS5: verified 512 × 512 PNG/TGA in 29.91 s; [benchmark](docs/performance/2026-10-12/ps5-media-2026-10-12.json) |
 | [Stable Audio 3 Small SFX Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Stable-Audio-3-Small-SFX-GGUF) | Text to audio (experimental) | 1.57 GiB | 4-second stereo WAV in 19.15 s cold / 5.84 s warm; two randomized full modality cycles passed |
-| [Kokoro 82M Vulkan](https://huggingface.co/blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5) | Text to speech | 165 MiB | 2.175 seconds of 24 kHz speech in 3.97 seconds cold, 0.26 seconds warm |
+| [ACE-Step 1.5 Turbo Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/ACE-Step1.5-GGUF/turbo) | Text to music (experimental) | 5.82 GiB | Initial PS5 smoke found its 848 MiB token embedding exceeded the 512 MiB bounded-read limit; raised to 1 GiB, retest pending ([diagnostic](docs/performance/2026-10-12/ps5-ace-step-2026-10-12.json)) |
+| [Kokoro 82M Vulkan](https://huggingface.co/blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5) | Text to speech | 165 MiB | PS5: 2.175 s of 24 kHz mono speech in 3.92 s cold; [benchmark](docs/performance/2026-10-12/ps5-media-2026-10-12.json) |
 
 The linked repositories contain the exact directory layout, integrity hashes,
 upstream provenance, licenses, and preparation recipe for each model. Do not
-rename or mix their internal files.
+rename or mix their internal files. Granite's GGUF is pinned directly to IBM's
+official repository. The smoke result is diagnostic only, not a performance claim;
+it does not verify PS5 runtime compatibility or performance.
+
+### Requested curated model additions
+
+These candidates are tracked here so they are not confused with models already
+available in Models. Do not interpret “pending” as a benchmark result. ACE-Step's
+adapter, dependency sources, and pinned 15-file bundle are implemented. Its first PS5
+run exposed a 512 MiB GGUF-read cap on an 848 MiB token embedding; the reader limit is
+now 1 GiB, and the updated title must pass a PS5 retest before ACE-Step is verified.
+
+| Candidate | Category | Benchmark status |
+| --- | --- | --- |
+| Stable Diffusion 3 (checkpoint selection pending) | Image | Not benchmarked; upstream stable-diffusion.cpp has an SD3 path, but ProsperoAI still needs an SD3 profile, pinned manifest, and PS5 memory/output validation |
+| [DreamShaper XL 1.0](https://huggingface.co/Lykon/dreamshaper-xl-1-0) | Image | Not benchmarked; SDXL profile and PS5 memory/output validation required |
+| [Fish Speech V1.5](https://huggingface.co/fishaudio/fish-speech-1.5) | Voice | Not benchmarked; separate model/codec runtime and PS5 speech adapter required; upstream model is CC-BY-NC-SA-4.0 |
+
+For every new model, the PS5 benchmark entry will report cold load, at least three
+generation timings with median, memory use, output validity, and a text round-trip
+after switching away and back. The app releases its selected runtime after two minutes
+without inference activity by default; the timeout is configurable from one to 60 minutes
+in both console and web Settings. The next request prepares it again on demand. Console
+verification of that timer is pending. Granite is in the active Text catalog,
+but its PS5 benchmark remains pending until that test is run.
 
 ### Legacy AGC text model preparation
 

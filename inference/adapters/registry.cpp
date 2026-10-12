@@ -12,9 +12,12 @@ int ps5_stable_audio_generate(const char *, const char *, char *, std::size_t, s
                               gpt_runtime_progress_fn);
 int ps5_kokoro_tts_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
                             gpt_runtime_progress_fn);
+int ps5_ace_step_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
+                          gpt_runtime_progress_fn);
 void ps5_media_stop();
 void ps5_sd_shutdown();
 void ps5_stable_audio_release();
+void ps5_ace_step_release();
 }
 
 namespace prospero::inference
@@ -58,9 +61,14 @@ int generate_media(const GenerationRequest &request)
                                  request.output_capacity, &elapsed, request.progress);
         break;
     case Modality::Audio:
-        result = ps5_stable_audio_generate(request.model.root.c_str(), prompt,
+        if (request.model.id.find("ace-step-1.5") != std::string::npos)
+            result = ps5_ace_step_generate(request.model.root.c_str(), prompt,
                                            request.output, request.output_capacity,
                                            &elapsed, request.progress);
+        else
+            result = ps5_stable_audio_generate(request.model.root.c_str(), prompt,
+                                               request.output, request.output_capacity,
+                                               &elapsed, request.progress);
         break;
     case Modality::Speech:
         result = ps5_kokoro_tts_generate(request.model.root.c_str(), prompt, request.output,
@@ -87,6 +95,7 @@ void release_text()
 void release_media()
 {
     ps5_stable_audio_release();
+    ps5_ace_step_release();
     ps5_media_stop();
     ps5_sd_shutdown();
 }

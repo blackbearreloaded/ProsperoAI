@@ -72,6 +72,30 @@
     ]
   },
   {
+    "id": "ace-step-1.5-turbo-q8-0",
+    "name": "ACE-Step 1.5 Turbo Q8_0 (Vulkan)",
+    "kind": 2,
+    "repository": "audio-cpp/audio.cpp-gguf",
+    "revision": "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5",
+    "files": [
+      {"source": "ACE-Step1.5-GGUF/turbo/ace-step-1.5-turbo-q8_0.gguf", "path": "ace-step-1.5-turbo-q8_0.gguf", "size": 6185460032, "sha256": "cd7bf272588f548d4a253f57483132ef0f8f54a549f26471b09caa72c654270b"},
+      {"source": "Qwen3-Embedding-0.6B/chat_template.jinja", "path": "Qwen3-Embedding-0.6B/chat_template.jinja", "size": 4116, "sha256": "87a2728cb8dc9fe424d624542f6060ec05a1d285ebbec578bb078900e33396b5", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "Qwen3-Embedding-0.6B/config.json", "path": "Qwen3-Embedding-0.6B/config.json", "size": 1359, "sha256": "bb23c1607cfe059a58d8f0196cf1cebb52082b1056b8e358a579da80a5759420", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "Qwen3-Embedding-0.6B/merges.txt", "path": "Qwen3-Embedding-0.6B/merges.txt", "size": 1671853, "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "Qwen3-Embedding-0.6B/tokenizer.json", "path": "Qwen3-Embedding-0.6B/tokenizer.json", "size": 11423705, "sha256": "def76fb086971c7867b829c23a26261e38d9d74e02139253b38aeb9df8b4b50a", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "Qwen3-Embedding-0.6B/tokenizer_config.json", "path": "Qwen3-Embedding-0.6B/tokenizer_config.json", "size": 5404, "sha256": "443bfa629eb16387a12edbf92a76f6a6f10b2af3b53d87ba1550adfcf45f7fa0", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "Qwen3-Embedding-0.6B/vocab.json", "path": "Qwen3-Embedding-0.6B/vocab.json", "size": 2776833, "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "acestep-5Hz-lm-1.7B/chat_template.jinja", "path": "acestep-5Hz-lm-1.7B/chat_template.jinja", "size": 4168, "sha256": "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "acestep-5Hz-lm-1.7B/config.json", "path": "acestep-5Hz-lm-1.7B/config.json", "size": 1385, "sha256": "73515ca4bfd86a5b56f28bf680311d1911e159c85d7f7ceb2188e310007c9010", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "acestep-5Hz-lm-1.7B/merges.txt", "path": "acestep-5Hz-lm-1.7B/merges.txt", "size": 1671853, "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "acestep-5Hz-lm-1.7B/tokenizer.json", "path": "acestep-5Hz-lm-1.7B/tokenizer.json", "size": 24321939, "sha256": "35af56c3f5cb3ea2cc578aa28a8937770981d504f183ac5c8c38baf4bbd4af4d", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "acestep-5Hz-lm-1.7B/tokenizer_config.json", "path": "acestep-5Hz-lm-1.7B/tokenizer_config.json", "size": 14072925, "sha256": "6cd70cdd89425971794f5235562edcc608b0629a6c4686ae51a8b8c8b8ba5e95", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "acestep-5Hz-lm-1.7B/vocab.json", "path": "acestep-5Hz-lm-1.7B/vocab.json", "size": 2776833, "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "acestep-v15-turbo/config.json", "path": "acestep-v15-turbo/config.json", "size": 1968, "sha256": "74745ff704ea49164c3d2d1c99fc0670f3fc635a869f0aec2d1311e6a52d400a", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"},
+      {"source": "vae/config.json", "path": "vae/config.json", "size": 425, "sha256": "14e019904df567f26df750317a70e2bd08f9f8f3c40ff4a24c97d1cd3f20ccd2", "repository": "ACE-Step/Ace-Step1.5", "revision": "19671f406d603126926c1b7e2adc169acbcade22"}
+    ]
+  },
+  {
     "id": "kokoro-82m-vulkan",
     "name": "Kokoro 82M Vulkan",
     "kind": 3,
@@ -256,6 +280,21 @@
         "path": "",
         "size": 5946648928,
         "sha256": "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3"
+      }
+    ]
+  },
+  {
+    "id": "granite-4.0-h-tiny-q4-k-m.gguf",
+    "name": "Granite 4.0 H-Tiny Q4_K_M",
+    "kind": 0,
+    "repository": "ibm-granite/granite-4.0-h-tiny-GGUF",
+    "revision": "08d5a8a9741dd5c1a95d2d39e25253226aa1464e",
+    "files": [
+      {
+        "source": "granite-4.0-h-tiny-Q4_K_M.gguf",
+        "path": "",
+        "size": 4230976352,
+        "sha256": "5a38b08c441ae1adbafb1d2b8a7167e0d48734d83af68b268cefea1eec553dcd"
       }
     ]
   }

@@ -20,6 +20,8 @@
 #include "platform/ps5/audio_out.hpp"
 #include "platform/ps5/system.hpp"
 #ifdef PS5_LLAMA_VULKAN
+#include "gpt_runtime.hpp"
+#include "runtime_settings.hpp"
 #include "http_server.hpp"
 #endif
 #include <SDL2/SDL.h>
@@ -123,6 +125,7 @@ int main()
     // is settled here (vulkan/storage.cpp).
     const prospero::Storage &storage = prospero::prepare_storage();
 #ifdef PS5_LLAMA_VULKAN
+    gpt_runtime_set_idle_unload_timeout(prospero_settings::get().idle_unload_minutes * 60);
     // The UI renderer also creates a Vulkan instance. llama.cpp snapshots its
     // profiling environment while the first Vulkan instance is initialized,
     // so configure it before constructing the display rather than on the first
@@ -182,6 +185,10 @@ int main()
     {
         // Animation time runs from frame start to frame start, and is clamped.
         const auto now = hui::sys::monotonic_us();
+#ifdef PS5_LLAMA_VULKAN
+        if (!first_frame)
+            gpt_runtime_check_configured_idle_unload();
+#endif
         const float elapsed = static_cast<float>(now - previous) / 1000000.0f;
         const float dt = std::clamp(elapsed, 0.001f, 0.05f);
         previous = now;

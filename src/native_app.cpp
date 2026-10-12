@@ -71,6 +71,8 @@ void validate(Preferences &p)
     if (!prospero_settings::valid_context(p.context_length))
         p.context_length = 0;
     p.kv_cache = 0; // Cache precision is always automatic.
+    if (!prospero_settings::valid_idle_unload_minutes(p.idle_unload_minutes))
+        p.idle_unload_minutes = 2;
     if (!prospero_generation::valid_output_limit(p.output_limit))
         p.output_limit = 0;
     p.theme = std::min(p.theme, 1U);
@@ -122,6 +124,8 @@ void load_preferences(Preferences &p, const std::vector<Model> &models)
                 p.kv_cache = number;
             else if (std::strcmp(key, "thinking") == 0)
                 p.thinking = number != 0;
+            else if (std::strcmp(key, "idle_unload_minutes") == 0)
+                p.idle_unload_minutes = number;
             else if (std::strcmp(key, "theme") == 0)
                 p.theme = number;
             else if (std::strcmp(key, "accent") == 0)
@@ -151,10 +155,10 @@ bool save_preferences(const Preferences &p)
     const int bytes = std::fprintf(
         file,
         "version=2\nmodel=%s\nstyle=%u\ntokens=%u\ntheme=%u\naccent=%u\nvolume=%"
-        "u\ntext_size=%u\nreduced_motion=%u\nhigh_contrast=%u\ncontext=%u\nkv=%u\nthinking=%u\n",
+        "u\ntext_size=%u\nreduced_motion=%u\nhigh_contrast=%u\ncontext=%u\nkv=%u\nthinking=%u\nidle_unload_minutes=%u\n",
         p.model_id.c_str(), p.style, p.output_limit, p.theme, p.accent, p.volume, p.text_size,
         p.reduced_motion ? 1U : 0U, p.high_contrast ? 1U : 0U, runtime.context, runtime.kv,
-        runtime.thinking ? 1U : 0U);
+        runtime.thinking ? 1U : 0U, runtime.idle_unload_minutes);
     const int closed = std::fclose(file);
     if (bytes < 0 || closed != 0 || std::rename(temporary, PROSPERO_SETTINGS_PATH) != 0)
     {
@@ -472,11 +476,13 @@ void App::set_preferences(Preferences preferences)
 {
     validate(preferences);
     if (!prospero_settings::set(
-            {preferences.context_length, preferences.kv_cache, preferences.thinking}))
+            {preferences.context_length, preferences.kv_cache, preferences.thinking,
+             preferences.idle_unload_minutes}))
     {
         state_.status = "Could not save runtime settings.";
         return;
     }
+    gpt_runtime_set_idle_unload_timeout(preferences.idle_unload_minutes * 60);
     preferences.model_id = state_.preferences.model_id;
     state_.preferences = std::move(preferences);
     preferences_dirty_ = true;

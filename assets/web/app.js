@@ -17,6 +17,7 @@ const kindNames = ['Text','Image','Audio','Voice'];
 const modelKind = model => ['text-to-text','text-to-image','text-to-audio','text-to-speech'].indexOf(model.purpose || 'text-to-text');
 let current = null, models = [], selectedModel = '', pendingModel = '', controller = null;
 let key = ''; try { key = sessionStorage.getItem('prospero-key') || ''; } catch {}
+const modelChooser=document.createElement('select');modelChooser.id='workspace-model';modelChooser.setAttribute('aria-label','Choose workspace model');const modelChooserLabel=document.createElement('label');modelChooserLabel.className='workspace-model-label';modelChooserLabel.textContent='Model';modelChooserLabel.append(modelChooser);$('model-chip').hidden=true;$('model-chip').before(modelChooserLabel);
 function page(name) { for (const p of ['workspace','models','settings']) $(p).hidden = p !== name; document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('selected', b.dataset.page === name); b.setAttribute('aria-current', b.dataset.page === name ? 'page' : 'false'); }); }
 document.querySelectorAll('[data-page]').forEach(b => b.onclick = () => page(b.dataset.page));
 document.querySelector('.brand').onclick = e => { e.preventDefault(); showWelcome(); };
@@ -28,7 +29,7 @@ $('temperature-value').textContent = preferences.temperature;
 function drawMark() { const svg = document.querySelector('.mark'); for (let i=0;i<4;i++) { const r=10+i*3, start=-0.4+i*0.24,end=start+4.7; const p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('d',`M ${25+r*Math.cos(start)} ${25+r*Math.sin(start)} A ${r} ${r} 0 1 1 ${25+r*Math.cos(end)} ${25+r*Math.sin(end)}`);p.setAttribute('fill','none');p.setAttribute('stroke','currentColor');p.setAttribute('stroke-width','1.4');svg.append(p); } }
 function drawSculpture(time) { const ctx=$('sculpture').getContext('2d'), size=300,cx=360,cy=360,turn=0.46+0.025*Math.sin(time*0.35);ctx.clearRect(0,0,720,720);ctx.lineWidth=1.25;const color=getComputedStyle(document.body).getPropertyValue('--accent').trim(); for(let band=0;band<40;band++){const v=band*2*Math.PI/40;let lx,ly;for(let step=0;step<=72;step++){const u=step*2*Math.PI/72,r=size*(0.70+0.24*Math.cos(v)),x=r*Math.cos(u),y=r*Math.sin(u),z=size*0.24*Math.sin(v),ty=y*0.62-z*0.78,depth=y*0.78+z*0.62,px=cx+x*Math.cos(turn)-ty*Math.sin(turn),py=cy+x*Math.sin(turn)+ty*Math.cos(turn);if(step){ctx.globalAlpha=0.22+0.70*(depth/size+1)*0.5;ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(px,py);ctx.stroke();}lx=px;ly=py;}}ctx.globalAlpha=1; }
 let lastArt=0;function animate(t){if(t-lastArt>66&&!$('welcome').hidden&&!$('workspace').hidden&&!preferences.motion&&!matchMedia('(prefers-reduced-motion:reduce)').matches){drawSculpture(t/1000);lastArt=t;}requestAnimationFrame(animate);}drawMark();applyPreferences();requestAnimationFrame(animate);
-async function api(path, options={}) { const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(key?{Authorization:`Bearer ${key}`}:{})}});if(response.status===401){if(!$('key-dialog').open)$('key-dialog').showModal();throw Error('A connection key is required.');}if(!response.ok){let message=`Connection failed (${response.status}).`;try{const body=await response.json();message=body.error?.message||body.error||message;}catch{}throw Error(message);}return response; }
+async function api(path, options={}) { if(path==='/v1/chat/completions'&&options.body&&current){try{const request=JSON.parse(options.body),model=models.find(item=>item.id===request.model);if(model&&modelKind(model)===0){request.output_session_id=current.id;request.output_message_index=current.messages.length;options={...options,body:JSON.stringify(request)};}}catch{}}const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(key?{Authorization:`Bearer ${key}`}:{})}});if(response.status===401){if(!$('key-dialog').open)$('key-dialog').showModal();throw Error('A connection key is required.');}if(!response.ok){let message=`Connection failed (${response.status}).`;try{const body=await response.json();message=body.error?.message||body.error||message;}catch{}throw Error(message);}return response; }
 async function refreshModels(){
     try {
         const response=await api('/v1/models');
@@ -36,7 +37,12 @@ async function refreshModels(){
         models=(data.data||[]).filter(m=>typeof m.id==='string');
         const presets=await api('/api/models/presets');
         presetCatalog=(await presets.json()).data||[];
-        if(!models.some(m=>m.id===selectedModel)) selectedModel=models[0]?.id||'';
+        const selection=await api('/api/models/selection');
+        const savedSelection=(await selection.json()).id;
+        selectedModel=models.some(m=>m.id===savedSelection)?savedSelection:models[0]?.id||'';
+        modelChooser.replaceChildren();
+        for(const model of models){const option=document.createElement('option');option.value=model.id;option.textContent=model.name||model.id;modelChooser.append(option);}
+        modelChooser.value=selectedModel;
         $('status').textContent=selectedModel?'PS5 · Ready':'No models installed';
         for(const [kind,id] of ['text-count','image-count','audio-count','voice-count'].entries()){
             const count=models.filter(m=>modelKind(m)===kind).length;
@@ -47,6 +53,7 @@ async function refreshModels(){
         $('model-chip').textContent=current?.model||selectedModel||'Choose a model';
     }catch(error){$('status').textContent='PS5 · Disconnected';$('feedback').textContent=error.message;}
 }
+async function refreshSelectedModel(){try{const response=await api('/api/models/selection');const selection=await response.json();if(models.some(model=>model.id===selection.id)){selectedModel=selection.id;modelChooser.value=selectedModel;$('model-chip').textContent=selectedModel;renderModels();}}catch{}}
 function renderModels(){
     const list=$('model-list');list.replaceChildren();
     const term=$('search').value.toLowerCase();
@@ -114,7 +121,9 @@ async function pollDownloads(){
     }catch(error){$('download-status').textContent=error.message;}
 }
 async function startModelDownload(index){$('download-status').textContent='Starting verified download…';try{await api('/api/models/download',{method:'POST',body:JSON.stringify({index})});await pollDownloads();}catch(error){$('download-status').textContent=error.message;}}
-$('search').oninput=renderModels;$('model-chip').onclick=()=>page('models');$('model-dialog').addEventListener('close',()=>{if($('model-dialog').returnValue==='use'){selectedModel=pendingModel;newConversation();renderModels();}});
+async function chooseInstalledModel(id,beginConversation=false){try{await api('/api/models/selection',{method:'POST',body:JSON.stringify({id})});selectedModel=id;modelChooser.value=id;$('model-chip').textContent=id;if(beginConversation)newConversation();else if(current){const chosen=models.find(model=>model.id===id);current.model=id;current.modelName=chosen?.name||id;current.purpose=chosen?.purpose||'text-to-text';current.updatedAt=Date.now();void persistConversation(current);}renderModels();renderHistory();}catch(error){modelChooser.value=selectedModel;$('feedback').textContent=error.message;}}
+$('search').oninput=renderModels;$('model-chip').onclick=()=>page('models');$('model-dialog').addEventListener('close',()=>{if($('model-dialog').returnValue==='use')void chooseInstalledModel(pendingModel,true);});
+modelChooser.onchange=()=>chooseInstalledModel(modelChooser.value);
 function renderHistory(){
     const list=$('history');list.replaceChildren();
     const kind=$('history-kind').value, query=$('history-search').value.trim().toLocaleLowerCase();
@@ -199,7 +208,7 @@ function newConversation(){
     current={id:globalThis.crypto?.randomUUID?.()||String(Date.now()),title:'New conversation',model:selectedModel,modelName:model?.name||selectedModel,purpose:model ? model.purpose||'text-to-text' : 'other',messages:[],updatedAt:Date.now()};
     openChat();renderMessages();renderHistory();$('prompt').focus();
 }
-function startKind(kind){if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}const candidates=models.filter(model=>modelKind(model)===kind);if(!candidates.length){modelFilter=String(kind);$('search').value='';for(const tab of document.querySelectorAll('[data-kind]'))tab.classList.toggle('selected',tab.dataset.kind===modelFilter);page('models');renderModels();return;}selectedModel=candidates.find(model=>model.id===selectedModel)?.id||candidates[0].id;newConversation();}
+function startKind(kind){if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}const candidates=models.filter(model=>modelKind(model)===kind);if(!candidates.length){modelFilter=String(kind);$('search').value='';for(const tab of document.querySelectorAll('[data-kind]'))tab.classList.toggle('selected',tab.dataset.kind===modelFilter);page('models');renderModels();return;}const id=candidates.find(model=>model.id===selectedModel)?.id||candidates[0].id;void chooseInstalledModel(id,true);}
 function closeHistory(){$('chat').classList.remove('show-history');$('history-toggle').setAttribute('aria-expanded','false');}
 $('start').onclick=()=>startKind(0);for(const [kind,id] of ['converse','imagine','compose','speak'].entries())$(id).onclick=()=>startKind(kind);$('new').onclick=()=>{newConversation();closeHistory();};$('history-close').onclick=closeHistory;$('history-toggle').onclick=()=>{$('chat').classList.toggle('show-history');$('history-toggle').setAttribute('aria-expanded',String($('chat').classList.contains('show-history')));};
 function extractMedia(text){const paths=[...text.matchAll(/\/download0\/[^\s]+\.(?:png|tga|wav)/g)];if(!paths.length)return null;const match=paths.find(item=>item[0].startsWith('/download0/ProsperoAI/sessions/')||item[0].startsWith('/download0/ProsperoAI/work/image/'))||paths[0],path=match[0],kind=path.endsWith('.wav')?'audio':'image';return{path,kind,before:text.slice(0,match.index)};}
@@ -217,7 +226,7 @@ const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';
 if(!received)throw Error('The model returned an empty response.');$('feedback').textContent=`Completed · ${((performance.now()-start)/1000).toFixed(1)}s`;}catch(error){$('feedback').textContent=error.name==='AbortError'?'Response stopped.':error.message;if(!received)el.remove();}finally{if(answer.content)conversation.messages.push(answer);conversation.updatedAt=Date.now();save('prospero-conversations',conversations.slice(0,50));controller=null;$('send').textContent='↑';$('send').setAttribute('aria-label','Send message');$('prompt').disabled=false;renderHistory();void persistConversation(conversation);}};
 $('access').onclick=()=>{$('key-error').textContent='';$('key-dialog').showModal();};$('key-dialog').addEventListener('close',()=>{if($('key-dialog').returnValue==='connect'){key=$('key').value.trim();try{sessionStorage.setItem('prospero-key',key);}catch{}$('key').value='';refreshModels();}});
 renderHistory();refreshModels();pollDownloads();
-void syncConversations();setInterval(syncConversations,4000);
+void syncConversations();setInterval(syncConversations,4000);setInterval(refreshSelectedModel,4000);
 
 let audioContext;function sound(){if(!preferences.sounds)return;try{audioContext??=new (window.AudioContext||window.webkitAudioContext)();const osc=audioContext.createOscillator(),gain=audioContext.createGain();osc.type='sine';osc.frequency.value=620;gain.gain.setValueAtTime(preferences.volume*0.08,audioContext.currentTime);gain.gain.exponentialRampToValueAtTime(0.0001,audioContext.currentTime+0.09);osc.connect(gain);gain.connect(audioContext.destination);osc.start();osc.stop(audioContext.currentTime+0.1);}catch{}}
 document.addEventListener('click',e=>{if(e.target.closest('button'))sound();});
@@ -225,7 +234,7 @@ for(const button of document.querySelectorAll('[data-category]'))button.onclick=
 $('preview-send').onclick=()=>{newConversation();$('prompt').value='Tell me a story.';$('prompt').focus();};
 
 async function runtimeSettings(change) {
-  const controls = ['runtime-context','runtime-thinking'].map($);
+  const controls = ['runtime-context','runtime-thinking','runtime-idle-unload'].map($);
   controls.forEach(el => el.disabled = true);
   try {
     const response = await api('/api/settings/runtime', change ? {method:'POST',body:JSON.stringify(change)} : {});
@@ -233,11 +242,13 @@ async function runtimeSettings(change) {
     const settings = await response.json();
     $('runtime-context').value = settings.context;
     $('runtime-thinking').checked = settings.thinking;
+    $('runtime-idle-unload').value = String(settings.idle_unload_minutes);
     $('runtime-feedback').textContent = '';
   } catch (error) { $('runtime-feedback').textContent = error.message; }
   finally { controls.forEach(el => el.disabled = false); }
 }
-for (const [id,key] of [['runtime-context','context'],['runtime-thinking','thinking']]) {
-  $(id).onchange = () => runtimeSettings({[key]:key === 'thinking' ? $(id).checked : $(id).value});
+for (const [id,key] of [['runtime-context','context'],['runtime-thinking','thinking'],['runtime-idle-unload','idle_unload_minutes']]) {
+  $(id).onchange = () => runtimeSettings({[key]:key === 'thinking' ? $(id).checked : key === 'idle_unload_minutes' ? Number($(id).value) : $(id).value});
 }
+const memoryGroup=document.createElement('div');memoryGroup.className='model-memory-settings';const memoryHeading=document.createElement('h2');memoryHeading.textContent='Model memory';const memoryDescription=document.createElement('p');memoryDescription.className='muted';memoryDescription.textContent='Release the active model after it has been idle.';const idleLabel=document.createElement('label');idleLabel.htmlFor='runtime-idle-unload';idleLabel.textContent='Unload model after';const idleSelect=document.createElement('select');idleSelect.id='runtime-idle-unload';for(const [value,label] of [[1,'1 minute'],[2,'2 minutes'],[5,'5 minutes'],[10,'10 minutes'],[30,'30 minutes'],[60,'60 minutes']]){const option=document.createElement('option');option.value=String(value);option.textContent=label;idleSelect.append(option);}idleLabel.append(idleSelect);memoryGroup.append(memoryHeading,memoryDescription,idleLabel);$('runtime-feedback').before(memoryGroup);
 document.querySelector('[data-page="settings"]').addEventListener('click', () => runtimeSettings());

@@ -46,22 +46,22 @@ class HttpApiTests(unittest.TestCase):
     def test_runtime_settings_round_trip(self):
         config = Path(self.scratch.name) / 'runtime.cfg'
         config.write_text('version=2\nstyle=2\ntokens=192\ntheme=1\n')
-        header, body = self.request('/api/settings/runtime', body={'context':'32k', 'kv':'auto', 'thinking':True})
+        header, body = self.request('/api/settings/runtime', body={'context':'32k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':2})
         self.assertIn('200 OK', header)
-        expected = {'context':'32k', 'kv':'auto', 'thinking':True}
+        expected = {'context':'32k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':2}
         self.assertEqual(json.loads(body), expected)
         self.assertIn('style=2\ntokens=192\ntheme=1\n', config.read_text())
         self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
-        header, body = self.request('/api/settings/runtime', body={'context':'256k', 'kv':'auto', 'thinking':True})
+        header, body = self.request('/api/settings/runtime', body={'context':'256k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':5})
         self.assertIn('200 OK', header)
-        expected = {'context':'256k', 'kv':'auto', 'thinking':True}
+        expected = {'context':'256k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':5}
         self.assertEqual(json.loads(body), expected)
         self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
-        for invalid in ({'context':'2k'}, {'kv':'q8_0'}, {'kv':'q2_0'}, {'thinking':'false'}, {'unknown':1}, {'context':'16k','kv':'bad'}, []):
+        for invalid in ({'context':'2k'}, {'kv':'q8_0'}, {'kv':'q2_0'}, {'thinking':'false'}, {'idle_unload_minutes':3}, {'unknown':1}, {'context':'16k','kv':'bad'}, []):
             self.assertIn('400 Bad Request', self.request('/api/settings/runtime', body=invalid)[0])
             self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
         self.assertIn('401 Unauthorized', self.request('/api/settings/runtime', key='secret')[0])
-        self.request('/api/settings/runtime', body={'context':'auto','kv':'auto','thinking':False})
+        self.request('/api/settings/runtime', body={'context':'auto','kv':'auto','thinking':False,'idle_unload_minutes':2})
 
     def test_conversations_share_the_native_session_store(self):
         conversation = {'id':'web-sync-fixture','title':'Shared from web', 'model':'tiny.gguf',
@@ -82,7 +82,7 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn('401 Unauthorized', self.request('/api/conversations', key='secret')[0])
 
     def test_request_context_does_not_replace_shared_settings(self):
-        shared = {'context': '32k', 'kv': 'auto', 'thinking': True}
+        shared = {'context': '32k', 'kv': 'auto', 'thinking': True, 'idle_unload_minutes': 2}
         self.request('/api/settings/runtime', body=shared)
         try:
             for route, body in [
@@ -103,11 +103,19 @@ class HttpApiTests(unittest.TestCase):
                                   'messages': [{'role': 'user', 'content': 'context-settings'}]})
             self.assertEqual(json.loads(wire)['choices'][0]['message']['content'], '32768:0')
         finally:
-            self.request('/api/settings/runtime', body={'context': 'auto', 'kv': 'auto', 'thinking': False})
+            self.request('/api/settings/runtime', body={'context': 'auto', 'kv': 'auto', 'thinking': False, 'idle_unload_minutes': 2})
 
     def test_models_and_selection(self):
         _, body = self.request("/v1/models")
         self.assertEqual([m["id"] for m in json.loads(body)["data"]], ["tiny.gguf", "second.gguf"])
+        _, body = self.request("/api/models/selection")
+        self.assertEqual(json.loads(body)["id"], "tiny.gguf")
+        head, body = self.request("/api/models/selection", body={"id": "second.gguf"})
+        self.assertIn("200 OK", head)
+        self.assertEqual(json.loads(body)["id"], "second.gguf")
+        self.assertIn("404 Not Found", self.request("/api/models/selection", body={"id": "missing.gguf"})[0])
+        self.assertIn("400 Bad Request", self.request("/api/models/selection", body={"id": 3})[0])
+        self.assertIn("401 Unauthorized", self.request("/api/models/selection", key="secret")[0])
         _, body = self.request(body={"model":"second.gguf", "messages":[{"role":"user","content":"x"}]})
         data = json.loads(body)
         self.assertEqual(data["model"], "second.gguf")

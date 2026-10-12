@@ -9,6 +9,8 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <sys/stat.h>
 extern "C"
@@ -51,6 +53,21 @@ unsigned selected = 0;
 bool scanned = false;
 std::mutex mutex;
 std::mutex inference_mutex;
+std::atomic<std::uint64_t> last_inference_activity_us{0};
+std::atomic<bool> runtime_idle_unloaded{false};
+std::atomic<unsigned> configured_idle_timeout_seconds{120};
+
+std::uint64_t monotonic_us()
+{
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+void note_inference_activity()
+{
+    last_inference_activity_us.store(monotonic_us(), std::memory_order_release);
+    runtime_idle_unloaded.store(false, std::memory_order_release);
+}
 bool exists(const std::string &path)
 {
     struct stat st
@@ -254,7 +271,57 @@ bool gpt_runtime_select_model(unsigned index)
     if (!inference.owns_lock())
         return false;
     std::lock_guard<std::mutex> lock(mutex);
-    return select_model_locked(index);
+    const bool selected_ok = select_model_locked(index);
+    if (selected_ok)
+        note_inference_activity();
+    return selected_ok;
+}
+namespace
+{
+void check_idle_unload(unsigned timeout_seconds)
+{
+    if (runtime_idle_unloaded.load(std::memory_order_acquire))
+        return;
+    const std::uint64_t now = monotonic_us();
+    const std::uint64_t last = last_inference_activity_us.load(std::memory_order_acquire);
+    if (last == 0 || now < last || now - last < static_cast<std::uint64_t>(timeout_seconds) * 1000000)
+        return;
+    std::unique_lock<std::mutex> inference(inference_mutex, std::try_to_lock);
+    if (!inference.owns_lock())
+        return;
+    std::lock_guard<std::mutex> lock(mutex);
+    const std::uint64_t refreshed = last_inference_activity_us.load(std::memory_order_acquire);
+    if (runtime_idle_unloaded.load(std::memory_order_acquire) || now < refreshed ||
+        now - refreshed < static_cast<std::uint64_t>(timeout_seconds) * 1000000)
+        return;
+    scan();
+    if (selected < models.size())
+    {
+        const Adapter *adapter = find_adapter(models[selected].modality);
+        if (adapter && adapter->release)
+            adapter->release();
+        char line[192];
+        std::snprintf(line, sizeof(line), "[prosperoai] idle model released after %u seconds: %s\n",
+                      timeout_seconds, models[selected].id.c_str());
+        sceKernelDebugOutText(0, line);
+    }
+    runtime_idle_unloaded.store(true, std::memory_order_release);
+}
+} // namespace
+void gpt_runtime_check_idle_unload(unsigned timeout_seconds)
+{
+    check_idle_unload(timeout_seconds);
+}
+void gpt_runtime_check_configured_idle_unload()
+{
+    check_idle_unload(configured_idle_timeout_seconds.load(std::memory_order_acquire));
+}
+void gpt_runtime_set_idle_unload_timeout(unsigned timeout_seconds)
+{
+    if (timeout_seconds == 0)
+        return;
+    configured_idle_timeout_seconds.store(timeout_seconds, std::memory_order_release);
+    note_inference_activity();
 }
 void gpt_runtime_refresh_models()
 {
@@ -286,7 +353,13 @@ int gpt_runtime_prepare()
         modality = models[selected].modality;
     }
     if (modality == Modality::Text)
-        return prospero_vulkan::gpt_runtime_prepare();
+    {
+        const int result = prospero_vulkan::gpt_runtime_prepare();
+        if (result == 0)
+            note_inference_activity();
+        return result;
+    }
+    note_inference_activity();
     return 0;
 }
 int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
@@ -301,6 +374,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
         std::snprintf(output, capacity, "Another generation is running. Please wait.");
         return 1;
     }
+    note_inference_activity();
     Model model;
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -327,6 +401,7 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
     }
     const int result = adapter->generate(
         GenerationRequest{model, messages, count, settings, output, capacity, stats, progress});
+    note_inference_activity();
     return result;
 }
 #endif
