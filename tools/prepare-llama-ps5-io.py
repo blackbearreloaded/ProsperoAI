@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply guarded, repeatable PS5-only loading hooks to the pinned dependency."""
+"""Apply guarded, repeatable PS5-only hooks to a llama.cpp source tree."""
 from pathlib import Path
 import argparse
 
@@ -44,9 +44,19 @@ vulkan = source_root / 'ggml/src/ggml-vulkan/ggml-vulkan.cpp'
 text = vulkan.read_text()
 marker = 'GGML_LOG_INFO("Vulkan Timings:\\n")'
 if marker not in text:
-    begin = text.index('    void print_timings(bool force = false) {')
-    end = text.index('\n    std::string get_node_fusion_name', begin)
-    body = '''    void print_timings(bool force = false) {
+    # Current upstream moved this method outside vk_perf_logger's class.
+    # Keep the adapter compatible with both that layout and the older Prism pin.
+    signature = 'void vk_perf_logger::print_timings(bool force) {'
+    if signature in text:
+        begin = text.index(signature)
+        end = text.index('\nstd::string vk_perf_logger::get_node_fusion_name', begin)
+    else:
+        signature = '    void print_timings(bool force = false) {'
+        if signature not in text:
+            raise SystemExit(f"{vulkan}: unsupported Vulkan timing logger layout")
+        begin = text.index(signature)
+        end = text.index('\n    std::string get_node_fusion_name', begin)
+    body = '''SIGNATURE
         if (timings.empty()) return;
         print_count++;
         if ((print_count % vk_perf_logger_frequency) != 0 && !force) return;
@@ -74,7 +84,7 @@ if marker not in text:
         timings.clear();
         flops.clear();
     }
-'''
+'''.replace('SIGNATURE', signature)
     vulkan.write_text(text[:begin] + body + text[end:])
 
 # Oberon's RDNA2 UMA benefits from computing four adjacent standard-quant

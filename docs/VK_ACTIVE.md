@@ -78,6 +78,13 @@ Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
   includes Vulkan and HIP, but generic HIP support does not establish a usable PS5 ROCm/HIP tool
   chain; Vulkan remains the supported console path. Recheck the upstream op-support matrix when
   moving ggml, since backend coverage is operation-specific.
+- Adapter compatibility pass started against an isolated upstream v0.6.0 worktree. The PS5 I/O
+  and Vulkan timing/UMA hooks apply after adapting to upstream's out-of-class Vulkan perf logger.
+  Host `llama`, Vulkan, SD and Kokoro targets built; both runtime ABI and media Vulkan tests pass
+  with llvmpipe explicitly selected (`GGML_VK_VISIBLE_DEVICES=0`). This does not prove PS5
+  cross-build/runtime behavior. The active app still uses Prism for private Bonsai
+  `PQ2_0`/`PTQ1_0` types, so do not advance its runtime pin until these types/kernels are ported
+  or a compatible upstream path is proven.
 
 ## Release preparation
 
