@@ -73,7 +73,7 @@
   },
   {
     "id": "z-image-turbo-q3-k",
-    "name": "Z-Image Turbo Q2_K + Qwen3 4B Q4_K_M (8-step)",
+    "name": "Z-Image Turbo Q2_K + Qwen3 4B Q2_K (8-step)",
     "kind": 1,
     "repository": "leejet/Z-Image-Turbo-GGUF",
     "revision": "c61c0e422dc8b541b7548cf33a4ef8302b0f8085",
@@ -85,10 +85,10 @@
         "sha256": "a9cf1b0368e24c2f9d542d2951c01f6f7fc85ed8c9ed39b5b37b15375508d58a"
       },
       {
-        "source": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
-        "path": "qwen3-4b-instruct-2507-q4-k-m.gguf",
-        "size": 2497281120,
-        "sha256": "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
+        "source": "Qwen3-4B-Instruct-2507-Q2_K.gguf",
+        "path": "qwen3-4b-instruct-2507-q2-k.gguf",
+        "size": 1669500000,
+        "sha256": "f7ed2f57713ad29e1a4ec093be0cdf3d7fd31e137e8fd4fc3edcfd04a5267862",
         "repository": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
         "revision": "1e1094e82febb22ad75c2802fc1cbc94c74f8481"
       },

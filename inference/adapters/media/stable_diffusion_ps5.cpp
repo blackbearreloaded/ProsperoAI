@@ -228,11 +228,24 @@ bool ensure_context(const char *root)
     if (z_image_turbo &&
         (std::snprintf(diffusion_model_path, sizeof(diffusion_model_path), "%s/diffusion_model.gguf", root) >=
              static_cast<int>(sizeof(diffusion_model_path)) ||
-         std::snprintf(llm_path, sizeof(llm_path), "%s/qwen3-4b-instruct-2507-q4-k-m.gguf", root) >=
+         std::snprintf(llm_path, sizeof(llm_path), "%s/qwen3-4b-instruct-2507-q2-k.gguf", root) >=
              static_cast<int>(sizeof(llm_path)) ||
          std::snprintf(vae_path, sizeof(vae_path), "%s/ae.safetensors", root) >=
              static_cast<int>(sizeof(vae_path))))
         return false;
+    if (z_image_turbo)
+    {
+        std::FILE *encoder = std::fopen(llm_path, "rb");
+        if (!encoder)
+        {
+            if (std::snprintf(llm_path, sizeof(llm_path),
+                              "%s/qwen3-4b-instruct-2507-q4-k-m.gguf", root) >=
+                static_cast<int>(sizeof(llm_path)))
+                return false;
+        }
+        else
+            std::fclose(encoder);
+    }
     if (flux2_klein &&
         (std::snprintf(diffusion_model_path, sizeof(diffusion_model_path), "%s/diffusion_model.gguf", root) >=
              static_cast<int>(sizeof(diffusion_model_path)) ||
@@ -255,20 +268,20 @@ bool ensure_context(const char *root)
     parameters.wtype = SD_TYPE_F16;
     parameters.rng_type = CUDA_RNG;
     parameters.prediction = (is_sd3_model(root) || flux2_klein || z_image_turbo) ? FLOW_PRED : EPS_PRED;
-    parameters.enable_mmap = false;
+    parameters.enable_mmap = z_image_turbo;
     parameters.eager_load = false;
     parameters.diffusion_conv_direct = false;
     parameters.vae_conv_direct = false;
     parameters.diffusion_flash_attn = z_image_turbo;
-    parameters.backend = z_image_turbo ? "CPU,diffusion=Vulkan0,te=Vulkan0,vae=CPU"
+    parameters.backend = z_image_turbo ? "CPU,diffusion=Vulkan0,te=CPU,vae=CPU"
                              : sdxl ? "CPU,diffusion=Vulkan0,vae=CPU"
                              : "CPU,diffusion=Vulkan0,vae=Vulkan0";
-    parameters.params_backend = "Vulkan0";
+    parameters.params_backend = z_image_turbo ? "CPU" : "Vulkan0";
     if (sdxl || z_image_turbo)
     {
         // Bound weight and runner residency so Z-Image's encoder and diffusion
         // workspace can coexist within the PS5 Vulkan heap.
-        parameters.max_vram = "10.5";
+        parameters.max_vram = z_image_turbo ? "11.0" : "10.5";
         parameters.disable_prefetch = true;
         parameters.diffusion_conv_direct = true;
         parameters.vae_conv_direct = true;

@@ -26,7 +26,7 @@ inline constexpr PresetFile preset_files_2[] = {
 };
 inline constexpr PresetFile preset_files_3[] = {
     {"z_image_turbo-Q2_K.gguf", "diffusion_model.gguf", "a9cf1b0368e24c2f9d542d2951c01f6f7fc85ed8c9ed39b5b37b15375508d58a", 2592442304ULL, nullptr, nullptr},
-    {"Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "qwen3-4b-instruct-2507-q4-k-m.gguf", "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597", 2497281120ULL, "unsloth/Qwen3-4B-Instruct-2507-GGUF", "1e1094e82febb22ad75c2802fc1cbc94c74f8481"},
+    {"Qwen3-4B-Instruct-2507-Q2_K.gguf", "qwen3-4b-instruct-2507-q2-k.gguf", "f7ed2f57713ad29e1a4ec093be0cdf3d7fd31e137e8fd4fc3edcfd04a5267862", 1669500000ULL, "unsloth/Qwen3-4B-Instruct-2507-GGUF", "1e1094e82febb22ad75c2802fc1cbc94c74f8481"},
     {"split_files/vae/ae.safetensors", "ae.safetensors", "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38", 335304388ULL, "Comfy-Org/z_image_turbo", "6fc90a3b1b653e935a0d175e260736de25b84df5"},
 };
 inline constexpr PresetFile preset_files_4[] = {
@@ -91,7 +91,7 @@ inline constexpr Preset presets[] = {
     {"qwen3.8-9b-distill-q4-k-m.gguf", "Qwen3.8 9B Distill Q4_K_M", "empero-ai/Qwen3.8-9B-Distill-GGUF", "760121cd70bb4c36b2b5ec58eb765e0df5987efe", 0, 5780090176ULL, preset_files_0, 1},
     {"sd-turbo-fp16", "SD-Turbo FP16", "blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5", "77d748daee145ea432a0cc20744ba18b5ef4c137", 1, 2580079090ULL, preset_files_1, 8},
     {"stable-audio-3-small-sfx-vulkan", "Stable Audio 3 Small SFX (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 1683570688ULL, preset_files_2, 1},
-    {"z-image-turbo-q3-k", "Z-Image Turbo Q2_K + Qwen3 4B Q4_K_M (8-step)", "leejet/Z-Image-Turbo-GGUF", "c61c0e422dc8b541b7548cf33a4ef8302b0f8085", 1, 5425027812ULL, preset_files_3, 3},
+    {"z-image-turbo-q3-k", "Z-Image Turbo Q2_K + Qwen3 4B Q2_K (8-step)", "leejet/Z-Image-Turbo-GGUF", "c61c0e422dc8b541b7548cf33a4ef8302b0f8085", 1, 4597246692ULL, preset_files_3, 3},
     {"ace-step-1.5-turbo-q8-0", "ACE-Step 1.5 Turbo Q8_0 (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 6244194798ULL, preset_files_4, 15},
     {"kokoro-82m-vulkan", "Kokoro 82M Vulkan", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 165757083ULL, preset_files_5, 25},
     {"minicpm5-2b-q8-0.gguf", "MiniCPM5 2B Q8_0", "openbmb/MiniCPM5-2B-GGUF", "2079a22f3beaa4e306449978533478fe0522f4b3", 0, 2679710688ULL, preset_files_6, 1},
