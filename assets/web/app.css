@@ -16,4 +16,10 @@
 
 .history-control{display:block;font-size:12px;color:var(--muted);margin:14px 0 6px}#history-kind,#history-search{width:100%;min-width:0}#history-count{display:block;color:var(--muted);margin:10px 0}#chat aside{overflow-y:auto}
 .model-memory-settings{border-top:1px solid var(--line);margin-top:22px;padding-top:2px}.model-memory-settings>p{margin:-20px 0 0;font-size:.88em}
+
+.model-grid>.model-card:not(.preset-card){display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:14px}
+.model-select{display:block;width:100%;min-height:0;text-align:left;padding:0}
+.delete-model{align-self:flex-end;border:1px solid var(--line);color:var(--muted)}
+.delete-model:not(:disabled):hover{color:var(--ink);border-color:var(--accent)}
 .message-media{display:block;max-width:min(420px,100%);border-radius:14px;border:1px solid var(--line);margin:10px 0}.message-media-link{display:inline-block;margin:2px 0 10px;font-size:13px;color:var(--accent);text-decoration:none}.message-media-link:hover{text-decoration:underline}
+.kokoro-voice-setting{align-items:center}#kokoro-voice{width:100%;max-width:420px;min-width:0}@media(max-width:700px){.kokoro-voice-setting{align-items:stretch;gap:8px}#kokoro-voice{max-width:none}}

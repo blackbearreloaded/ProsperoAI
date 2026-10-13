@@ -792,7 +792,8 @@ void handle_model_download_action(const NetApi &api, int sock, const char *body,
         const char *value = json_value_start(body, "index");
         char *end = nullptr;
         const long index = value ? std::strtol(value, &end, 10) : -1;
-        if (!value || end == value || index < 0 || index > 7)
+        if (!value || end == value || index < 0 ||
+            static_cast<unsigned long>(index) >= prospero_model_download::preset_count)
         {
             send_status(api, sock, "400 Bad Request", "application/json",
                         "{\"error\":\"a valid GGUF item index is required\"}");
@@ -944,6 +945,15 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                 p.thinking = it.value().get<bool>();
                 valid = true;
             }
+            else if (it.key() == "kokoro_voice" && it.value().is_string())
+            {
+                const auto voice = it.value().get<std::string>();
+                if (voice == "af_heart" || voice == "af_bella")
+                {
+                    p.kokoro_voice = voice == "af_bella" ? 1U : 0U;
+                    valid = true;
+                }
+            }
             else if (it.key() == "idle_unload_minutes" && it.value().is_number_integer())
             {
                 const auto minutes = it.value().get<unsigned>();
@@ -974,7 +984,8 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
         {"kv", prospero_settings::kv_name(p.kv)},
         {"thinking",
          p.thinking},
-        {"idle_unload_minutes", p.idle_unload_minutes}}.dump();
+        {"idle_unload_minutes", p.idle_unload_minutes},
+        {"kokoro_voice", p.kokoro_voice == 1 ? "af_bella" : "af_heart"}}.dump();
     send_json(api, sock, response.c_str());
 }
 
@@ -1017,6 +1028,26 @@ void handle_model_selection(const NetApi &api, int sock, const char *method,
                 "{\"error\":\"Model is not installed.\"}");
 }
 
+void handle_model_delete(const NetApi &api, int sock, const char *body)
+{
+    const auto request = nlohmann::json::parse(body ? body : "", nullptr, false);
+    if (!request.is_object() || !request.value("id", nlohmann::json()).is_string() ||
+        request["id"].get<std::string>().empty())
+    {
+        send_status(api, sock, "400 Bad Request", "application/json",
+                    "{\"error\":\"Expected a model id.\"}");
+        return;
+    }
+    const std::string id = request["id"].get<std::string>();
+    if (!gpt_runtime_delete_model(id.c_str()))
+    {
+        send_status(api, sock, "409 Conflict", "application/json",
+                    "{\"error\":\"Model is active, busy, downloading, or could not be deleted.\"}");
+        return;
+    }
+    send_json(api, sock, nlohmann::json{{"deleted", id}}.dump().c_str());
+}
+
 // Same allowlist the native app uses to recognize a generated-media reference inside a
 // message's own text (src/native_app.cpp:media_path/refresh_images): no traversal, and only
 // the fresh-output or archived-media paths the runtime itself writes under /download0.
@@ -1025,8 +1056,9 @@ bool media_path_allowed(const std::string &path)
     if (path.find("..") != std::string::npos)
         return false;
     static const char *prefixes[] = {
-        "/download0/ProsperoAI/sessions/", "/download0/ProsperoAI/work/image/",
-        "/download0/ProsperoAI/work/audio/", "/download0/ProsperoAI/work/voice/"};
+        "/download0/ProsperoAI/sessions/", "/download0/ProsperoAI/work/text/",
+        "/download0/ProsperoAI/work/image/", "/download0/ProsperoAI/work/audio/",
+        "/download0/ProsperoAI/work/voice/"};
     for (const char *prefix : prefixes)
         if (path.compare(0, std::strlen(prefix), prefix) == 0)
             return true;
@@ -1052,6 +1084,8 @@ void handle_media_file(const NetApi &api, int sock, const char *path)
     const std::size_t path_length = std::strlen(path);
     const bool is_wav = path_length >= 4 && std::strcmp(path + path_length - 4, ".wav") == 0;
     const bool is_png = path_length >= 4 && std::strcmp(path + path_length - 4, ".png") == 0;
+    const bool is_json = path_length >= 5 && std::strcmp(path + path_length - 5, ".json") == 0;
+    const bool is_text = path_length >= 4 && std::strcmp(path + path_length - 4, ".txt") == 0;
     if (size < 0 || size > 64 * 1024 * 1024)
     {
         std::fclose(file);
@@ -1063,7 +1097,11 @@ void handle_media_file(const NetApi &api, int sock, const char *path)
                   "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n"
                   "X-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\nConnection: "
                   "close\r\n\r\n",
-                  is_wav ? "audio/wav" : is_png ? "image/png" : "application/octet-stream", size);
+                  is_wav ? "audio/wav"
+                         : is_png ? "image/png"
+                         : is_json ? "application/json"
+                                   : is_text ? "text/plain; charset=utf-8" : "application/octet-stream",
+                  size);
     send_all(api, sock, header, std::strlen(header));
     char buffer[16384];
     for (std::size_t count; (count = std::fread(buffer, 1, sizeof(buffer), file)) != 0;)
@@ -1304,6 +1342,8 @@ void handle_connection(const NetApi &api, int sock)
     else if ((std::strcmp(method, "GET") == 0 || std::strcmp(method, "POST") == 0) &&
              std::strcmp(path, "/api/models/selection") == 0)
         handle_model_selection(api, sock, method, body);
+    else if (std::strcmp(method, "DELETE") == 0 && std::strcmp(path, "/api/models") == 0)
+        handle_model_delete(api, sock, body);
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/models/presets") == 0)
         handle_model_presets(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/presets") == 0)

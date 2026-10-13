@@ -73,6 +73,7 @@ void validate(Preferences &p)
     p.kv_cache = 0; // Cache precision is always automatic.
     if (!prospero_settings::valid_idle_unload_minutes(p.idle_unload_minutes))
         p.idle_unload_minutes = 2;
+    p.kokoro_voice = std::min(p.kokoro_voice, 1U);
     if (!prospero_generation::valid_output_limit(p.output_limit))
         p.output_limit = 0;
     p.theme = std::min(p.theme, 1U);
@@ -155,10 +156,11 @@ bool save_preferences(const Preferences &p)
     const int bytes = std::fprintf(
         file,
         "version=2\nmodel=%s\nstyle=%u\ntokens=%u\ntheme=%u\naccent=%u\nvolume=%"
-        "u\ntext_size=%u\nreduced_motion=%u\nhigh_contrast=%u\ncontext=%u\nkv=%u\nthinking=%u\nidle_unload_minutes=%u\n",
+        "u\ntext_size=%u\nreduced_motion=%u\nhigh_contrast=%u\ncontext=%u\nkv=%u\nthinking=%"
+        "u\nidle_unload_minutes=%u\nkokoro_voice=%u\n",
         p.model_id.c_str(), p.style, p.output_limit, p.theme, p.accent, p.volume, p.text_size,
         p.reduced_motion ? 1U : 0U, p.high_contrast ? 1U : 0U, runtime.context, runtime.kv,
-        runtime.thinking ? 1U : 0U, runtime.idle_unload_minutes);
+        runtime.thinking ? 1U : 0U, runtime.idle_unload_minutes, runtime.kokoro_voice);
     const int closed = std::fclose(file);
     if (bytes < 0 || closed != 0 || std::rename(temporary, PROSPERO_SETTINGS_PATH) != 0)
     {
@@ -475,9 +477,9 @@ bool App::retry()
 void App::set_preferences(Preferences preferences)
 {
     validate(preferences);
-    if (!prospero_settings::set(
-            {preferences.context_length, preferences.kv_cache, preferences.thinking,
-             preferences.idle_unload_minutes}))
+    if (!prospero_settings::set({preferences.context_length, preferences.kv_cache,
+                                 preferences.thinking, preferences.idle_unload_minutes,
+                                 preferences.kokoro_voice}))
     {
         state_.status = "Could not save runtime settings.";
         return;
@@ -881,10 +883,16 @@ void App::generate()
     {
         const bool image = model.capability == Capability::Image;
         const auto png_source = image ? media_path(response.data(), ".png") : std::string();
-        const auto source = image ? media_path(response.data(), ".tga")
-                                  : std::string("/download0/prosperoai-audio.wav");
+        const auto source = media_path(response.data(), image ? ".tga" : ".wav");
+        const char *expected_root = image ? "/download0/ProsperoAI/work/image/"
+                                    : model.capability == Capability::Voice
+                                        ? "/download0/ProsperoAI/work/voice/"
+                                        : "/download0/ProsperoAI/work/audio/";
+        const bool source_allowed =
+            source.compare(0, std::strlen(expected_root), expected_root) == 0 &&
+            source.find("..") == std::string::npos;
         char path[320]{};
-        archived = !source.empty() &&
+        archived = source_allowed &&
                    prospero_session::archive_media(
                        result_.session.id, static_cast<unsigned>(result_.messages.size()),
                        image                                   ? "image"
@@ -895,8 +903,8 @@ void App::generate()
         {
             if (image && !png_source.empty())
                 std::snprintf(response.data(), response.size(),
-                              "Image generated locally.\nPNG: %s\nPreview: %s",
-                              png_source.c_str(), path);
+                              "Image generated locally.\nPNG: %s\nPreview: %s", png_source.c_str(),
+                              path);
             else
                 std::snprintf(response.data(), response.size(), "%s generated locally.\n%s",
                               image ? "Image" : "Audio", path);

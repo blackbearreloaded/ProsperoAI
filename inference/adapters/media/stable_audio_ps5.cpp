@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Stable Audio 3 through audio.cpp's C API and the shared ggml/Vulkan runtime.
 #include "audiocpp.h"
+#include "../../../include/generated_output_path.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -19,7 +20,6 @@ std::uint64_t sceKernelGetProcessTime(void);
 namespace
 {
 constexpr char kModelFile[] = "stable-audio-3-small-sfx-q8_0.gguf";
-constexpr char kOutput[] = "/download0/ProsperoAI/work/audio/stable-audio-3.wav";
 audiocpp_registry *g_registry;
 audiocpp_model *g_model;
 audiocpp_options *g_options;
@@ -60,7 +60,7 @@ bool write_wav(const char *path, const float *samples, std::size_t frames,
         return false;
     const auto sample_count = frames * static_cast<std::size_t>(channels);
     const auto data_bytes = static_cast<std::uint32_t>(sample_count * 2);
-    std::FILE *file = std::fopen(path, "wb");
+    std::FILE *file = std::fopen(path, "wbx");
     if (!file)
         return false;
     std::fwrite("RIFF", 1, 4, file);
@@ -148,6 +148,9 @@ extern "C" int ps5_stable_audio_generate(const char *model_root, const char *pro
 {
     if (!model_root || !*model_root || !prompt || !*prompt || !response || !response_capacity)
         return 1;
+    char output[160];
+    if (!prospero_generated_output_path(output, sizeof(output), "audio", "stable-audio-3", "wav"))
+        return 1;
     if (progress)
         progress("Loading Stable Audio 3 on Vulkan");
 
@@ -187,14 +190,15 @@ extern "C" int ps5_stable_audio_generate(const char *model_root, const char *pro
         std::size_t frames = 0;
         int sample_rate = 0, channels = 0;
         if (audiocpp_result_audio(result, &samples, &frames, &sample_rate, &channels) != AUDIOCPP_OK ||
-            !samples || !frames || !write_wav(kOutput, samples, frames, sample_rate, channels))
+            !samples || !frames || !write_wav(output, samples, frames, sample_rate, channels))
         {
             log_error("WAV output failed");
+            std::remove(output);
             result_code = 7;
             break;
         }
         sceKernelDebugOutText(0, "[prosperoai:stable-audio] generation complete\n");
-        std::snprintf(response, response_capacity, "Audio generated locally at %s", kOutput);
+        std::snprintf(response, response_capacity, "Audio generated locally at %s", output);
     } while (false);
 
     audiocpp_result_free(result);

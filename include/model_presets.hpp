@@ -9,12 +9,9 @@ struct PresetFile { const char *source, *path, *sha256; std::uint64_t size;
                     const char *repository, *revision; };
 struct Preset { const char *id, *name, *repository, *revision; int kind; std::uint64_t size; const PresetFile *files; std::size_t count; };
 inline constexpr PresetFile preset_files_0[] = {
-    {"Mistral-7B-Instruct-v0.3.Q4_0.gguf", "", "19c3cf872246d48e7a9784d6def7a694a6c9056cfbeb98f7061d43cd0a7c8b7f", 4113289152ULL, nullptr, nullptr},
+    {"Qwen3.8-9B-Q4_K_M.gguf", "", "df13d66021cef676f82be74053220fd75af6bf2a6a7fb77f5222ab9e50744a7a", 5780090176ULL, nullptr, nullptr},
 };
 inline constexpr PresetFile preset_files_1[] = {
-    {"Qwen3.5-9B-Q4_0.gguf", "", "17670346b4260ddcb0173965145155885024f3c9a4a24389a3370751edbcde24", 5379417312ULL, nullptr, nullptr},
-};
-inline constexpr PresetFile preset_files_2[] = {
     {"LICENSE.md", "licenses/LICENSE.md", "d6f6b1a4dce5c852bd6d7d9482d002baf0ccdb71e662250b73be9eec8764ee8d", 11852ULL, nullptr, nullptr},
     {"NOTICE", "licenses/NOTICE", "2b3ebfd1ca02b5f00e1ff32cd1930c0f4613b60f738aff8cf738388e44164873", 568ULL, nullptr, nullptr},
     {"README.md", "licenses/README.md", "44d7a675149cf15dce8e5f235ee4ce91963d331ac7e6ba3336302111b68e0b33", 2735ULL, nullptr, nullptr},
@@ -24,8 +21,13 @@ inline constexpr PresetFile preset_files_2[] = {
     {"sd-turbo-fp16/unet/diffusion_pytorch_model.safetensors", "unet/diffusion_pytorch_model.safetensors", "40ec400881e27d1376c7c95c5bd495f407b33756e80eb6365e301c33a07af6e5", 1731904736ULL, nullptr, nullptr},
     {"sd-turbo-fp16/vae/diffusion_pytorch_model.safetensors", "vae/diffusion_pytorch_model.safetensors", "3e4c08995484ee61270175e9e7a072b66a6e4eeb5f0c266667fe1f45b90daf9a", 167335342ULL, nullptr, nullptr},
 };
-inline constexpr PresetFile preset_files_3[] = {
+inline constexpr PresetFile preset_files_2[] = {
     {"Stable-Audio-3-Small-SFX-GGUF/stable-audio-3-small-sfx-q8_0.gguf", "stable-audio-3-small-sfx-q8_0.gguf", "5bb1ec653134e63dac46264e336ae198a2590195fc996fcd0605021215e9b26f", 1683570688ULL, nullptr, nullptr},
+};
+inline constexpr PresetFile preset_files_3[] = {
+    {"z_image_turbo-Q2_K.gguf", "diffusion_model.gguf", "a9cf1b0368e24c2f9d542d2951c01f6f7fc85ed8c9ed39b5b37b15375508d58a", 2592442304ULL, nullptr, nullptr},
+    {"Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "qwen3-4b-instruct-2507-q4-k-m.gguf", "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597", 2497281120ULL, "unsloth/Qwen3-4B-Instruct-2507-GGUF", "1e1094e82febb22ad75c2802fc1cbc94c74f8481"},
+    {"split_files/vae/ae.safetensors", "ae.safetensors", "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38", 335304388ULL, "Comfy-Org/z_image_turbo", "6fc90a3b1b653e935a0d175e260736de25b84df5"},
 };
 inline constexpr PresetFile preset_files_4[] = {
     {"ACE-Step1.5-GGUF/turbo/ace-step-1.5-turbo-q8_0.gguf", "ace-step-1.5-turbo-q8_0.gguf", "cd7bf272588f548d4a253f57483132ef0f8f54a549f26471b09caa72c654270b", 6185460032ULL, nullptr, nullptr},
@@ -69,6 +71,7 @@ inline constexpr PresetFile preset_files_5[] = {
     {"provenance/model-preparation.json", "licenses/provenance/model-preparation.json", "f9e710c3079daa116b5341964acfb3e1aea5fc21909bfa7745709cdc56b3c996", 14562ULL, nullptr, nullptr},
     {"kokoro-82m-f16.gguf", "kokoro-82m-f16.gguf", "597926de84f5550e1526ce0abde4e496209d464afc9274d8603d14f3c04d1f67", 163728096ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
     {"voices/kokoro-voice-af_heart.gguf", "kokoro-voice-af_heart.gguf", "c2f44076dfb8f9c098a85d634f6d6b46b038f80e3afdf695ff3b90f6d9ef473f", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
+    {"voices/kokoro-voice-af_bella.gguf", "kokoro-voice-af_bella.gguf", "63d24d0e5d91cb6cf3bca294a3b8c0b4428aa54ac9b5de42e5ba07f6bd110ea8", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
 };
 inline constexpr PresetFile preset_files_6[] = {
     {"MiniCPM5-2B-Q8_0.gguf", "", "c5415f8989bf88a8288f1b55a3cc371af53c07b0faa220a63bd7a990cfaba078", 2679710688ULL, nullptr, nullptr},
@@ -81,18 +84,22 @@ inline constexpr PresetFile preset_files_7[] = {
 inline constexpr PresetFile preset_files_8[] = {
     {"granite-4.0-h-tiny-Q4_K_M.gguf", "", "5a38b08c441ae1adbafb1d2b8a7167e0d48734d83af68b268cefea1eec553dcd", 4230976352ULL, nullptr, nullptr},
 };
+inline constexpr PresetFile preset_files_9[] = {
+    {"bohf-12b-moe-3a-q3_k_m.gguf", "", "a13ef6785d0753fe7270d96c061d8c0f32e1bc2b8c17acf6e28fd021ebb5023b", 4703718432ULL, nullptr, nullptr},
+};
 inline constexpr Preset presets[] = {
-    {"mistral-7b-instruct-v0.3-q4-0.gguf", "Mistral 7B Instruct v0.3 Q4_0", "QuantFactory/Mistral-7B-Instruct-v0.3-GGUF", "a83fbb7c79c1afd59dfcce75272591cbe5a2412f", 0, 4113289152ULL, preset_files_0, 1},
-    {"qwen3.5-9b-q4-0.gguf", "Qwen3.5 9B Q4_0", "unsloth/Qwen3.5-9B-GGUF", "3885219b6810b007914f3a7950a8d1b469d598a5", 0, 5379417312ULL, preset_files_1, 1},
-    {"sd-turbo-fp16", "SD-Turbo FP16", "blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5", "77d748daee145ea432a0cc20744ba18b5ef4c137", 1, 2580079090ULL, preset_files_2, 8},
-    {"stable-audio-3-small-sfx-vulkan", "Stable Audio 3 Small SFX (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 1683570688ULL, preset_files_3, 1},
+    {"qwen3.8-9b-distill-q4-k-m.gguf", "Qwen3.8 9B Distill Q4_K_M", "empero-ai/Qwen3.8-9B-Distill-GGUF", "760121cd70bb4c36b2b5ec58eb765e0df5987efe", 0, 5780090176ULL, preset_files_0, 1},
+    {"sd-turbo-fp16", "SD-Turbo FP16", "blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5", "77d748daee145ea432a0cc20744ba18b5ef4c137", 1, 2580079090ULL, preset_files_1, 8},
+    {"stable-audio-3-small-sfx-vulkan", "Stable Audio 3 Small SFX (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 1683570688ULL, preset_files_2, 1},
+    {"z-image-turbo-q3-k", "Z-Image Turbo Q2_K + Qwen3 4B Q4_K_M (8-step)", "leejet/Z-Image-Turbo-GGUF", "c61c0e422dc8b541b7548cf33a4ef8302b0f8085", 1, 5425027812ULL, preset_files_3, 3},
     {"ace-step-1.5-turbo-q8-0", "ACE-Step 1.5 Turbo Q8_0 (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 6244194798ULL, preset_files_4, 15},
-    {"kokoro-82m-vulkan", "Kokoro 82M Vulkan", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 165234523ULL, preset_files_5, 24},
+    {"kokoro-82m-vulkan", "Kokoro 82M Vulkan", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 165757083ULL, preset_files_5, 25},
     {"minicpm5-2b-q8-0.gguf", "MiniCPM5 2B Q8_0", "openbmb/MiniCPM5-2B-GGUF", "2079a22f3beaa4e306449978533478fe0522f4b3", 0, 2679710688ULL, preset_files_6, 1},
 #ifdef PROSPERO_PRISM_RUNTIME
     {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "Ternary Bonsai 2 27B PTQ1_0", "prism-ml/Ternary-Bonsai-2-27B-gguf", "b072e1d3b35a0a630cece372c2127528e0994386", 0, 5946648928ULL, preset_files_7, 1},
 #endif
     {"granite-4.0-h-tiny-q4-k-m.gguf", "Granite 4.0 H-Tiny Q4_K_M", "ibm-granite/granite-4.0-h-tiny-GGUF", "08d5a8a9741dd5c1a95d2d39e25253226aa1464e", 0, 4230976352ULL, preset_files_8, 1},
+    {"bohf-12b-moe-3a-q3-k-m.gguf", "BoHF 12B MoE 3A Q3_K_M", "theprint/Bohf-12B-MoE-3A-GGUF", "a0ab1f1455f4bad47f31c8c52f6aec1569699da5", 0, 4703718432ULL, preset_files_9, 1},
 };
 inline constexpr std::size_t preset_count = sizeof(presets) / sizeof(presets[0]);
 }

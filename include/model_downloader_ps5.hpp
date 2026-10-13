@@ -22,6 +22,8 @@ bool candidate(std::size_t index, Candidate *output);
 bool search(const char *query);
 bool browse(const char *repository);
 bool download(std::size_t index);
+// Remove one installed model by its runtime ID. Never removes partial downloads.
+bool delete_model_files(const char *id);
 // Ends the download that is running: true when one was. The worker stops within a moment,
 // removes what it had downloaded (a .part file, a bundle's staging folder) and the state
 // becomes Ready after a file from a repository, Idle after a preset.

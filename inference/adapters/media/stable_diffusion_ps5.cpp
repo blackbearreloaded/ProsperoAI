@@ -1,6 +1,7 @@
 #include "ggml-vulkan.h"
 static_assert(GGML_MAX_NAME == 160, "SD and llama must share the tensor ABI");
 #include "stable-diffusion.h"
+#include "../../../include/generated_output_path.hpp"
 #include "../../../third_party/miniz/miniz_tdef.h"
 #include "../../../third_party/miniz/miniz.h"
 
@@ -11,6 +12,8 @@ static_assert(GGML_MAX_NAME == 160, "SD and llama must share the tensor ABI");
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <vector>
 
 extern "C"
 {
@@ -25,6 +28,60 @@ sd_ctx_t *context;
 char context_root[192];
 void (*progress_callback)(const char *);
 bool backend_registered;
+
+bool model_index_has(const char *root, const char *pipeline)
+{
+    char path[512];
+    std::snprintf(path, sizeof(path), "%s/model_index.json", root);
+    std::FILE *file = std::fopen(path, "rb");
+    if (!file)
+        return false;
+    char contents[8192]{};
+    const std::size_t count = std::fread(contents, 1, sizeof(contents) - 1, file);
+    const bool failed = std::ferror(file) != 0;
+    std::fclose(file);
+    return !failed && count > 0 && std::strstr(contents, pipeline) != nullptr;
+}
+
+bool is_sd3_model(const char *root)
+{
+    return root && model_index_has(root, "StableDiffusion3Pipeline");
+}
+
+bool is_flux2_klein_model(const char *root)
+{
+    return root && model_index_has(root, "Flux2KleinPipeline");
+}
+
+bool is_sdxl_checkpoint(const char *root)
+{
+    if (!root || !*root)
+        return false;
+    char path[512];
+    if (std::snprintf(path, sizeof(path), "%s/sd_xl_base_1.0.safetensors", root) >=
+        static_cast<int>(sizeof(path)))
+        return false;
+    std::FILE *file = std::fopen(path, "rb");
+    if (!file)
+        return false;
+    std::fclose(file);
+    return true;
+}
+
+bool is_z_image_turbo_model(const char *root)
+{
+    if (!root || !*root)
+        return false;
+    char path[512];
+    if (std::snprintf(path, sizeof(path), "%s/diffusion_model.gguf", root) >=
+        static_cast<int>(sizeof(path)))
+        return false;
+    std::FILE *file = std::fopen(path, "rb");
+    if (!file)
+        return false;
+    std::fclose(file);
+    return true;
+}
 
 void log_line(const char *format, ...)
 {
@@ -55,7 +112,7 @@ bool write_ppm(const char *path, const sd_image_t &image)
 {
     if (!image.data || image.width == 0 || image.height == 0 || image.channel < 3)
         return false;
-    std::FILE *file = std::fopen(path, "wb");
+    std::FILE *file = std::fopen(path, "wbx");
     if (!file)
         return false;
     std::fprintf(file, "P6\n%u %u\n255\n", image.width, image.height);
@@ -75,9 +132,10 @@ bool write_ppm(const char *path, const sd_image_t &image)
 
 bool write_tga(const char *path, const sd_image_t &image)
 {
-    if (!image.data || image.width != 512 || image.height != 512 || image.channel < 3)
+    if (!image.data || image.width == 0 || image.height == 0 || image.width > 65535 ||
+        image.height > 65535 || image.channel < 3)
         return false;
-    std::FILE *file = std::fopen(path, "wb");
+    std::FILE *file = std::fopen(path, "wbx");
     if (!file)
         return false;
     unsigned char header[18]{};
@@ -89,7 +147,7 @@ bool write_tga(const char *path, const sd_image_t &image)
     header[16] = 32;
     header[17] = 0x28;
     bool ok = std::fwrite(header, 1, sizeof(header), file) == sizeof(header);
-    unsigned char row[512 * 4];
+    std::vector<unsigned char> row(static_cast<std::size_t>(image.width) * 4);
     for (unsigned y = 0; y < image.height && ok; ++y)
     {
         for (unsigned x = 0; x < image.width; ++x)
@@ -101,7 +159,7 @@ bool write_tga(const char *path, const sd_image_t &image)
             row[x * 4 + 2] = source[0];
             row[x * 4 + 3] = 255;
         }
-        ok = std::fwrite(row, 4, image.width, file) == image.width;
+        ok = std::fwrite(row.data(), 4, image.width, file) == image.width;
     }
     return std::fclose(file) == 0 && ok;
 }
@@ -120,7 +178,7 @@ bool write_png(const char *path, const sd_image_t &image)
         mz_free(png);
         return false;
     }
-    std::FILE *file = std::fopen(path, "wb");
+    std::FILE *file = std::fopen(path, "wbx");
     const bool complete = file && std::fwrite(png, 1, png_size, file) == png_size;
     const bool closed = !file || std::fclose(file) == 0;
     mz_free(png);
@@ -155,17 +213,66 @@ bool ensure_context(const char *root)
 
     sd_ctx_params_t parameters;
     sd_ctx_params_init(&parameters);
-    parameters.model_path = root;
+    const bool flux2_klein = is_flux2_klein_model(root);
+    char diffusion_model_path[512];
+    char llm_path[512];
+    char vae_path[512];
+    char checkpoint_path[512];
+    const bool sdxl_checkpoint = is_sdxl_checkpoint(root);
+    const bool sdxl = sdxl_checkpoint || model_index_has(root, "StableDiffusionXLPipeline");
+    const bool z_image_turbo = is_z_image_turbo_model(root);
+    if (sdxl_checkpoint &&
+        std::snprintf(checkpoint_path, sizeof(checkpoint_path), "%s/sd_xl_base_1.0.safetensors", root) >=
+            static_cast<int>(sizeof(checkpoint_path)))
+        return false;
+    if (z_image_turbo &&
+        (std::snprintf(diffusion_model_path, sizeof(diffusion_model_path), "%s/diffusion_model.gguf", root) >=
+             static_cast<int>(sizeof(diffusion_model_path)) ||
+         std::snprintf(llm_path, sizeof(llm_path), "%s/qwen3-4b-instruct-2507-q4-k-m.gguf", root) >=
+             static_cast<int>(sizeof(llm_path)) ||
+         std::snprintf(vae_path, sizeof(vae_path), "%s/ae.safetensors", root) >=
+             static_cast<int>(sizeof(vae_path))))
+        return false;
+    if (flux2_klein &&
+        (std::snprintf(diffusion_model_path, sizeof(diffusion_model_path), "%s/diffusion_model.gguf", root) >=
+             static_cast<int>(sizeof(diffusion_model_path)) ||
+         std::snprintf(llm_path, sizeof(llm_path), "%s/qwen3-4b-q2-k.gguf", root) >=
+             static_cast<int>(sizeof(llm_path)) ||
+         std::snprintf(vae_path, sizeof(vae_path), "%s/vae.safetensors", root) >=
+             static_cast<int>(sizeof(vae_path))))
+        return false;
+    parameters.model_path = (flux2_klein || z_image_turbo) ? nullptr
+                            : sdxl_checkpoint ? checkpoint_path
+                                                                  : root;
+    if (flux2_klein || z_image_turbo)
+    {
+        parameters.diffusion_model_path = diffusion_model_path;
+        parameters.llm_path = llm_path;
+        parameters.vae_path = vae_path;
+        parameters.vae_format = z_image_turbo ? SD_VAE_FORMAT_FLUX : SD_VAE_FORMAT_FLUX2;
+    }
     parameters.n_threads = 1;
     parameters.wtype = SD_TYPE_F16;
     parameters.rng_type = CUDA_RNG;
-    parameters.prediction = EPS_PRED;
+    parameters.prediction = (is_sd3_model(root) || flux2_klein || z_image_turbo) ? FLOW_PRED : EPS_PRED;
     parameters.enable_mmap = false;
     parameters.eager_load = false;
     parameters.diffusion_conv_direct = false;
     parameters.vae_conv_direct = false;
-    parameters.backend = "CPU,diffusion=Vulkan0,vae=Vulkan0";
+    parameters.diffusion_flash_attn = z_image_turbo;
+    parameters.backend = z_image_turbo ? "CPU,diffusion=Vulkan0,te=Vulkan0,vae=CPU"
+                             : sdxl ? "CPU,diffusion=Vulkan0,vae=CPU"
+                             : "CPU,diffusion=Vulkan0,vae=Vulkan0";
     parameters.params_backend = "Vulkan0";
+    if (sdxl || z_image_turbo)
+    {
+        // Bound weight and runner residency so Z-Image's encoder and diffusion
+        // workspace can coexist within the PS5 Vulkan heap.
+        parameters.max_vram = "10.5";
+        parameters.disable_prefetch = true;
+        parameters.diffusion_conv_direct = true;
+        parameters.vae_conv_direct = true;
+    }
     context = new_sd_ctx(&parameters);
     if (!context || !sd_ctx_supports_image_generation(context))
     {
@@ -188,25 +295,32 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
                                void (*progress)(const char *))
 {
     constexpr char oracle_output[] = "/download0/ProsperoAI/work/image/prosperoai-image.ppm";
-    static unsigned image_serial;
     char display_output[128];
     char png_output[128];
-    const unsigned serial = image_serial++ % 4;
-    std::snprintf(display_output, sizeof(display_output),
-                  "/download0/ProsperoAI/work/image/prosperoai-image-%u.tga", serial);
-    std::snprintf(png_output, sizeof(png_output),
-                  "/download0/ProsperoAI/work/image/prosperoai-image-%u.png", serial);
     if (!root || !*root || !prompt || !*prompt || !response || response_capacity == 0)
         return 1;
+    if (!prospero_generated_output_path(display_output, sizeof(display_output), "image",
+                                        "prosperoai-image", "tga") ||
+        !prospero_generated_output_path(png_output, sizeof(png_output), "image",
+                                        "prosperoai-image", "png"))
+        return 1;
+    const bool sd3 = is_sd3_model(root);
+    const bool sdxl = model_index_has(root, "StableDiffusionXLPipeline") || is_sdxl_checkpoint(root);
+    const bool flux2_klein = is_flux2_klein_model(root);
+    const bool z_image_turbo = is_z_image_turbo_model(root);
     progress_callback = progress;
     if (progress_callback)
-        progress_callback("Loading SD-Turbo");
+        progress_callback(z_image_turbo ? "Loading Z-Image Turbo"
+                          : flux2_klein ? "Loading FLUX.2 Klein 4B"
+                          : sdxl       ? "Loading Stable Diffusion XL"
+                          : sd3        ? "Loading Stable Diffusion 3"
+                                            : "Loading SD-Turbo");
     std::remove(oracle_output);
     std::remove(display_output);
     const std::uint64_t start = sceKernelGetProcessTime();
     if (!ensure_context(root))
     {
-        std::snprintf(response, response_capacity, "Could not load the SD-Turbo model.");
+        std::snprintf(response, response_capacity, "Could not load the image model.");
         return 2;
     }
 
@@ -214,12 +328,23 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
     sd_img_gen_params_init(&parameters);
     parameters.prompt = prompt;
     parameters.negative_prompt = "";
-    parameters.width = 512;
-    parameters.height = 512;
+    parameters.width = (sd3 || flux2_klein) ? 768 : 512;
+    parameters.height = parameters.width;
     parameters.seed = 42;
     parameters.batch_count = 1;
-    parameters.sample_params.sample_steps = 1;
-    parameters.sample_params.guidance.txt_cfg = 1.0f;
+    parameters.sample_params.sample_steps = z_image_turbo ? 8
+                                            : flux2_klein ? 4
+                                            : sdxl ? 10
+                                            : sd3 ? 28
+                                                  : 1;
+    parameters.sample_params.sample_method = (sdxl || sd3 || flux2_klein || z_image_turbo)
+                                                 ? EULER_SAMPLE_METHOD
+                                                 : EULER_A_SAMPLE_METHOD;
+    if (flux2_klein)
+        parameters.sample_params.scheduler = FLUX2_SCHEDULER;
+    if (flux2_klein || z_image_turbo)
+        parameters.sample_params.guidance.distilled_guidance = 1.0f;
+    parameters.sample_params.guidance.txt_cfg = sdxl ? 5.0f : sd3 ? 4.5f : 1.0f;
 
     sd_image_t *images = nullptr;
     int image_count = 0;
@@ -235,8 +360,9 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
     progress_callback = nullptr;
     if (!written)
     {
-        std::snprintf(response, response_capacity,
-                      "SD-Turbo generation failed. Check the system log.");
+        std::remove(display_output);
+        std::remove(png_output);
+        std::snprintf(response, response_capacity, "Image generation failed. Check the system log.");
         return 3;
     }
     std::snprintf(response, response_capacity,

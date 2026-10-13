@@ -202,7 +202,8 @@ struct NativeUI::Impl
     float clock_ = 0, page_age_ = 10, body_size_ = 28, session_sync_age_ = 0;
     float boot_ = 1, boot_age_ = 0, busy_seconds_ = 0, hero_age_ = 10;
     bool welcomed_ = false, was_busy_ = false;
-    bool conversation_ = false, search_open_ = false, rail_ = false, category_focus_ = false;
+    bool conversation_ = false, search_open_ = false, chat_keyboard_open_ = false,
+        rail_ = false, category_focus_ = false;
     bool empty_models_download_focus_ = true;
     bool keyboard_pending_ = false, quit_ = false;
     int download_focus_ = 0;

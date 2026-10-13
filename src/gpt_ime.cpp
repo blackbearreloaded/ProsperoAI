@@ -11,7 +11,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#define SCE_SYSMODULE_IME_DIALOG UINT16_C(0x0096)
 #define SCE_COMMON_DIALOG_ALREADY_INITIALIZED UINT32_C(0x80B80002)
 #define SCE_IME_ENTER_LABEL_SEND INT32_C(1)
 #define IME_TEXT_CHARACTERS 255U
@@ -53,8 +52,6 @@ extern "C"
     extern int sceImeDialogGetStatus(void);
     extern int sceImeDialogInit(const sce_ime_dialog_param_t *param, const void *extended);
     extern int sceImeDialogTerm(void);
-    extern int sceSysmoduleLoadModule(uint16_t module_id);
-    extern int sceSysmoduleUnloadModule(uint16_t module_id);
     extern int sceUserServiceGetForegroundUser(int32_t *user_id);
 }
 
@@ -170,8 +167,9 @@ bool gpt_ime_init(void)
     const int common_dialog = sceCommonDialogInitialize();
     if (common_dialog < 0 && (uint32_t)common_dialog != SCE_COMMON_DIALOG_ALREADY_INITIALIZED)
         return false;
-    if (sceSysmoduleLoadModule(SCE_SYSMODULE_IME_DIALOG) < 0)
-        return false;
+    // libSceImeDialog.prx and libSceCommonDialog.prx are direct NEEDED
+    // dependencies. Loading the PS4-era 0x0096 sysmodule ID here fails from
+    // the PS5 title context and silently disables the on-screen keyboard.
     module_loaded = true;
     return true;
 }
@@ -264,9 +262,5 @@ bool gpt_ime_active(void)
 void gpt_ime_shutdown(void)
 {
     gpt_ime_cancel();
-    if (module_loaded)
-    {
-        sceSysmoduleUnloadModule(SCE_SYSMODULE_IME_DIALOG);
-        module_loaded = false;
-    }
+    module_loaded = false;
 }

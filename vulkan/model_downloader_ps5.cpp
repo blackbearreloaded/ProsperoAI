@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
+#include <fcntl.h>
 #include <mutex>
 #include <string>
 #include <sys/stat.h>
@@ -147,6 +148,14 @@ struct HttpSession {
             return false;
         }
         return true;
+    }
+    bool get_range(const std::string &url, std::uint64_t first, std::uint64_t last) {
+        status = 0;
+        if (!open()) return false;
+        if (prospero_https_get_range(session, url.c_str(), first, last, &status) != 0) {
+            set_failure("Connection", prospero_https_error(session)); return false;
+        }
+        return status == 206;
     }
     int read(void *buffer, std::size_t size) { return prospero_https_read(session, buffer, size); }
     const char *error() const { return prospero_https_error(session); }
@@ -345,24 +354,246 @@ std::uint64_t resume_point(const std::string &part, std::uint64_t expected, Sha2
     return done;
 }
 
-// Downloads `url` into `part` and checks it against its size and SHA-256. A download the
-// network interrupted leaves its .part file, and the next attempt asks only for the rest
-// (an HTTP Range request); a cancelled or wrong file is removed. `base` is what earlier
-// files of the same job already counted towards the progress bar.
+bool range_supported(const std::string &url) {
+    HttpSession probe;
+    if (!probe.open()) return false;
+    long status = 0;
+    if (prospero_https_get_range(probe.session, url.c_str(), 0, 0, &status) != 0 || status != 206)
+        return false;
+    std::uint8_t byte = 0;
+    return probe.read(&byte, 1) == 1;
+}
+
+struct RangeTask {
+    const std::string *url;
+    const std::string *path;
+    int manifest_fd;
+    std::uint64_t first, last;
+    std::size_t index;
+    bool ok = false;
+};
+
+struct RangeManifestHeader {
+    char magic[8];
+    std::uint64_t expected;
+    std::uint32_t count;
+};
+// More independent TCP windows make better use of the console's bandwidth to the
+// Hugging Face CDN. Sixteen streams are the highest count verified to complete a full
+// model download on the PS5 test title; a 32-stream trial was killed before completion.
+constexpr std::size_t kRangeConnections = 16;
+constexpr char kRangeManifestMagic[] = "P5RNG01";
+off_t manifest_state_offset(std::size_t index) {
+    return static_cast<off_t>(sizeof(RangeManifestHeader) + index);
+}
+
+bool load_range_manifest(const std::string &path, std::uint64_t expected,
+                         std::array<bool, kRangeConnections> &complete) {
+    const int fd = open((path + ".ranges").c_str(), O_RDONLY);
+    if (fd < 0) return false;
+    RangeManifestHeader header{};
+    const ssize_t bytes = read(fd, &header, sizeof(header));
+    struct stat part_info{};
+    const bool valid = bytes == static_cast<ssize_t>(sizeof(header)) &&
+                       std::memcmp(header.magic, kRangeManifestMagic, sizeof(header.magic)) == 0 &&
+                       header.expected == expected && header.count == kRangeConnections &&
+                       stat(path.c_str(), &part_info) == 0 &&
+                       static_cast<std::uint64_t>(part_info.st_size) == expected;
+    if (valid) {
+        for (std::size_t i = 0; i < complete.size(); ++i) {
+            std::uint8_t state = 0;
+            complete[i] = pread(fd, &state, 1, manifest_state_offset(i)) == 1 && state == 1;
+        }
+    }
+    close(fd);
+    return valid;
+}
+
+bool create_range_manifest(const std::string &path, std::uint64_t expected) {
+    const int fd = open((path + ".ranges").c_str(), O_CREAT | O_TRUNC | O_RDWR, 0666);
+    if (fd < 0) return false;
+    RangeManifestHeader header{};
+    std::memcpy(header.magic, kRangeManifestMagic, sizeof(header.magic));
+    header.expected = expected;
+    header.count = kRangeConnections;
+    const std::array<std::uint8_t, kRangeConnections> states{};
+    const bool ok = write(fd, &header, sizeof(header)) == static_cast<ssize_t>(sizeof(header)) &&
+                    write(fd, states.data(), states.size()) == static_cast<ssize_t>(states.size()) &&
+                    fsync(fd) == 0;
+    close(fd);
+    return ok;
+}
+
+void *download_range(void *opaque) {
+    auto &task = *static_cast<RangeTask *>(opaque);
+    HttpSession http;
+    if (!http.get_range(*task.url, task.first, task.last)) return nullptr;
+    const int file = open(task.path->c_str(), O_WRONLY);
+    if (file < 0) return nullptr;
+    std::vector<std::uint8_t> buffer(1024 * 1024);
+    std::uint64_t received = 0;
+    bool ok = true;
+    const std::uint64_t length = task.last - task.first + 1;
+    while (received < length && ok) {
+        const int count = http.read(buffer.data(), std::min<std::uint64_t>(buffer.size(), length - received));
+        if (count <= 0) { ok = false; break; }
+        std::size_t written = 0;
+        while (written < static_cast<std::size_t>(count)) {
+            const ssize_t amount = pwrite(file, buffer.data() + written,
+                                          static_cast<std::size_t>(count) - written,
+                                          static_cast<off_t>(task.first + received + written));
+            if (amount <= 0) { ok = false; break; }
+            written += static_cast<std::size_t>(amount);
+        }
+        if (ok) {
+            received += static_cast<std::uint64_t>(count);
+            completed_bytes.fetch_add(static_cast<std::uint64_t>(count), std::memory_order_acq_rel);
+        }
+    }
+    if (ok) {
+        std::uint8_t extra = 0;
+        if (http.read(&extra, 1) != 0) ok = false;
+    }
+    close(file);
+    task.ok = ok && received == length && !cancel_pending();
+    if (task.ok) {
+        const int sync_file = open(task.path->c_str(), O_WRONLY);
+        const std::uint8_t state = 1;
+        task.ok = sync_file >= 0 && fsync(sync_file) == 0;
+        if (sync_file >= 0) close(sync_file);
+        task.ok = task.ok &&
+                  pwrite(task.manifest_fd, &state, 1, manifest_state_offset(task.index)) == 1 &&
+                  fsync(task.manifest_fd) == 0;
+    }
+    return nullptr;
+}
+
+enum class ParallelResult { Unsupported, Failed, Complete };
+ParallelResult fetch_parallel(const std::string &url, const std::string &part,
+                              std::uint64_t expected, std::uint64_t base,
+                              std::array<bool, kRangeConnections> complete) {
+    constexpr std::uint64_t kMinimumParallelBytes = 128ULL * 1024 * 1024;
+    const bool resuming = std::any_of(complete.begin(), complete.end(), [](bool value) { return value; });
+    if (expected < kMinimumParallelBytes || (!resuming && !range_supported(url)))
+        return ParallelResult::Unsupported;
+    const int file = open(part.c_str(), resuming ? O_WRONLY : O_CREAT | O_TRUNC | O_WRONLY, 0666);
+    if (file < 0 || (!resuming && ftruncate(file, static_cast<off_t>(expected)) != 0)) {
+        if (file >= 0) close(file);
+        storage_error("Cannot prepare parallel download");
+        return ParallelResult::Failed;
+    }
+    close(file);
+    if (!resuming && !create_range_manifest(part, expected)) {
+        std::remove(part.c_str());
+        std::remove((part + ".ranges").c_str());
+        storage_error("Cannot record parallel download progress");
+        return ParallelResult::Failed;
+    }
+    const int manifest_fd = open((part + ".ranges").c_str(), O_RDWR);
+    if (manifest_fd < 0) {
+        std::remove(part.c_str());
+        std::remove((part + ".ranges").c_str());
+        storage_error("Cannot resume parallel download");
+        return ParallelResult::Failed;
+    }
+    std::array<RangeTask, kRangeConnections> tasks{};
+    std::array<void *, kRangeConnections> threads{};
+    const std::uint64_t chunk = expected / kRangeConnections;
+    std::size_t started = 0;
+    for (std::size_t i = 0; i < kRangeConnections; ++i) {
+        if (complete[i]) continue;
+        tasks[i] = {&url, &part, manifest_fd, chunk * i,
+                    i + 1 == kRangeConnections ? expected - 1 : chunk * (i + 1) - 1, i, false};
+        if (scePthreadCreate(&threads[i], nullptr, download_range, &tasks[i], "model-range") != 0)
+            break;
+        ++started;
+    }
+    std::size_t joined = 0;
+    bool created_all = true;
+    for (std::size_t i = 0; i < kRangeConnections; ++i) {
+        if (complete[i]) continue;
+        if (joined < started) {
+            scePthreadJoin(threads[i], nullptr);
+            ++joined;
+        } else {
+            created_all = false;
+            break;
+        }
+    }
+    for (std::size_t i = 0; i < kRangeConnections; ++i)
+        complete[i] = complete[i] || tasks[i].ok;
+    close(manifest_fd);
+    bool all_complete = created_all;
+    for (bool segment : complete) all_complete = all_complete && segment;
+    std::uint64_t saved = 0;
+    for (std::size_t i = 0; i < kRangeConnections; ++i)
+        if (complete[i]) saved += i + 1 == kRangeConnections ? expected - chunk * i : chunk;
+    if (!all_complete) {
+        if (cancel_pending()) {
+            std::remove(part.c_str());
+            std::remove((part + ".ranges").c_str());
+        }
+        completed_bytes.store(cancel_pending() ? base : base + saved, std::memory_order_release);
+        set_status(cancel_pending() ? "Download cancelled. Nothing of it was kept."
+                                   : "Download stopped. Completed ranges are saved; retry to continue.");
+        current.store(cancel_pending() ? State::Idle : State::Failed, std::memory_order_release);
+        return ParallelResult::Failed;
+    }
+    const int sync_fd = open(part.c_str(), O_WRONLY);
+    const bool durable = sync_fd >= 0 && fsync(sync_fd) == 0;
+    if (sync_fd >= 0) close(sync_fd);
+    if (!durable) {
+        storage_error("Cannot flush completed download");
+        return ParallelResult::Failed;
+    }
+    if (std::remove((part + ".ranges").c_str()) != 0 && errno != ENOENT) {
+        storage_error("Cannot finalize parallel download metadata");
+        return ParallelResult::Failed;
+    }
+    prospero::debug::line("download", "completed %llu-byte file with %zu HTTP range connections",
+                          static_cast<unsigned long long>(expected), kRangeConnections);
+    return ParallelResult::Complete;
+}
+
+// Downloads `url` into `part` and checks it against its size and SHA-256. Serial transfers
+// resume from a byte offset; parallel transfers save completed ranges in a sidecar. A
+// cancelled or wrong file is removed. `base` counts earlier files in the same job.
 bool fetch_verified(HttpSession &http, const std::string &url, const std::string &part,
                     std::uint64_t expected, const std::string &sha256, std::uint64_t base,
                     const char *name) {
     Sha256 hash;
-    std::uint64_t done = resume_point(part, expected, hash);
+    std::array<bool, kRangeConnections> range_complete{};
+    const bool range_resume = load_range_manifest(part, expected, range_complete);
+    if (!range_resume && access((part + ".ranges").c_str(), F_OK) == 0) {
+        std::remove(part.c_str());
+        std::remove((part + ".ranges").c_str());
+    }
+    std::uint64_t done = range_resume ? 0 : resume_point(part, expected, hash);
     const std::uint64_t resumed = done;
     if (cancel_pending()) { std::remove(part.c_str()); return false; }
     completed_bytes.store(base + done, std::memory_order_release);
+    if (range_resume) {
+        const std::uint64_t chunk = expected / kRangeConnections;
+        std::uint64_t saved = 0;
+        for (std::size_t i = 0; i < kRangeConnections; ++i)
+            if (range_complete[i]) saved += i + 1 == kRangeConnections ? expected - chunk * i : chunk;
+        completed_bytes.store(base + saved, std::memory_order_release);
+    }
     if (done) prospero::debug::line("download", "%s: continuing at %llu of %llu bytes", name,
                                     static_cast<unsigned long long>(done),
                                     static_cast<unsigned long long>(expected));
     const Pace pace;
     bool ok = true, network_failed = false;
-    if (done < expected) {
+    bool parallel = false;
+    if ((range_resume || (done == 0 && expected >= 128ULL * 1024 * 1024))) {
+        const auto result = fetch_parallel(url, part, expected, base, range_complete);
+        if (result == ParallelResult::Failed) return false;
+        parallel = result == ParallelResult::Complete;
+        if (!parallel && range_resume)
+            std::remove((part + ".ranges").c_str());
+        if (parallel) done = resume_point(part, expected, hash);
+    }
+    if (!parallel && done < expected) {
         ok = http.get(url, done);
         network_failed = !ok && http.status == 0; // no answer at all, not a refusal
         if (ok && done && http.status == 200) {
@@ -372,7 +603,7 @@ bool fetch_verified(HttpSession &http, const std::string &url, const std::string
         }
         std::FILE *file = ok ? std::fopen(part.c_str(), done ? "ab" : "wb") : nullptr;
         if (ok && !file) { storage_error("Cannot create download file"); ok = false; }
-        std::vector<std::uint8_t> buffer(1024 * 1024);
+        std::vector<std::uint8_t> buffer(4 * 1024 * 1024);
         while (ok) {
             const int n = http.read(buffer.data(), buffer.size());
             if (cancel_pending()) { ok = false; break; }
@@ -660,5 +891,59 @@ bool candidate(std::size_t i,Candidate*out){if(!out)return false;std::lock_guard
 bool search(const char *query){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(!query||state()==State::Searching||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(query);if(value.size()<2||value.size()>96){set_status("Enter at least two characters for model search.");current.store(State::Failed);return false;}for(unsigned char c:value)if(!(std::isalnum(c)||std::isspace(c)||c=='-'||c=='_'||c=='.'||c=='+')){set_status("Use letters, numbers, spaces, dots, dashes or underscores.");current.store(State::Failed);return false;}worker_query=value;{std::lock_guard<std::mutex> lock(state_mutex);items.clear();}current.store(State::Searching);set_status("Searching public GGUF repositories...");return start();}
 bool browse(const char *repo){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(!repo||state()==State::Loading||state()==State::Downloading||worker_thread)return false;std::string value(repo);if(!safe_repo(value)){set_status("Enter a repository as owner/name.");current.store(State::Failed);return false;}worker_repo=value;{std::lock_guard<std::mutex> lock(state_mutex);items.clear();}current.store(State::Loading);set_status("Connecting to Hugging Face over HTTPS...");return start();}
 bool download(std::size_t i){poll();std::lock_guard<std::mutex> job_lock(job_mutex);if(state()!=State::Ready||worker_thread)return false;worker_preset=-1;{std::lock_guard<std::mutex> lock(state_mutex);if(i>=items.size())return false;worker_index=i;}completed_bytes.store(0);total_bytes.store(items[i].size);current.store(State::Downloading);set_status("Starting model download...");return start();}
+bool delete_model_files(const char *raw_id) {
+    if (!raw_id || !*raw_id) return false;
+    poll();
+    std::lock_guard<std::mutex> job_lock(job_mutex);
+    if (worker_thread || state() == State::Downloading || state() == State::Searching ||
+        state() == State::Loading) return false;
+    const std::string id(raw_id);
+    const std::string root = prospero::model_root();
+    for (const auto &preset : presets) {
+        if (preset.kind == 0 || id != preset.id) continue;
+        const std::string bundle = root + "/" + preset.id;
+        struct stat info{};
+        if (stat(bundle.c_str(), &info) == 0 && S_ISDIR(info.st_mode)) {
+            remove_tree(bundle);
+            return access(bundle.c_str(), F_OK) != 0;
+        }
+        bool removed = false;
+        for (std::size_t i = 0; i < preset.count; ++i) {
+            const std::string relative = preset.files[i].path;
+            if (relative.empty() || relative.find("..") != std::string::npos ||
+                relative.front() == '/') return false;
+            const std::string path = root + "/" + relative;
+            if (unlink(path.c_str()) == 0) removed = true;
+            else if (errno != ENOENT) return false;
+        }
+        return removed;
+    }
+    if (safe_filename(id)) {
+        const std::string path = root + "/" + id;
+        struct stat info{};
+        if (stat(path.c_str(), &info) != 0 || !S_ISREG(info.st_mode)) return false;
+        return unlink(path.c_str()) == 0;
+    }
+    if (id.empty() || id.size() > 128 || id.front() == '.') return false;
+    for (const unsigned char c : id)
+        if (!std::isalnum(c) && c != '-' && c != '_' && c != '.') return false;
+    const std::string directory = root + "/" + id;
+    struct stat info{};
+    if (stat(directory.c_str(), &info) != 0 || !S_ISDIR(info.st_mode)) return false;
+    const std::string index_path = directory + "/model_index.json";
+    std::FILE *index = std::fopen(index_path.c_str(), "rb");
+    if (!index) return false;
+    char contents[8192]{};
+    const std::size_t count = std::fread(contents, 1, sizeof(contents) - 1, index);
+    const bool failed = std::ferror(index) != 0;
+    std::fclose(index);
+    if (failed || count == 0 ||
+        (!std::strstr(contents, "Flux2KleinPipeline") &&
+         !std::strstr(contents, "StableDiffusion3Pipeline") &&
+         !std::strstr(contents, "StableDiffusionXLPipeline")))
+        return false;
+    remove_tree(directory);
+    return access(directory.c_str(), F_OK) != 0;
+}
 }
 #endif // PS5_LLAMA_VULKAN

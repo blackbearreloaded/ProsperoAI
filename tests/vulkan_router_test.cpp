@@ -3,6 +3,7 @@
 #include "runtime_adapter.hpp"
 #include "model_paths.hpp"
 #include "model_presets.hpp"
+#include "model_downloader_ps5.hpp"
 #include <cassert>
 #include <algorithm>
 #include <cstring>
@@ -69,6 +70,13 @@ int gpt_runtime_generate(const gpt_runtime_message_t *, unsigned,
     return 0;
 }
 } // namespace prospero_vulkan
+namespace prospero_model_download
+{
+bool delete_model_files(const char *)
+{
+    return true;
+}
+} // namespace prospero_model_download
 extern "C"
 {
     std::int64_t sceKernelGetDirectMemorySize()
@@ -138,18 +146,19 @@ extern "C"
 int main()
 {
     {
-        const auto *adapter = prospero::inference::find_adapter(prospero::inference::Modality::Audio);
+        const auto *adapter =
+            prospero::inference::find_adapter(prospero::inference::Modality::Audio);
         assert(adapter);
         prospero::inference::Model ace_model{"ace-step-1.5-turbo-q8-0", "ACE-Step 1.5",
-                                              "/models/ace-step-1.5-turbo-q8-0",
-                                              prospero::inference::Modality::Audio, 0};
+                                             "/models/ace-step-1.5-turbo-q8-0",
+                                             prospero::inference::Modality::Audio, 0};
         const gpt_runtime_message_t ace_messages[] = {{"user", "A bright synth melody"}};
         gpt_runtime_settings_t ace_settings{};
         char ace_output[64]{};
         gpt_runtime_stats_t ace_stats{};
         const prospero::inference::GenerationRequest ace_request{
-            ace_model, ace_messages, 1, ace_settings, ace_output, sizeof(ace_output),
-            &ace_stats, nullptr};
+            ace_model,  ace_messages,       1,          ace_settings,
+            ace_output, sizeof(ace_output), &ace_stats, nullptr};
         assert(adapter->generate(ace_request) == 0);
         assert(ace_generated == 1 && ace_stats.elapsed_microseconds == 456);
         assert(std::strcmp(ace_output, "ace-step.wav") == 0);

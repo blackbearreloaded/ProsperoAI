@@ -350,60 +350,20 @@ std::FILE *open_output(const char *id, unsigned index, const char *kind, const c
     return nullptr;
 }
 
-bool save_output_metadata(const char *id, unsigned index, const char *kind, const char *output,
-                          const OutputMetadata &metadata)
+bool save_output_reference(const char *id, unsigned index, const char *output)
 {
-    char path[384];
-    std::snprintf(path, sizeof(path), "%s.json", output);
-    std::FILE *file = std::fopen(path, "wbx");
-    if (!file)
-        return false;
-    std::fputs("{\n  \"schema\": 1,\n  \"session_id\": ", file);
-    write_json_string(file, id);
-    std::fputs(",\n  \"kind\": ", file);
-    write_json_string(file, kind);
-    std::fputs(",\n  \"output\": ", file);
-    write_json_string(file, output);
-    std::fputs(",\n  \"model_id\": ", file);
-    write_json_string(file, metadata.model_id);
-    std::fputs(",\n  \"model_name\": ", file);
-    write_json_string(file, metadata.model_name);
-    std::fputs(",\n  \"prompt\": ", file);
-    write_json_string(file, metadata.prompt, true);
-    std::fprintf(file,
-                 ",\n  \"message_index\": %u,\n  \"response_style\": %u,\n"
-                 "  \"output_limit\": %u,\n  \"requested_context\": %u,\n"
-                 "  \"thinking\": %s,\n  \"seed\": ",
-                 index, metadata.response_style, metadata.output_limit, metadata.requested_context,
-                 metadata.thinking ? "true" : "false");
-    if (metadata.seed < 0)
-        std::fputs("null", file);
-    else
-        std::fprintf(file, "%lld", static_cast<long long>(metadata.seed));
-    std::fputs("\n}\n", file);
-    bool ok = std::ferror(file) == 0;
-    ok = std::fclose(file) == 0 && ok;
-    if (!ok)
-    {
-        std::remove(path);
-        return false;
-    }
-    // A separate reference preserves plain text responses and existing session schema.
     char reference[256], temporary[272], leaf[48];
     std::snprintf(leaf, sizeof(leaf), "output-%03u.txt", index);
     make_path(reference, sizeof(reference), id, leaf);
     std::snprintf(temporary, sizeof(temporary), "%s.tmp", reference);
-    file = std::fopen(temporary, "wb");
-    ok = file && std::fprintf(file, "%s\n", output) > 0;
+    std::FILE *file = std::fopen(temporary, "wb");
+    bool ok = file && std::fprintf(file, "%s\n", output) > 0;
     if (file)
         ok = std::fclose(file) == 0 && ok;
     if (ok)
         ok = std::rename(temporary, reference) == 0;
     if (!ok)
-    {
         std::remove(temporary);
-        std::remove(path);
-    }
     return ok;
 }
 
@@ -591,9 +551,17 @@ bool erase(const char *id)
         make_path(path, sizeof(path), id, leaf);
         if (std::remove(path) != 0 && errno != ENOENT)
             return false;
+        std::snprintf(leaf, sizeof(leaf), "output-%03u.json", index);
+        make_path(path, sizeof(path), id, leaf);
+        if (std::remove(path) != 0 && errno != ENOENT)
+            return false;
         const int length = std::snprintf(leaf, sizeof(leaf), "message-%03u.txt.tmp", index);
         if (length < 0 || static_cast<std::size_t>(length) >= sizeof(leaf))
             return false;
+        make_path(path, sizeof(path), id, leaf);
+        if (std::remove(path) != 0 && errno != ENOENT)
+            return false;
+        std::snprintf(leaf, sizeof(leaf), "output-%03u.json.tmp", index);
         make_path(path, sizeof(path), id, leaf);
         if (std::remove(path) != 0 && errno != ENOENT)
             return false;
@@ -631,6 +599,7 @@ bool erase(const char *id)
 bool archive_media(const char *id, unsigned message_index, const char *kind, const char *source,
                    char *output, std::size_t output_capacity, const OutputMetadata *metadata)
 {
+    (void)metadata; // Session metadata is stored with the conversation, not beside each asset.
     if (!valid_id(id) || message_index >= MessageCapacity || !kind ||
         (std::strcmp(kind, "image") != 0 && std::strcmp(kind, "audio") != 0 &&
          std::strcmp(kind, "voice") != 0) ||
@@ -671,8 +640,8 @@ bool archive_media(const char *id, unsigned message_index, const char *kind, con
     const bool input_closed = std::fclose(input) == 0;
     const bool output_closed = std::fclose(destination) == 0;
     ok = input_closed && output_closed && ok;
-    if (ok && metadata)
-        ok = save_output_metadata(id, message_index, kind, output, *metadata);
+    if (ok)
+        ok = save_output_reference(id, message_index, output);
     if (!ok)
         std::remove(output);
     return ok;
@@ -681,6 +650,7 @@ bool archive_media(const char *id, unsigned message_index, const char *kind, con
 bool archive_text(const char *id, unsigned message_index, const char *text,
                   const OutputMetadata &metadata, char *output, std::size_t output_capacity)
 {
+    (void)metadata; // Text exports are plain text; the session already records model metadata.
     if (!valid_id(id) || message_index >= MessageCapacity || !text || !output ||
         output_capacity < 2)
         return false;
@@ -691,7 +661,7 @@ bool archive_text(const char *id, unsigned message_index, const char *text,
     bool ok = std::fwrite(text, 1, size, file) == size;
     ok = std::fclose(file) == 0 && ok;
     if (ok)
-        ok = save_output_metadata(id, message_index, "text", output, metadata);
+        ok = save_output_reference(id, message_index, output);
     if (!ok)
         std::remove(output);
     return ok;

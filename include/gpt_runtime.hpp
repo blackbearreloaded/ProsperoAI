@@ -51,6 +51,8 @@ const char *gpt_runtime_model_id(unsigned index);
 const char *gpt_runtime_model_name(unsigned index);
 const char *gpt_runtime_model_purpose(unsigned index);
 bool gpt_runtime_select_model(unsigned index);
+// Delete an installed model when it is not selected and inference is idle.
+bool gpt_runtime_delete_model(const char *id);
 // Release the selected runtime after it has been idle for timeout_seconds. A later
 // generation lazily prepares that same model again. Safe to call from the UI loop.
 void gpt_runtime_check_idle_unload(unsigned timeout_seconds);

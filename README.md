@@ -48,7 +48,9 @@ how it is built, and what a run on a console showed.
 - Draws answers in Latin, Greek, Cyrillic, Chinese, Japanese and Korean with scalable faces.
 - Stores independent text, image, audio, and speech sessions under `/data/prosperoai/sessions`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
-- Ships without weights. Models offers verified presets and standalone GGUF downloads.
+- Ships without weights. Models offers verified presets and standalone GGUF downloads. See
+  [Supported models](docs/SUPPORTED_MODELS.md) for curated text models that run through the
+  shared GGUF runtime without model-specific adapters.
 - Includes an HTTP server with a browser Workspace, model downloads and progress at
   `http://<PS5-IP>:11434/`.
 - Connects OpenCode and other OpenAI-compatible clients to local PS5 text inference,
@@ -71,33 +73,33 @@ how it is built, and what a run on a console showed.
 
 | Model | Purpose | Installed size | Hardware result |
 | --- | --- | ---: | --- |
-| [Mistral 7B Instruct v0.3 Q4_0](https://huggingface.co/blackbearreloaded/ProsperoAI-Mistral-7B-Instruct-v0.3-Q4_0-PS5) | Text to text | 4.35 GiB | About 1.4–1.5 s load and 25–29 tokens/s for short, resident-context replies |
-| [Qwen3.5 9B Q4_0](https://huggingface.co/blackbearreloaded/ProsperoAI-Qwen3.5-9B-Q4_0-PS5) | Text to text | 6.37 GiB | 3.72 s switch/load; 1.46 s measured 44-token prefill and about 30 tokens/s decode |
-| [Granite 4.0 H-Tiny Q4_K_M](https://huggingface.co/ibm-granite/granite-4.0-h-tiny-GGUF) | Text to text | 3.94 GiB | Host CPU smoke: 0.9 prompt / 0.6 decode tokens/s (single short run); PS5/Vulkan benchmark pending ([report](docs/performance/2026-10-12/granite-host-smoke.json)) |
+| [Qwen3.8 9B Distill Q4_K_M](https://huggingface.co/empero-ai/Qwen3.8-9B-Distill-GGUF) | Text to text | 5.38 GiB | New curated preset; PS5 verification pending |
+| [Granite 4.0 H-Tiny Q4_K_M](https://huggingface.co/ibm-granite/granite-4.0-h-tiny-GGUF) | Text to text | 3.94 GiB | PS5/Vulkan: 3 warm 40-token runs, median 0.502 s runtime (about 79.6 tokens/s); 3.88 s weight load |
+| [BoHF 12B MoE 3A Q3_K_M](https://huggingface.co/theprint/Bohf-12B-MoE-3A-GGUF) | Text to text | 4.38 GiB | Experimental MoE; PS5/Vulkan: correct answer and 48-token warm response at about 66 tokens/s; [run report](docs/performance/2026-10-13/pr27-bohf-12b-moe.json) |
 | [SD-Turbo FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5) | Text to image | 2.40 GiB | PS5: verified 512 × 512 PNG/TGA in 29.91 s; [benchmark](docs/performance/2026-10-12/ps5-media-2026-10-12.json) |
+| [Z-Image Turbo Q2_K](https://huggingface.co/leejet/Z-Image-Turbo-GGUF) | Text to image | 5.05 GiB | Smaller 8-step preset with Qwen3 4B Q4_K_M encoder; PS5 output validation pending |
 | [Stable Audio 3 Small SFX Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Stable-Audio-3-Small-SFX-GGUF) | Text to audio (experimental) | 1.57 GiB | 4-second stereo WAV in 19.15 s cold / 5.84 s warm; two randomized full modality cycles passed |
-| [ACE-Step 1.5 Turbo Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/ACE-Step1.5-GGUF/turbo) | Text to music (experimental) | 5.82 GiB | Initial PS5 smoke found its 848 MiB token embedding exceeded the 512 MiB bounded-read limit; raised to 1 GiB, retest pending ([diagnostic](docs/performance/2026-10-12/ps5-ace-step-2026-10-12.json)) |
+| [ACE-Step 1.5 Turbo Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/ACE-Step1.5-GGUF/turbo) | Text to music (experimental) | 5.82 GiB | PS5/Vulkan: valid 8-second stereo 48 kHz WAV in 118.28 s; [retest report](docs/performance/2026-10-12/pr27-console-followup.json) |
 | [Kokoro 82M Vulkan](https://huggingface.co/blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5) | Text to speech | 165 MiB | PS5: 2.175 s of 24 kHz mono speech in 3.92 s cold; [benchmark](docs/performance/2026-10-12/ps5-media-2026-10-12.json) |
 
 The linked repositories contain the exact directory layout, integrity hashes,
 upstream provenance, licenses, and preparation recipe for each model. Do not
 rename or mix their internal files. Granite's GGUF is pinned directly to IBM's
-official repository. The smoke result is diagnostic only, not a performance claim;
-it does not verify PS5 runtime compatibility or performance.
+official repository. Its host smoke result is diagnostic only; the PS5 result above
+records the separate console run.
 
 ### Requested curated model additions
 
 These candidates are tracked here so they are not confused with models already
 available in Models. Do not interpret “pending” as a benchmark result. ACE-Step's
-adapter, dependency sources, and pinned 15-file bundle are implemented. Its first PS5
-run exposed a 512 MiB GGUF-read cap on an 848 MiB token embedding; the reader limit is
-now 1 GiB, and the updated title must pass a PS5 retest before ACE-Step is verified.
+adapter, dependency sources, and pinned 15-file bundle are implemented; following the
+1 GiB bounded-read fix, a PS5/Vulkan generation and text round-trip now pass. The other
+candidates below remain unverified.
 
 | Candidate | Category | Benchmark status |
 | --- | --- | --- |
-| Stable Diffusion 3 (checkpoint selection pending) | Image | Not benchmarked; upstream stable-diffusion.cpp has an SD3 path, but ProsperoAI still needs an SD3 profile, pinned manifest, and PS5 memory/output validation |
-| [DreamShaper XL 1.0](https://huggingface.co/Lykon/dreamshaper-xl-1-0) | Image | Not benchmarked; SDXL profile and PS5 memory/output validation required |
-| [Fish Speech V1.5](https://huggingface.co/fishaudio/fish-speech-1.5) | Voice | Not benchmarked; separate model/codec runtime and PS5 speech adapter required; upstream model is CC-BY-NC-SA-4.0 |
+| Stable Diffusion 3.5 Medium | Image | SD3 profile and local Diffusers-directory discovery are implemented. The official checkpoint is gated by Stability AI's license and requires user acceptance; no curated preset or PS5 validation is included |
+| [Fish Speech V1.5](https://huggingface.co/fishaudio/fish-speech-1.5) | Voice | Not integrated: it needs its own autoregressive model, DAC codec and runtime; the project has no compatible PS5 C++/Vulkan implementation. Upstream model is CC-BY-NC-SA-4.0 |
 
 For every new model, the PS5 benchmark entry will report cold load, at least three
 generation timings with median, memory use, output validity, and a text round-trip
@@ -454,7 +456,9 @@ Stable Audio's OpenCL retirement, SA3 PS5 TLS teardown fix, and console evidence
 [`docs/OPENCL_TO_VULKAN_RESEARCH.md`](docs/OPENCL_TO_VULKAN_RESEARCH.md).
 
 Generated files are saved by modality under `work/image/`, `work/audio/`, and `work/voice/`
-in ProsperoAI's persistent data folder; they no longer go to the shared temporary directory.
+in ProsperoAI's persistent data folder; text responses are saved under `work/text/`. Each
+generated asset gets its own filename and is referenced from its conversation; media stays in
+PNG/WAV form and text exports are plain `.txt` files.
 
 For responsibilities and the adapter contract, see [Inference layers and adapters](docs/INFERENCE_ADAPTERS.md).
 

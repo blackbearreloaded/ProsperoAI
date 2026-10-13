@@ -989,3 +989,99 @@ bounded residency move to the subsequent draft PR.
 - Console stayed responsive; no reboot was performed. Temporary diagnostic logging is being
   removed from the final build. The test title PPSA99023 was the only title changed; PPSA99004
   was not touched.
+
+## 2026-10-12 — PR #27 downloader and curated-model console follow-up
+
+- On PPSA99023, the same 4.03 GB Granite GGUF completed and passed downloader verification with
+  8 and 16 parallel HTTP range connections. Progress samples were about 28–30 MiB/s at 8 and
+  37–42 MiB/s at 16; a repeated 16-connection download confirmed the faster range. Four
+  connections were observed around 17–18 MiB/s in an earlier interval. These are console API
+  polling estimates, not controlled LAN throughput measurements.
+- A 32-connection build was launched and a Granite download requested. The app exited before a
+  reliable progress/resource sample; klog recorded `CRASH KILL_END` for PPSA99023. No exact cause
+  was established. The shsrv monitor on port 2323 refused connections, so CPU and peak RSS at 32
+  could not be measured. The final downloader is set to 16, the highest count with two complete,
+  SHA-verified model downloads.
+- Granite 4.0 H-Tiny loaded on Vulkan (weights 3,875 ms). Three identical 40-token warm answers
+  were correct; runtime elapsed times were 501,326 / 502,371 / 504,255 us (median 502,371 us,
+  about 79.6 generated tokens/s). Before switching to Granite, the console reported a 6,099 MiB
+  largest free block and 11,712 MiB Vulkan heap. Granite was removed after the test.
+- ACE-Step 1.5 passed its first real-model PS5 generation after the per-tensor read bound was
+  raised to 1 GiB. HTTP returned 200 in 118.282 s and the output is an 8-second, stereo 48 kHz
+  PCM16 WAV; its bytes and SHA-256 are stored in
+  `work/audio/ace-step-1.5-ps5-2026-10-12.wav`. Qwen 9B then switched back and answered “4” in
+  4.286 s. Machine-readable evidence: `performance/2026-10-12/pr27-console-followup.json`.
+- The final PPSA99023 app is running the 16-connection build with Qwen 9B selected. Granite was
+  deleted after benchmarking. ACE-Step remains installed as the curated preset. PPSA99004 was
+  not touched; the console was not rebooted.
+
+## 2026-10-12 — PR #27 workspace export and idle-release follow-up
+
+- Text export now writes a plain `.txt` artifact and session reference; the Workspace saves the
+  conversation before inference so new-session outputs have a valid reference. A console API
+  request returned the text through the HTTP media route as `text/plain`; deleting the temporary
+  test conversation removed its exported file.
+- Media archives keep their original PNG/WAV files and session references without writing
+  per-output JSON sidecars. Host session-store tests confirmed that two outputs at the same
+  message index get different filenames and both remain present. PS5 returned 200 with
+  `image/png` and `audio/wav` for existing archived outputs.
+- Setting idle unload to one minute released Qwen after 60 seconds in klog. A subsequent request
+  reloaded the model and returned HTTP 200 in about 4.1 seconds. The setting was restored to two
+  minutes.
+- Tests: `tests/test_session_store.py`, `tests/test_http_api.py`, `make format-check`, and
+  `git diff --check` passed. The final build was deployed to PPSA99023; Qwen remains selected.
+
+## 2026-10-13 — PR #27 storage comparison and SDXL memory check
+
+- Retried FTP to PPSA99023 successfully after stopping the external-storage benchmark build and
+  confirming the title was unmounted. Restored the internal-storage build and launched it; the
+  app remained alive during the following tests.
+- Qwen3.5 0.8B warm requests measured 0.117–0.121 s from both internal storage and
+  `/mnt/ext1/prosperoai`. Kokoro `af_heart` warm medians were 0.301 s internal and 0.303 s
+  external. Cold samples include app/model setup. No meaningful warm inference speedup was found
+  from external storage. Test assets remain in the requested external directory. Samples and WAVs:
+  `performance/2026-10-13/pr27-storage-comparison.json` and `../work/voice/`.
+- The corrected 6,938,078,334-byte SDXL checkpoint downloaded at about 33 MiB/s and passed bundle
+  verification. Generation failed on Vulkan workspace allocation: with a 11,712 MiB heap and
+  6,450.88 MiB tracked weights, the UNet needed 843.51 MiB device / 331.51 MiB budget and had no
+  available allocation. The retry failed while preparing `unet.input_blocks.1`. Do not report
+  SDXL as usable on this PS5 profile.
+- FLUX.2 Klein's Q4_K_M encoder likewise could not allocate about 5.94 GB with a 5,245 MiB largest
+  free block. A smaller encoder remains to be evaluated. Machine-readable results are in
+  `performance/2026-10-13/pr27-storage-comparison.json`.
+- PPSA99023 stayed running on the restored internal build. PPSA99004 was not touched and the
+  console was not rebooted.
+
+## 2026-10-13 — PR #27 12B MoE and allocator memory follow-up
+
+- Added the experimental BoHF 12B MoE 3A Q3_K_M preset from the author's GGUF repository,
+  pinned at `a0ab1f1455f4bad47f31c8c52f6aec1569699da5`. PPSA99023 downloaded 4,703,718,432 bytes
+  and passed the preset SHA-256 check. The standard `llama` architecture loaded and generated
+  `84 × 3 = 252`; a warm 48-token response took 724.202 ms of decode time, about 66.28 tokens/s.
+- During the run, klog recorded release of the idle SDXL context after 120 seconds. The next
+  model-change sample reported a 9,839 MiB largest free PS5 direct-memory block and Vulkan
+  reported 10,317,922,304 bytes free of a 12,280,922,112-byte heap (11,712 MiB total). The prior
+  FLUX failure reported 5,245 MiB largest direct-memory block while trying a 5,939.93 MiB CPU
+  buffer. These values show that the 5 GiB observation was state-dependent; they are not the same
+  metric as the full Vulkan heap. Releasing the idle SDXL context is a practical memory recovery
+  path. There is no allocator setting that can raise the OS/driver-reported Vulkan budget.
+- The title PPSA99023 remains running with BoHF selected. No reboot or change to PPSA99004.
+  Machine-readable evidence: `performance/2026-10-13/pr27-bohf-12b-moe.json`.
+
+## 2026-10-13 — PR #27 preset and KV-cache verification
+
+- PPSA99023 verified short text generation for Mistral 7B Instruct Q4_0, Qwen3.5 9B Q4_0,
+  MiniCPM5 2B Q8_0, Ternary Bonsai 2 27B PTQ1_0, Granite 4.0 H-Tiny Q4_K_M and BoHF 12B MoE
+  3A Q3_K_M. Granite downloaded 4,230,976,352 bytes, passed preset integrity verification, and
+  answered `84 multiplied by 3 equals 252`.
+- Existing console runs verified SD-Turbo, Stable Audio 3 Small SFX, ACE-Step 1.5 Turbo and
+  Kokoro. New retries still failed for FLUX.2 Klein (Qwen encoder could not allocate a 5,939.93
+  MiB CPU buffer) and SDXL (sampling needed 636.55 MiB of Vulkan device workspace and reported
+  zero available). Both remain unusable on this PS5 profile.
+- `inference/adapters/llama/vulkan.cpp` already uses llama.cpp KV memory for token-by-token
+  decoding and implements a longest-common-prefix reuse path for repeated prompts. Three
+  identical Qwen HTTP calls returned the expected answer but logged `reused=0` each time, so
+  cross-request reuse is not proven on the live console. The Hugging Face article's general
+  `use_cache=True` behavior is already provided by llama.cpp; improving prefix reuse needs a
+  separate investigation. No cache code was changed.
+- PPSA99023 remained running. PPSA99004 was not touched; no reboot.

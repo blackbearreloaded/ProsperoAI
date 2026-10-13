@@ -4,6 +4,7 @@
 // OpenCL shim could forward to the GPU.
 #include "kokoro.h"
 #include "ggml-vulkan.h"
+#include "../../../include/generated_output_path.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -20,10 +21,14 @@ extern "C"
 
 namespace
 {
-constexpr char kOutput[] = "/download0/ProsperoAI/work/voice/kokoro-speech.wav";
 // The voice pack that ships with the model folder. Other packs are additional GGUF files.
 constexpr char kModelFile[] = "kokoro-82m-f16.gguf";
-constexpr char kVoiceFile[] = "kokoro-voice-af_heart.gguf";
+const char *voice_file(const char *voice)
+{
+    if (voice && std::strcmp(voice, "af_bella") == 0)
+        return "kokoro-voice-af_bella.gguf";
+    return "kokoro-voice-af_heart.gguf";
+}
 
 void log_line(const char *text)
 {
@@ -72,7 +77,7 @@ bool write_wav(const char *path, const float *samples, int count, int rate)
 {
     if (count <= 0 || rate <= 0)
         return false;
-    std::FILE *file = std::fopen(path, "wb");
+    std::FILE *file = std::fopen(path, "wbx");
     if (!file)
         return false;
     const std::uint32_t data_bytes = static_cast<std::uint32_t>(count) * 2u;
@@ -98,12 +103,15 @@ bool write_wav(const char *path, const float *samples, int count, int rate)
 }
 } // namespace
 
-extern "C" int ps5_kokoro_tts_generate(const char *root, const char *prompt, char *response,
+extern "C" int ps5_kokoro_tts_generate(const char *root, const char *voice_id, const char *prompt, char *response,
                                        std::size_t response_capacity,
                                        std::uint64_t *elapsed_microseconds,
                                        void (*progress)(const char *))
 {
     if (!root || !*root || !prompt || !*prompt || !response || response_capacity == 0)
+        return 1;
+    char output[160];
+    if (!prospero_generated_output_path(output, sizeof(output), "voice", "kokoro-speech", "wav"))
         return 1;
     if (progress)
         progress("Synthesizing speech on the GPU");
@@ -111,7 +119,7 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *prompt, cha
 
     const std::string base(root);
     const std::string model = base + "/" + kModelFile;
-    const std::string voice = base + "/" + kVoiceFile;
+    const std::string voice = base + "/" + voice_file(voice_id);
     // espeak-ng reads its dictionaries from the model folder's assets, not from a system path.
     const std::string espeak_data = base + "/assets";
     setenv("KOKORO_ESPEAK_DATA_PATH", espeak_data.c_str(), 1);
@@ -148,7 +156,6 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *prompt, cha
         return 3;
     }
 
-    std::remove(kOutput);
     kokoro_audio audio = {};
     const enum kokoro_status status = kokoro_synthesize_audio(context, prompt, &audio);
     const std::uint64_t elapsed = sceKernelGetProcessTime() - start;
@@ -177,14 +184,15 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *prompt, cha
                   kokoro_backend_name(context), static_cast<unsigned long long>(elapsed));
     log_line(line);
 
-    const bool written = write_wav(kOutput, audio.samples, audio.n_samples, audio.sample_rate);
+    const bool written = write_wav(output, audio.samples, audio.n_samples, audio.sample_rate);
     kokoro_audio_free(&audio);
     kokoro_free(context);
     if (!written)
     {
-        std::snprintf(response, response_capacity, "Could not write %s", kOutput);
+        std::remove(output);
+        std::snprintf(response, response_capacity, "Could not write %s", output);
         return 5;
     }
-    std::snprintf(response, response_capacity, "Speech generated locally: %s", kOutput);
+    std::snprintf(response, response_capacity, "Speech generated locally: %s", output);
     return 0;
 }

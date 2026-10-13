@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "tool": {
+    "name": "prosperoai-model-tools",
+    "recipe_version": 1,
+    "release": "v0.1.0-alpha.2",
+    "artifact": "ProsperoAI-Model-Tools-Alpha-2.zip"
+  },
+  "profile": "prosperoai-qwen38-9b-distill-v1",
+  "model": {
+    "id": "qwen3.8-9b-distill-q4-k-m",
+    "name": "Qwen3.8 9B Distill Q4_K_M",
+    "purpose": "text-to-text"
+  },
+  "creator": "BlackBearReloaded",
+  "source": {
+    "repository": "empero-ai/Qwen3.8-9B-Distill-GGUF",
+    "file": "Qwen3.8-9B-Q4_K_M.gguf",
+    "revision": "760121cd70bb4c36b2b5ec58eb765e0df5987efe",
+    "bytes": 5780090176,
+    "sha256": "df13d66021cef676f82be74053220fd75af6bf2a6a7fb77f5222ab9e50744a7a"
+  },
+  "outputs": {
+    "model.ps5lm": {
+      "bytes": 6828326912,
+      "sha256": "966e266be4f41a6cc17bb2424236aa0cc4e665c93cfffb342ef5bf6f725e5d5d"
+    },
+    "tokenizer.ps5tok": {
+      "bytes": 6801880,
+      "sha256": "7db8d8e9fb5c28489746bcd921c8d74a252e70963015a342041c09fce6a43e51",
+      "self_checks": 7
+    },
+    "model.json": {
+      "bytes": 61,
+      "sha256": "e481357e5fe90efdce724684d59659ec014d38277282745a56db52cee07786b1"
+    }
+  },
+  "notes": "Full-parameter distillation from Qwen3.8 MoE to the Qwen3.5-9B architecture; this recipe pins the upstream GGUF for direct llama.cpp loading and does not describe PS5LM conversion outputs."
+}

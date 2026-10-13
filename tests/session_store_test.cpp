@@ -104,20 +104,21 @@ int main()
         return bytes;
     };
     assert(read_file(media) == "wave fixture");
-    const auto details = read_file(std::string(media) + ".json");
-    assert(details.find("\"kind\": \"voice\"") != std::string::npos);
-    assert(details.find("\"seed\": null") != std::string::npos);
-    assert(details.find("Second\\u0009line") != std::string::npos);
-    assert(details.find("\"requested_context\": 32768") != std::string::npos);
+    assert(!std::filesystem::exists(std::string(media) + ".json"));
     assert(read_file(std::string("/tmp/prosperoai-session-test/sessions/") + record.id +
                      "/output-001.txt") == std::string(media) + "\n");
     char text_output[320];
     assert(archive_text(record.id, 3, "Text result", metadata, text_output, sizeof(text_output)));
     assert(std::strstr(text_output, "/work/text/") && read_file(text_output) == "Text result");
+    assert(!std::filesystem::exists(std::string(text_output) + ".json"));
+    assert(read_file(std::string("/tmp/prosperoai-session-test/sessions/") + record.id +
+                     "/output-003.txt") == std::string(text_output) + "\n");
     assert(std::strstr(media, "/work/voice/") != nullptr);
     usleep(1000);
     assert(archive_media(record.id, 1, "voice", source, second, sizeof(second)));
     assert(std::strcmp(media, second) != 0);
+    assert(read_file(media) == "wave fixture" && read_file(second) == "wave fixture");
+    assert(!std::filesystem::exists(std::string(second) + ".json"));
     assert(!archive_media(record.id, 1, "../audio", source, second, sizeof(second)));
     char too_short[4];
     assert(!archive_media(record.id, 1, "audio", source, too_short, sizeof(too_short)));

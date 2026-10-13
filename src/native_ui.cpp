@@ -119,11 +119,13 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     keyboard_.style.bindings = ui::KeyboardBindings::standard();
     keyboard_.style.bindings.space = Action::north;
     keyboard_.style.bindings.done = Action::jump_next;
-    keyboard_.style.max_length = 64;
+    keyboard_.style.max_length = 1023;
     keyboard_.set_bounds({360, 596, 1200, 310});
     keyboard_.on_text = [this](std::string_view value)
     {
-        if (tabs_.active() == 0)
+        if (chat_keyboard_open_)
+            composer_.insert(value);
+        else if (tabs_.active() == 0)
         {
             session_search_.insert(value);
             session_query_ = session_search_.text();
@@ -137,7 +139,9 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     };
     keyboard_.on_backspace = [this]
     {
-        if (tabs_.active() == 0)
+        if (chat_keyboard_open_)
+            composer_.backspace();
+        else if (tabs_.active() == 0)
         {
             session_search_.backspace();
             session_query_ = session_search_.text();
@@ -381,7 +385,7 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
 
     // A newer version waits for a quiet moment: nothing running, no other question open.
     if (update_ui_ == UpdateUi::hidden && boot_ < 0.01f && !keyboard_pending_ && !search_open_ &&
-        !dialog_.is_open() && !app_.busy())
+        !chat_keyboard_open_ && !dialog_.is_open() && !app_.busy())
         take_update_offer(feedback);
 
     if (boot_ > 0.6f || keyboard_pending_)
@@ -390,6 +394,17 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     }
     else if (update_ui_ != UpdateUi::hidden)
         update_modal(input, dt, feedback);
+    else if (chat_keyboard_open_)
+    {
+        const auto event = keyboard_.handle(input, feedback);
+        if (event == ui::Event::activated || event == ui::Event::cancelled)
+        {
+            chat_keyboard_open_ = false;
+            feedback.play(audio::Cue::modal_close);
+            if (event == ui::Event::activated && !composer_.text().empty())
+                submit(feedback);
+        }
+    }
     else if (search_open_)
     {
         const auto event = keyboard_.handle(input, feedback);
@@ -419,6 +434,14 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
                 accepted = cancel_pending_ = prospero_model_download::cancel();
             if (!accepted)
                 feedback.play(audio::Cue::error);
+        }
+    }
+    else if (input.is_pressed(Action::l3) && tabs_.active() != 1)
+    {
+        if (tabs_.active() != 1)
+        {
+            change_page(1);
+            feedback.play(audio::Cue::tab);
         }
     }
     else if (input.is_pressed(Action::menu))
@@ -534,7 +557,7 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
             download_focus_ =
                 std::min(static_cast<int>(prospero_model_download::candidate_count()) - 1,
                          download_focus_ + 1);
-        else if (input.is_pressed(Action::confirm))
+        else if (input.is_pressed(Action::confirm) || input.is_pressed(Action::l3))
         {
             if (state == prospero_model_download::State::Downloading)
             {
@@ -584,7 +607,9 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
     }
     if (input.is_pressed(Action::west))
         open_search();
-    else if (models_.handle(input, feedback) == ui::Event::activated && !visible_models_.empty())
+    else if ((input.is_pressed(Action::l3) ||
+              models_.handle(input, feedback) == ui::Event::activated) &&
+             !visible_models_.empty())
     {
         const int index = visible_models_[static_cast<std::size_t>(models_.focus())];
         const auto &state = app_.state();
@@ -935,11 +960,13 @@ void NativeUI::Impl::submit(ui::Feedback &feedback)
         else
             feedback.play(audio::Cue::error);
     }
-    else if (owner_.request_keyboard)
+    else
     {
-        keyboard_pending_ = true;
+        chat_keyboard_open_ = true;
+        keyboard_.style.max_length = 1023;
+        keyboard_.set_length(composer_.text().length());
+        keyboard_.enter();
         feedback.play(audio::Cue::open);
-        owner_.request_keyboard(composer_.text());
     }
 }
 
@@ -966,6 +993,7 @@ void NativeUI::Impl::build_form()
     p.kv_cache = runtime.kv;
     p.thinking = runtime.thinking;
     p.idle_unload_minutes = runtime.idle_unload_minutes;
+    p.kokoro_voice = runtime.kokoro_voice;
     form_.clear();
     if (category_ == 0)
     {
@@ -1005,9 +1033,12 @@ void NativeUI::Impl::build_form()
         for (int i = 0; i < 6; ++i)
             if (idle_minutes[i] == p.idle_unload_minutes)
                 selected_idle = i;
-        form_.add_choice(20, "Unload model after",
-                         {"1 minute", "2 minutes", "5 minutes", "10 minutes", "30 minutes",
-                          "60 minutes"}, selected_idle);
+        form_.add_choice(
+            20, "Unload model after",
+            {"1 minute", "2 minutes", "5 minutes", "10 minutes", "30 minutes", "60 minutes"},
+            selected_idle);
+        form_.add_choice(22, "Kokoro voice", {"Heart · US English", "Bella · US English"},
+                         static_cast<int>(p.kokoro_voice));
         form_.add_value(9, "Processing", "On this console");
     }
     else if (category_ == 2)
@@ -1058,6 +1089,7 @@ void NativeUI::Impl::apply_form()
         p.thinking = form_.toggle_value(19);
         constexpr unsigned idle_minutes[] = {1, 2, 5, 10, 30, 60};
         p.idle_unload_minutes = idle_minutes[std::clamp(form_.choice_index(20), 0, 5)];
+        p.kokoro_voice = static_cast<unsigned>(std::clamp(form_.choice_index(22), 0, 1));
     }
     else if (category_ == 2)
         p.volume = static_cast<unsigned>(form_.slider_value(3));
@@ -1279,7 +1311,7 @@ void NativeUI::Impl::draw(UiFrame &frame) const
         draw_boot(list);
 
     ui::Canvas overlay{frame.overlay, fonts_, 0, clock_};
-    if (search_open_)
+    if (search_open_ || chat_keyboard_open_)
         draw_search(overlay);
     if (dialog_.visible())
     {
@@ -1344,11 +1376,11 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
     {
         // The update's own panels name their buttons.
     }
-    else if (search_open_)
+    else if (search_open_ || chat_keyboard_open_)
     {
         hints[count++] = {ui::Button::cross, "Type"};
         hints[count++] = {ui::Button::triangle, "Space"};
-        hints[count++] = {ui::Button::r2, "Done"};
+        hints[count++] = {ui::Button::r2, chat_keyboard_open_ ? "Send" : "Done"};
         hints[count++] = {ui::Button::circle, "Back"};
     }
     else if (tabs_.active() == 1)
@@ -1426,8 +1458,13 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
         hints[count++] = {ui::Button::square, "New"};
         hints[count++] = {ui::Button::right_stick, "Scroll"};
     }
-    if (!dialog_.is_open() && !search_open_ && update_ui_ == UpdateUi::hidden)
+    if (!dialog_.is_open() && !search_open_ && !chat_keyboard_open_ &&
+        update_ui_ == UpdateUi::hidden)
         hints[count++] = {ui::Button::options, "Close"};
+    if (!dialog_.is_open() && !search_open_ && !chat_keyboard_open_ &&
+        update_ui_ == UpdateUi::hidden)
+        hints[count++] = {ui::Button::left_stick,
+                          tabs_.active() == 1 ? "Select" : "Models"};
     auto glyphs = palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
     glyphs.label = palette_.ink;
     ui::HintLayout layout;
@@ -1544,18 +1581,22 @@ void NativeUI::Impl::draw_search(ui::Canvas &canvas) const
     overlay.bordered_rect(sheet, 26, palette_.panel.with_alpha(1.0f / palette_.panel.a), 1,
                           palette_.line);
     label(overlay,
-          tabs_.active() == 0      ? "SEARCH CONVERSATIONS"
+          chat_keyboard_open_ ? "WRITE A MESSAGE"
+          : tabs_.active() == 0 ? "SEARCH CONVERSATIONS"
           : filters_.active() == 0 ? "FIND A MODEL TO DOWNLOAD"
                                    : "SEARCH YOUR MODELS",
           364, 492, palette_.accent);
-    const auto &field = tabs_.active() == 0 ? session_search_ : search_;
-    const bool empty = field.text().empty();
-    text(overlay, empty ? "Type to search..." : fit(field.text(), 32, 900).c_str(), 364, 548, 32,
+    const std::string &value = chat_keyboard_open_
+                                   ? composer_.text()
+                                   : tabs_.active() == 0 ? session_search_.text() : search_.text();
+    const bool empty = value.empty();
+    text(overlay, empty ? (chat_keyboard_open_ ? "Type your message..." : "Type to search...")
+                        : fit(value, 32, 900).c_str(), 364, 548, 32,
          empty ? palette_.muted : palette_.ink, !empty);
     char found[64];
     std::snprintf(found, sizeof(found), "%zu found",
                   tabs_.active() == 0 ? visible_sessions_.size() : visible_models_.size());
-    if (tabs_.active() == 0 || filters_.active() != 0)
+    if (!chat_keyboard_open_ && (tabs_.active() == 0 || filters_.active() != 0))
         text(overlay, found, sheet.x + sheet.w - 40, 548, 22, palette_.muted, false,
              gfx::Align::right);
     keyboard_.draw(canvas);

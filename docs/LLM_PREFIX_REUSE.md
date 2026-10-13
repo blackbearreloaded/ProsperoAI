@@ -6,6 +6,23 @@ the changed suffix. Model changes, failed decodes, missing cache positions and
 rejected tail removal clear the cache. Recurrent and hybrid models use full prefill.
 Create `disable_prefix_cache.txt` in the app folder to compare the original path.
 
+## KV cache versus prompt-prefix reuse
+
+The generation loop already uses llama.cpp's KV memory: it decodes the prompt in batches,
+then feeds each generated token back through `llama_decode` while retaining the context.
+This is the same core mechanism described in the
+[Hugging Face KV caching article](https://huggingface.co/blog/not-lain/kv-caching); it avoids
+recomputing prior tokens within one response. Prompt-prefix reuse is a separate optimization
+across requests. The runtime only enables it for non-hybrid Transformer memory, because
+recurrent state cannot safely rewind to an arbitrary token boundary.
+
+On PPSA99023, the Qwen3.8 9B Distill preset loaded and generated the expected exact response
+twice. Both logs reported `reused=0` (first prefill 111.736 ms, second 207.888 ms). The model
+therefore confirms the normal within-request KV path, but not cross-request prefix reuse; its
+distilled Qwen3.5-9B architecture is hybrid and intentionally takes the full-prefill path.
+Supporting hybrid prefix snapshots would need a separate bounded state-save/restore design and
+console validation before enabling it.
+
 Optional model-load files are `context_size.txt` (512-16384), `batch_size.txt` and
 `ubatch_size.txt` (32-2048), `threads.txt` and `threads_batch.txt` (1-16), and
 `flash_attention.txt` (0 auto, 1 disabled, 2 enabled). Invalid files retain defaults:

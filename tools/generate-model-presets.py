@@ -6,7 +6,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 media = json.loads((root / 'model-tools/presets.json').read_text())
 models = []
-for name in ['mistral-7b-instruct-v0.3-q4-0', 'qwen3.5-9b-q4-0']:
+for name in ['qwen3.8-9b-distill-q4-k-m']:
     recipe = json.loads((root / 'model-tools/recipes' / (name + '.json')).read_text())
     source = recipe['source']
     models.append(dict(id=name+'.gguf', name=recipe['model']['name'], kind=0,

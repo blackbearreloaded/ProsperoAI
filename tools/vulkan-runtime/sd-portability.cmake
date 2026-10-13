@@ -42,3 +42,41 @@ set_source_files_properties("${patched_pickle}"
     DIRECTORY "${PROS_ROOT}/.deps/stable-diffusion-vulkan"
     PROPERTIES INCLUDE_DIRECTORIES
     "${PROS_ROOT}/.deps/stable-diffusion-vulkan/src/model_io")
+
+# On PS5 the Vulkan memory-budget query can report a free-byte sentinel larger than
+# the heap total. Use the known heap total, then subtract the model manager's tracked
+# resident allocations below, instead of treating all capacity as exhausted.
+set(model_manager_source "${PROS_ROOT}/.deps/stable-diffusion-vulkan/src/model_manager.cpp")
+file(READ "${model_manager_source}" model_manager_content)
+set(invalid_budget_check [==[        if (total_bytes > 0 && free_bytes > total_bytes && sd_backend_is(backend, "Vulkan")) {
+            return size_t{0};
+        }]==])
+set(valid_budget_check [==[        if (total_bytes > 0 && free_bytes > total_bytes && sd_backend_is(backend, "Vulkan")) {
+            free_bytes = total_bytes;
+        }]==])
+string(FIND "${model_manager_content}" "${valid_budget_check}" model_manager_patch_at)
+if(model_manager_patch_at LESS 0)
+    string(FIND "${model_manager_content}" "${invalid_budget_check}" model_manager_patch_at)
+    if(model_manager_patch_at LESS 0)
+        message(FATAL_ERROR "Pinned SD Vulkan memory-budget logic changed; review the PS5 fallback patch")
+    endif()
+    string(REPLACE "${invalid_budget_check}" "${valid_budget_check}"
+        model_manager_content "${model_manager_content}")
+endif()
+set(patched_model_manager "${CMAKE_CURRENT_BINARY_DIR}/sd-patches/model_manager.cpp")
+if(EXISTS "${patched_model_manager}")
+    file(READ "${patched_model_manager}" previous_model_manager)
+else()
+    set(previous_model_manager "")
+endif()
+if(NOT previous_model_manager STREQUAL model_manager_content)
+    file(WRITE "${patched_model_manager}" "${model_manager_content}")
+endif()
+get_target_property(sd_sources stable-diffusion SOURCES)
+list(REMOVE_ITEM sd_sources "${model_manager_source}")
+list(APPEND sd_sources "${patched_model_manager}")
+set_property(TARGET stable-diffusion PROPERTY SOURCES "${sd_sources}")
+set_source_files_properties("${patched_model_manager}"
+    DIRECTORY "${PROS_ROOT}/.deps/stable-diffusion-vulkan"
+    PROPERTIES INCLUDE_DIRECTORIES
+    "${PROS_ROOT}/.deps/stable-diffusion-vulkan/src")

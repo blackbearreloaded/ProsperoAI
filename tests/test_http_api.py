@@ -46,18 +46,18 @@ class HttpApiTests(unittest.TestCase):
     def test_runtime_settings_round_trip(self):
         config = Path(self.scratch.name) / 'runtime.cfg'
         config.write_text('version=2\nstyle=2\ntokens=192\ntheme=1\n')
-        header, body = self.request('/api/settings/runtime', body={'context':'32k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':2})
+        header, body = self.request('/api/settings/runtime', body={'context':'32k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':2, 'kokoro_voice':'af_bella'})
         self.assertIn('200 OK', header)
-        expected = {'context':'32k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':2}
+        expected = {'context':'32k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':2, 'kokoro_voice':'af_bella'}
         self.assertEqual(json.loads(body), expected)
         self.assertIn('style=2\ntokens=192\ntheme=1\n', config.read_text())
         self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
         header, body = self.request('/api/settings/runtime', body={'context':'256k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':5})
         self.assertIn('200 OK', header)
-        expected = {'context':'256k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':5}
+        expected = {'context':'256k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':5, 'kokoro_voice':'af_bella'}
         self.assertEqual(json.loads(body), expected)
         self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
-        for invalid in ({'context':'2k'}, {'kv':'q8_0'}, {'kv':'q2_0'}, {'thinking':'false'}, {'idle_unload_minutes':3}, {'unknown':1}, {'context':'16k','kv':'bad'}, []):
+        for invalid in ({'context':'2k'}, {'kv':'q8_0'}, {'kv':'q2_0'}, {'thinking':'false'}, {'idle_unload_minutes':3}, {'kokoro_voice':'missing'}, {'unknown':1}, {'context':'16k','kv':'bad'}, []):
             self.assertIn('400 Bad Request', self.request('/api/settings/runtime', body=invalid)[0])
             self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
         self.assertIn('401 Unauthorized', self.request('/api/settings/runtime', key='secret')[0])
@@ -81,8 +81,34 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn('404 Not Found', self.request('/api/conversations/' + conversation['id'])[0])
         self.assertIn('401 Unauthorized', self.request('/api/conversations', key='secret')[0])
 
+    def test_text_completion_archives_export_after_conversation_is_saved(self):
+        session_id = 'text-export-fixture'
+        conversation = {'id':session_id,'title':'Text export','model':'tiny.gguf',
+                        'modelName':'Tiny model','purpose':'text-to-text',
+                        'messages':[{'role':'user','content':'hello'}]}
+        header, _ = self.request('/api/conversations', body=conversation)
+        self.assertIn('201 Created', header)
+        try:
+            _, response = self.request(body={
+                'model':'tiny.gguf',
+                'messages':[{'role':'user','content':'hello'}],
+                'output_session_id':session_id,
+                'output_message_index':1,
+            })
+            self.assertEqual(json.loads(response)['choices'][0]['message']['content'], 'Hello café 😀')
+
+            root = Path('/tmp/prosperoai-session-test')
+            exports = list((root / 'work' / 'text' / session_id).glob('001-*.txt'))
+            self.assertEqual(len(exports), 1)
+            self.assertEqual(exports[0].read_text(encoding='utf-8'), 'Hello café 😀')
+            self.assertFalse(Path(str(exports[0]) + '.json').exists())
+            reference = root / 'sessions' / session_id / 'output-001.txt'
+            self.assertEqual(reference.read_text(encoding='utf-8').strip(), str(exports[0]))
+        finally:
+            self.request('/api/conversations/' + session_id, method='DELETE')
+
     def test_request_context_does_not_replace_shared_settings(self):
-        shared = {'context': '32k', 'kv': 'auto', 'thinking': True, 'idle_unload_minutes': 2}
+        shared = {'context': '32k', 'kv': 'auto', 'thinking': True, 'idle_unload_minutes': 2, 'kokoro_voice': 'af_heart'}
         self.request('/api/settings/runtime', body=shared)
         try:
             for route, body in [
@@ -116,6 +142,15 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn("404 Not Found", self.request("/api/models/selection", body={"id": "missing.gguf"})[0])
         self.assertIn("400 Bad Request", self.request("/api/models/selection", body={"id": 3})[0])
         self.assertIn("401 Unauthorized", self.request("/api/models/selection", key="secret")[0])
+        header, body = self.request("/api/models", body={"id": "tiny.gguf"}, method="DELETE")
+        self.assertIn("409 Conflict", header)
+        self.assertIn("active", json.loads(body)["error"])
+        header, body = self.request("/api/models", body={"id": "second.gguf"}, method="DELETE")
+        self.assertIn("200 OK", header)
+        self.assertEqual(json.loads(body)["deleted"], "second.gguf")
+        self.assertIn("400 Bad Request", self.request("/api/models", body={"id": 3}, method="DELETE")[0])
+        self.assertIn("401 Unauthorized", self.request("/api/models", body={"id": "second.gguf"},
+                                                       method="DELETE", key="secret")[0])
         _, body = self.request(body={"model":"second.gguf", "messages":[{"role":"user","content":"x"}]})
         data = json.loads(body)
         self.assertEqual(data["model"], "second.gguf")
@@ -184,7 +219,8 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn("/v1/chat/completions", body)
         self.assertIn("/api/models/search", body)
         for route in ("/v1/models", "/api/tags", "/api/models/download",
-                      "/api/models/search", "/api/models/presets", "/../api_key.txt", "/fonts/../../api_key.txt"):
+                      "/api/models/search", "/api/models/presets", "/api/models",
+                      "/../api_key.txt", "/fonts/../../api_key.txt"):
             header, _ = self.request(route, key="private")
             self.assertIn("401 Unauthorized", header)
         header, _ = self.request("/../api_key.txt")

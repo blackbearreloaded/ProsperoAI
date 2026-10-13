@@ -5,6 +5,7 @@
 #include "runtime_vulkan.hpp"
 #include "model_paths.hpp"
 #include "model_presets.hpp"
+#include "model_downloader_ps5.hpp"
 #include <mutex>
 #include <vector>
 #include <string>
@@ -12,6 +13,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
+#include <dirent.h>
+#include <cctype>
 #include <sys/stat.h>
 extern "C"
 {
@@ -74,6 +78,28 @@ bool exists(const std::string &path)
     {
     };
     return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0;
+}
+bool supported_diffusers_directory(const std::string &path, std::string &family)
+{
+    const std::string index = path + "/model_index.json";
+    std::FILE *file = std::fopen(index.c_str(), "rb");
+    if (!file)
+        return false;
+    char contents[8192]{};
+    const std::size_t count = std::fread(contents, 1, sizeof(contents) - 1, file);
+    const bool failed = std::ferror(file) != 0;
+    std::fclose(file);
+    if (failed)
+        return false;
+    if (std::strstr(contents, "Flux2KleinPipeline"))
+        family = "FLUX.2 Klein";
+    else if (std::strstr(contents, "StableDiffusion3Pipeline"))
+        family = "SD3";
+    else if (std::strstr(contents, "StableDiffusionXLPipeline"))
+        family = "SDXL";
+    else
+        return false;
+    return count > 0;
 }
 void scan()
 {
@@ -148,6 +174,33 @@ void scan()
         }
         if (complete)
             models.push_back({preset.id, preset.name, root, modality, 0});
+    }
+    const std::string model_root = prospero::model_root();
+    if (DIR *directory = opendir(model_root.c_str()))
+    {
+        while (const dirent *entry = readdir(directory))
+        {
+            const std::string id = entry->d_name;
+            if (id.empty() || id == "." || id == ".." || id[0] == '.')
+                continue;
+            bool safe = true;
+            for (const unsigned char c : id)
+                if (!std::isalnum(c) && c != '-' && c != '_' && c != '.')
+                    safe = false;
+            if (!safe || std::any_of(models.begin(), models.end(), [&](const Model &model)
+                                     { return model.id == id; }))
+                continue;
+            const std::string root = model_root + "/" + id;
+            struct stat info
+            {
+            };
+            if (stat(root.c_str(), &info) != 0 || !S_ISDIR(info.st_mode))
+                continue;
+            std::string family;
+            if (supported_diffusers_directory(root, family))
+                models.push_back({id, id + " (" + family + ")", root, Modality::Image, 0});
+        }
+        closedir(directory);
     }
 }
 // Written at every change of model, after the one in memory was let go: with one
@@ -275,6 +328,32 @@ bool gpt_runtime_select_model(unsigned index)
     if (selected_ok)
         note_inference_activity();
     return selected_ok;
+}
+bool gpt_runtime_delete_model(const char *raw_id)
+{
+    if (!raw_id || !*raw_id)
+        return false;
+    std::unique_lock<std::mutex> inference(inference_mutex, std::try_to_lock);
+    if (!inference.owns_lock())
+        return false;
+    std::lock_guard<std::mutex> lock(mutex);
+    scan();
+    const std::string id(raw_id);
+    const auto found = std::find_if(models.begin(), models.end(),
+                                    [&](const Model &model) { return model.id == id; });
+    if (found == models.end() || (selected < models.size() && models[selected].id == id))
+        return false;
+    if (!prospero_model_download::delete_model_files(id.c_str()))
+        return false;
+    const std::string selected_id = selected < models.size() ? models[selected].id : std::string();
+    prospero_vulkan::gpt_runtime_refresh_models();
+    models.clear();
+    scanned = false;
+    scan();
+    const auto next = std::find_if(models.begin(), models.end(),
+                                   [&](const Model &model) { return model.id == selected_id; });
+    selected = next == models.end() ? 0 : static_cast<unsigned>(next - models.begin());
+    return true;
 }
 namespace
 {

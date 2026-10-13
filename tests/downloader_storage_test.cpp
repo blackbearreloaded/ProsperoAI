@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cerrno>
 #include <pthread.h>
+#include <thread>
 static int mounted_stat(const char *path, struct stat *result)
 {
     assert(std::strcmp(path, "/data/prosperoai/models") == 0);
@@ -54,6 +55,17 @@ extern "C"
         sending = ranged ? offset : 0;
         return 0;
     }
+    int prospero_https_get_range(prospero_https *, const char *url, unsigned long long first,
+                                 unsigned long long last, long *status)
+    {
+        requested.emplace_back(url);
+        offsets.push_back(first);
+        if (last < first)
+            return 1;
+        sending = static_cast<std::size_t>(first);
+        *status = 200; // Small host fixtures stay on the sequential fallback path.
+        return 0;
+    }
     int prospero_https_read(prospero_https *, void *buffer, std::size_t size)
     {
         if (sending >= served.size())
@@ -74,8 +86,18 @@ extern "C"
     void prospero_https_set_stop(prospero_https *, prospero_https_stop, void *)
     {
     }
-    int scePthreadJoin(void *, void **)
+    int scePthreadJoin(void *thread, void **)
     {
+        auto *worker = static_cast<std::thread *>(thread);
+        worker->join();
+        delete worker;
+        return 0;
+    }
+    int scePthreadCreate(void **thread, const void *, void *(*entry)(void *), void *arg,
+                         const char *)
+    {
+        auto *worker = new std::thread([entry, arg] { entry(arg); });
+        *thread = worker;
         return 0;
     }
     int prospero_https_receive_buffer(void)

@@ -105,6 +105,8 @@ void input_event(const gpt_input_event_t &event, hui::InputFrame &input, prosper
     else if (event.key == GPT_INPUT_L2 || event.key == GPT_INPUT_R2)
         input.pressed |=
             hui::action_bit(event.key == GPT_INPUT_L2 ? Action::jump_prev : Action::jump_next);
+    else if (event.key == GPT_INPUT_L3)
+        input.pressed |= hui::action_bit(Action::l3);
     else if (event.key == GPT_INPUT_SCROLL_UP)
         ui.scroll(-120);
     else if (event.key == GPT_INPUT_SCROLL_DOWN)

@@ -9,11 +9,14 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-static void require(bool ok, const char *message) {
-    if (!ok) throw std::runtime_error(message);
+static void require(bool ok, const char *message)
+{
+    if (!ok)
+        throw std::runtime_error(message);
 }
 
-static void fixture(const std::filesystem::path &path, int64_t elements) {
+static void fixture(const std::filesystem::path &path, int64_t elements)
+{
     auto *ctx = ggml_init({1024 * 1024, nullptr, true});
     require(ctx != nullptr, "ggml fixture context");
     auto *tensor = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, elements);
@@ -23,10 +26,13 @@ static void fixture(const std::filesystem::path &path, int64_t elements) {
     require(gguf_write_to_file(gguf, path.c_str(), true), "write fixture metadata");
     FILE *file = std::fopen(path.c_str(), "ab");
     require(file != nullptr, "open fixture");
-    if (elements == 4) {
+    if (elements == 4)
+    {
         const float values[] = {1.0f, -2.0f, 3.0f, 4.0f};
         require(std::fwrite(values, sizeof(values), 1, file) == 1, "fixture values");
-    } else {
+    }
+    else
+    {
         const auto offset = std::filesystem::file_size(path);
         require(ftruncate(fileno(file), offset + elements * sizeof(float)) == 0, "sparse fixture");
     }
@@ -35,8 +41,10 @@ static void fixture(const std::filesystem::path &path, int64_t elements) {
     ggml_free(ctx);
 }
 
-int main(int argc, char **argv) {
-    try {
+int main(int argc, char **argv)
+{
+    try
+    {
         require(argc == 3, "usage: test fixture-directory real-model.gguf");
         const auto dir = std::filesystem::path(argv[1]);
         std::filesystem::create_directories(dir);
@@ -46,18 +54,33 @@ int main(int argc, char **argv) {
         const float expected[] = {1.0f, -2.0f, 3.0f, 4.0f};
         auto data = source->require_tensor_data("weight");
         require(data.bytes.size() == sizeof(expected) &&
-                std::memcmp(data.bytes.data(), expected, sizeof(expected)) == 0, "tensor read mismatch");
+                    std::memcmp(data.bytes.data(), expected, sizeof(expected)) == 0,
+                "tensor read mismatch");
         source->release_storage();
         require(source->require_tensor_data("weight").bytes == data.bytes, "read after release");
         std::filesystem::resize_file(small, std::filesystem::file_size(small) - 1);
         bool rejected = false;
-        try { (void)source->require_tensor_data("weight"); } catch (const std::exception &) { rejected = true; }
+        try
+        {
+            (void)source->require_tensor_data("weight");
+        }
+        catch (const std::exception &)
+        {
+            rejected = true;
+        }
         require(rejected, "short read must fail");
         const auto large = dir / "large.gguf";
         fixture(large, 600ll * 1024 * 1024 / sizeof(float));
         auto large_source = engine::assets::open_tensor_source(large);
         rejected = false;
-        try { (void)large_source->require_tensor_data("weight"); } catch (const std::exception &) { rejected = true; }
+        try
+        {
+            (void)large_source->require_tensor_data("weight");
+        }
+        catch (const std::exception &)
+        {
+            rejected = true;
+        }
         require(rejected, "oversized tensor must fail before allocation");
         audiocpp_registry *registry = nullptr;
         audiocpp_model *model = nullptr;
@@ -67,12 +90,18 @@ int main(int argc, char **argv) {
             throw std::runtime_error(audiocpp_last_error());
         audiocpp_model_free(model);
         audiocpp_registry_free(registry);
-        struct rusage usage{};
+        struct rusage usage
+        {
+        };
         getrusage(RUSAGE_SELF, &usage);
         require(usage.ru_maxrss < 128 * 1024, "metadata-only model load exceeded 128 MiB RSS");
-        std::printf("PASS tensor read/release, truncation, allocation limit, SA3 model load; peak RSS=%ld KiB\n", usage.ru_maxrss);
+        std::printf("PASS tensor read/release, truncation, allocation limit, SA3 model load; peak "
+                    "RSS=%ld KiB\n",
+                    usage.ru_maxrss);
         return 0;
-    } catch (const std::exception &error) {
+    }
+    catch (const std::exception &error)
+    {
         std::fprintf(stderr, "FAIL: %s\n", error.what());
         return 1;
     }

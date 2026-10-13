@@ -33,6 +33,11 @@ extern "C"
     int prospero_https_get_from(prospero_https *session, const char *url,
                                 unsigned long long offset, long *status);
 
+    /* Requests one inclusive byte range. The caller must require HTTP 206. */
+    int prospero_https_get_range(prospero_https *session, const char *url,
+                                 unsigned long long first, unsigned long long last,
+                                 long *status);
+
     /* The next bytes of the body: their count, 0 at its end, -1 on failure. */
     int prospero_https_read(prospero_https *session, void *buffer, size_t size);
 

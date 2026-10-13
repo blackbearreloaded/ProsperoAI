@@ -1,6 +1,6 @@
 # Active work
 
-Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
+Updated: 2026-10-13. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
 
 ## Verified vulkan-runtime
 
@@ -45,7 +45,8 @@ Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
 
 - `inference/adapters/media/kokoro_ps5.cpp` drives
   kokoro.cpp (pinned `kokoro-cpp`) on the shared ggml Vulkan backend. The catalog preset is now
-  `kokoro-82m-vulkan`; it downloads the GGUF model, voice and espeak-ng assets. The retired
+  `kokoro-82m-vulkan`; it downloads the GGUF model, Heart and Bella voice packs, and espeak-ng assets.
+  The shared runtime setting selects the Kokoro voice in native and web Settings. The retired
   `kokoro-82m-fp16` directory is ignored by text-model discovery and left intact for users.
 - The PS5 adapter caps Kokoro's scheduler/metadata reservation at 131072 nodes. On 2026-10-12,
   repeated Kokoro requests passed (first 3.97 s, warm median 0.268 s) and text → Kokoro → text
@@ -99,11 +100,72 @@ Updated: 2026-10-12. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
 - Added a dedicated adapter using the ACE-Step family in the already-pinned audio.cpp C API.
   The PS5 build links `stable_audio` and `ace_step` against the same audio.cpp/ggml-Vulkan
   runtime. Its router path, WAV output, release hook and a PS5 cross-build pass.
-- The curated Turbo Q8_0 bundle pins the GGUF and upstream tokenizer/config sidecars. The host
-  router test verifies dispatch; no real-model inference, PS5 generation, artifact quality, or
-  modality-switch benchmark is claimed yet. `PS5_HOST` was unset during this run.
+- The curated Turbo Q8_0 bundle pins the GGUF and upstream tokenizer/config sidecars. After the
+  1 GiB tensor-read fix, PPSA99023 generated a valid 8-second stereo 48 kHz WAV in 118.28 s,
+  then returned to Qwen 9B and answered a text prompt. Artifact and request evidence:
+  `performance/2026-10-12/pr27-console-followup.json` and
+  `../work/audio/ace-step-1.5-ps5-2026-10-12.wav`.
 - The decoder compatibility patch uses a pinned-GGML BF16 cast round-trip where this audio.cpp
-  revision's fused round operator is unavailable. Retest parity and performance on PS5.
+  revision's fused round operator is unavailable. Console quality/performance validation is a
+  single smoke generation; repeatability and parity still need a controlled comparison.
+
+## PR #27 curated adapter follow-up
+
+- Stable Diffusion XL Base 1.0 now has a pinned ungated FP16 preset and a 768×768, 20-step image profile.
+  The corrected 6.94 GB standalone checkpoint downloaded and passed bundle verification on PPSA99023.
+  Generation is not viable with the current 11,712 MiB Vulkan heap: klog reports 6,450.88 MiB
+  tracked weights and then fails UNet workspace checks (needs 843.51 MiB device / 331.51 MiB budget,
+  available 0). The title stayed alive. Keep SDXL marked unsupported on this hardware pending a
+  lower-memory profile or checkpoint.
+- FLUX.2 Klein 4B now has a pinned Q4_0 diffusion model, Q4_K_M Qwen3 encoder and official VAE
+  preset. The Q4_K_M Qwen3 encoder failed allocation on PPSA99023: it requested about 5.94 GB while
+  the largest free direct-memory block was 5,245 MiB. After the idle SDXL context released, that
+  block measured 9,839 MiB. The failure therefore reflects the memory state at the time, not a
+  fixed 5 GiB Vulkan allocator limit. Retry FLUX with no idle media context before judging it.
+- BoHF 12B MoE 3A Q3_K_M was added as a pinned text preset and verified on PPSA99023. Its 4.70 GB
+  GGUF passed the preset SHA check, loaded with the standard `llama` architecture, and returned a
+  correct short answer plus a 48-token warm response at about 66 tokens/s. The model is
+  experimental; this confirms runtime compatibility, not general answer quality. See
+  [BoHF console run](performance/2026-10-13/pr27-bohf-12b-moe.json).
+- Internal vs `/mnt/ext1/prosperoai` storage comparison on PPSA99023 found no meaningful warm
+  inference difference. Qwen3.5 0.8B warm requests were 0.118–0.121 s on both paths. Kokoro warm
+  requests had medians of 0.301 s internal and 0.303 s external. Cold process/model setup was about
+  2.7–3.0 s for Qwen and 3.96–4.04 s for Kokoro. External test models remain in the requested
+  directory. Full samples: `performance/2026-10-13/pr27-storage-comparison.json`.
+- The image adapter has a 768px/28-step SD3 profile for a locally supplied compatible model.
+  The official Stability AI SD3.5 Medium checkpoint is gated and is not included as a preset.
+- Fish Speech V1.5 remains out of scope for this runtime: its autoregressive model and DAC codec
+  lack a compatible project C++/Vulkan implementation. Do not substitute Kokoro voice packs.
+
+## PR #27 preset and KV-cache verification
+
+- PPSA99023 verified short text generation for Mistral 7B Instruct Q4_0, Qwen3.5 9B Q4_0,
+  MiniCPM5 2B Q8_0, Ternary Bonsai 2 27B PTQ1_0, Granite 4.0 H-Tiny Q4_K_M and BoHF 12B MoE
+  3A Q3_K_M. Granite downloaded 4,230,976,352 bytes, passed preset integrity verification, and
+  answered `84 multiplied by 3 equals 252`.
+- Existing console runs verified SD-Turbo, Stable Audio 3 Small SFX, ACE-Step 1.5 Turbo and
+  Kokoro. New retries still failed for FLUX.2 Klein (Qwen encoder could not allocate a 5,939.93
+  MiB CPU buffer) and SDXL (sampling needed 636.55 MiB of Vulkan device workspace and reported
+  zero available). Both remain unusable on this PS5 profile.
+- The text adapter uses llama.cpp KV memory and contains longest-common-prefix reuse across
+  requests. Three identical Qwen prompts on the console all logged `reused=0`; cross-request
+  prefix reuse is therefore not demonstrated in the live path, even though normal per-token KV
+  decoding is active. Diagnose cache eligibility/state before treating prefix caching as working.
+
+## Model downloader throughput
+
+- PPSA99023 completed and SHA-verified the same 4.03 GB Granite preset at 8 and 16 HTTP range
+  connections. Poll samples were about 28–30 MiB/s at 8 and 37–42 MiB/s at 16; 16 is the
+  current setting. A 32-connection run ended with a `CRASH KILL_END` event before a reliable
+  speed or resource sample. The PS5 `shsrv` monitor was unavailable, so peak CPU/RSS is unknown.
+- Full run details, Granite inference and the ACE-Step retest are in
+  `performance/2026-10-12/pr27-console-followup.json`.
+- One-minute idle unload was verified in klog; the next Qwen request reloaded successfully in
+  about 4.1 s. The configured two-minute timeout was restored.
+- Workspace text export now saves the conversation before inference, archives plain `.txt`, and
+  serves it as `text/plain`; deletion removes the export. Audio/image HTTP paths return WAV/PNG
+  directly. New per-output JSON metadata sidecars are not written; session metadata stays in
+  `session.json`. The 2026-10-12 follow-up report records the PS5 checks.
 
 ## Upstream llama.cpp update strategy
 

@@ -163,6 +163,10 @@ bool gpt_runtime_select_model(unsigned i)
     current_model = i;
     return i < 2;
 }
+bool gpt_runtime_delete_model(const char *id)
+{
+    return id && std::strcmp(id, "second.gguf") == 0 && current_model == 0;
+}
 int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
                          const gpt_runtime_settings_t &settings, char *out, std::size_t capacity,
                          gpt_runtime_stats_t *stats, gpt_runtime_progress_fn progress)

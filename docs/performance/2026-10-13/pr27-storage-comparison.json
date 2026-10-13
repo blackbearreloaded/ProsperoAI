@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-13",
+  "test_title": "PPSA99023",
+  "storage_test": {
+    "external_root": "/mnt/ext1/prosperoai",
+    "models": [
+      {
+        "model": "Qwen3.5-0.8B-Q4_0.gguf",
+        "size_bytes": 563036064,
+        "prompt": "Give one short sentence about stars.",
+        "max_tokens": 64,
+        "external_http_seconds": [2.684991, 0.117442, 0.120960],
+        "internal_http_seconds": [0.127711, 3.024715, 0.118079, 0.120311],
+        "notes": "The 3.024715 s internal sample followed a model switch and is treated as cold; warm external and internal results overlap."
+      },
+      {
+        "model": "kokoro-82m-vulkan",
+        "prompt": "Hello, this is a short speech test from the heart voice.",
+        "voice": "af_heart",
+        "external_http_seconds": [4.037465, 0.384321, 0.456829, 0.302967, 0.299140],
+        "external_warm_median_seconds": 0.303,
+        "internal_http_seconds": [3.960380, 0.296233, 0.447854, 0.301220],
+        "internal_warm_median_seconds": 0.301220,
+        "artifacts": [
+          "work/voice/kokoro-af-heart-external-cold.wav",
+          "work/voice/kokoro-af-heart-external-warm.wav"
+        ],
+        "notes": "Warm inference timing shows no meaningful difference between storage paths. Cold timing includes model/process setup, not an isolated disk benchmark."
+      }
+    ],
+    "external_files_retained": true
+  },
+  "sdxl_followup": {
+    "preset": "stable-diffusion-xl-base-1-0",
+    "file": "sd_xl_base_1.0.safetensors",
+    "size_bytes": 6938078334,
+    "sha256": "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b",
+    "download_status": "complete; bundle verified and installed",
+    "approx_download_rate_mib_per_second": 33,
+    "generation": {
+      "status": "failed",
+      "http_status": null,
+      "prompt": "A quiet mountain lake at sunrise, soft blue and gold light, realistic landscape painting.",
+      "klog": [
+        "Vulkan heap 11712 MiB; tracked model weights 6450.88 MiB",
+        "UNet workspace check needed 843.51 MiB device / 331.51 MiB budget; available 0 MiB",
+        "image sampling failed after 55.77 s",
+        "retry failed while preparing unet.input_blocks.1"
+      ],
+      "result": "Checkpoint download is valid, but this PS5 Vulkan memory budget cannot run the configured SDXL profile."
+    }
+  },
+  "flux2_klein_followup": {
+    "status": "failed_memory_allocation",
+    "encoder": "Qwen3-4B Q4_K_M",
+    "requested_bytes": 5939930000,
+    "largest_free_block_mib": 5245,
+    "image_generated": false
+  },
+  "final_state": {
+    "test_title": "PPSA99023",
+    "running": true,
+    "internal_storage_build_restored": true,
+    "selected_model": "Qwen3.5-0.8B-Q4_0.gguf",
+    "post_sdxl_text_smoke": {
+      "http_status": 200,
+      "response": "Ready",
+      "eval_count": 1
+    },
+    "main_title_PPSA99004_touched": false,
+    "console_rebooted": false
+  }
+}

@@ -59,12 +59,15 @@ The requested additions are categorized as follows:
 
 | Model | Modality | Current status |
 | --- | --- | --- |
-| Granite 4.0 H-Tiny Q4_K_M | Text | Added as a pinned GGUF preset. The current llama.cpp source recognizes `granitehybrid`; PS5 generation still needs device verification. |
-| Stable Diffusion 3 | Image | Stable-diffusion.cpp has an SD3 path, but the current PS5 adapter is fixed to the SD-Turbo 512px/one-step profile. Needs an SD3 manifest, model settings and PS5 memory/generation validation. |
-| DreamShaper XL | Image | SDXL-family checkpoint; needs an SDXL-compatible manifest/profile and PS5 memory/generation validation. |
-| ACE-Step 1.5 | Audio | The pinned audio.cpp C API includes an ACE-Step family loader. ProsperoAI now builds that family with Stable Audio, routes a dedicated adapter, and pins the Q8 GGUF plus tokenizer/config resources. Console generation and switching benchmark remain pending. |
-| Fish Speech V1.5 | Voice | Separate Fish Speech runtime/model/codec path; it needs a new speech adapter. It cannot be selected through the existing Kokoro API by swapping weights. |
+| Granite 4.0 H-Tiny Q4_K_M | Text | Added as a pinned GGUF preset. The current llama.cpp source recognizes `granitehybrid`; PS5 generated correct text and completed three warm benchmark runs. |
+| Stable Diffusion 3.5 Medium | Image | SD3 sampling profile and local Diffusers-directory discovery are implemented. The official checkpoint is gated by Stability AI's license; it needs user-side acceptance before model installation and PS5 validation. |
+| Stable Diffusion XL Base 1.0 | Image | PS5 verified the pinned checkpoint download, but 768px generation failed Vulkan UNet workspace allocation on the 11,712 MiB heap. Not currently usable. |
+| FLUX.2 Klein 4B Q4_0 | Image | Pinned Q4_0 diffusion, Q4_K_M Qwen3 encoder and official VAE use the stable-diffusion.cpp Flux2 Klein path. PS5 encoder allocation failed with a 5.12 GiB largest free block; a smaller encoder remains to be tested. Apache 2.0. |
+| ACE-Step 1.5 | Audio | The pinned audio.cpp C API includes an ACE-Step family loader. ProsperoAI builds that family with Stable Audio, routes a dedicated adapter, and pins the Q8 GGUF plus tokenizer/config resources. PS5 generated a valid 8-second stereo 48 kHz WAV in 118.28 s and passed a text round-trip after switching back; see `performance/2026-10-12/pr27-console-followup.json`. |
+| Fish Speech V1.5 | Voice | Not supported by the current C++/Vulkan stack: it requires its own autoregressive model and DAC codec runtime. It cannot be wired through Kokoro by changing voice packs. |
 
-The audio model's build and download manifest are in place, but it is still experimental until
-the PS5 output and switching tests pass. Keep the SD3, DreamShaper XL and Fish Speech V1.5
-entries visibly pending until their profiles/adapters and console tests are complete.
+ACE-Step's build and download manifest are in place, and its first PS5 output and text-switch
+tests pass; keep the model experimental until repeated quality/performance validation is done.
+Keep SDXL Base and FLUX.2 Klein marked unusable on this hardware until their memory limits are addressed and image output is verified. SD3 remains unverified.
+SD3 users must accept the model license and supply the gated weights themselves. Fish Speech
+needs a separate compatible runtime before an adapter can be implemented.

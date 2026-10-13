@@ -17,7 +17,7 @@
 /* What may wait between libcurl and the reader. A chunk that does not fit pauses the
  * transfer until the reader has caught up, so a slow disk holds the network back
  * instead of filling memory. */
-#define HTTPS_BUFFER_BYTES (1024u * 1024u)
+#define HTTPS_BUFFER_BYTES (4u * 1024u * 1024u)
 
 struct prospero_https
 {
@@ -35,6 +35,7 @@ struct prospero_https
 static pthread_once_t global_once = PTHREAD_ONCE_INIT;
 static CURLcode global_result;
 static int receive_buffer = -1; /* what the last socket was given */
+static pthread_mutex_t receive_buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void global_start(void)
 {
@@ -52,19 +53,24 @@ static int on_socket(void *user, curl_socket_t socket, curlsocktype purpose)
     (void)purpose;
     (void)console_curl_nonblocking(socket); /* as console_curl_setup() does */
     int granted = 0;
-    for (int bytes = 4 * 1024 * 1024; bytes >= 256 * 1024; bytes /= 2)
+    for (int bytes = 8 * 1024 * 1024; bytes >= 256 * 1024; bytes /= 2)
         if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &bytes, sizeof(bytes)) == 0)
         {
             granted = bytes;
             break;
         }
+    pthread_mutex_lock(&receive_buffer_mutex);
     receive_buffer = granted;
+    pthread_mutex_unlock(&receive_buffer_mutex);
     return CURL_SOCKOPT_OK;
 }
 
 int prospero_https_receive_buffer(void)
 {
-    return receive_buffer;
+    pthread_mutex_lock(&receive_buffer_mutex);
+    const int result = receive_buffer;
+    pthread_mutex_unlock(&receive_buffer_mutex);
+    return result;
 }
 
 static size_t on_data(char *bytes, size_t size, size_t count, void *user)
@@ -184,8 +190,8 @@ int prospero_https_get(prospero_https *session, const char *url, long *status)
     return prospero_https_get_from(session, url, 0, status);
 }
 
-int prospero_https_get_from(prospero_https *session, const char *url, unsigned long long offset,
-                            long *status)
+static int get_request(prospero_https *session, const char *url, const char *range,
+                       long *status)
 {
     drop_request(session);
     session->have = session->taken = 0;
@@ -212,18 +218,12 @@ int prospero_https_get_from(prospero_https *session, const char *url, unsigned l
     /* A transfer that moves nothing for a minute has stalled. */
     curl_easy_setopt(easy, CURLOPT_LOW_SPEED_LIMIT, 1L);
     curl_easy_setopt(easy, CURLOPT_LOW_SPEED_TIME, 60L);
-    curl_easy_setopt(easy, CURLOPT_BUFFERSIZE, 256L * 1024L);
+    curl_easy_setopt(easy, CURLOPT_BUFFERSIZE, 512L * 1024L);
     curl_easy_setopt(easy, CURLOPT_WRITEFUNCTION, on_data);
     curl_easy_setopt(easy, CURLOPT_WRITEDATA, session);
     curl_easy_setopt(easy, CURLOPT_ERRORBUFFER, session->error);
-    /* CURLOPT_RANGE rather than RESUME_FROM: a server that ignores the range then answers
-     * 200 with the whole body, which the caller can still use, instead of an error. */
-    char range[32];
-    if (offset)
-    {
-        snprintf(range, sizeof(range), "%llu-", offset);
+    if (range)
         curl_easy_setopt(easy, CURLOPT_RANGE, range);
-    }
     if (curl_multi_add_handle(session->multi, easy) != CURLM_OK)
     {
         snprintf(session->error, sizeof(session->error), "libcurl could not start the request");
@@ -242,6 +242,26 @@ int prospero_https_get_from(prospero_https *session, const char *url, unsigned l
     if (status)
         *status = code;
     return 0;
+}
+
+int prospero_https_get_from(prospero_https *session, const char *url, unsigned long long offset,
+                            long *status)
+{
+    char range[32];
+    if (!offset)
+        return get_request(session, url, NULL, status);
+    snprintf(range, sizeof(range), "%llu-", offset);
+    return get_request(session, url, range, status);
+}
+
+int prospero_https_get_range(prospero_https *session, const char *url,
+                             unsigned long long first, unsigned long long last, long *status)
+{
+    if (last < first)
+        return 1;
+    char range[64];
+    snprintf(range, sizeof(range), "%llu-%llu", first, last);
+    return get_request(session, url, range, status);
 }
 
 int prospero_https_read(prospero_https *session, void *buffer, size_t size)

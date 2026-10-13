@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // ACE-Step 1.5 music generation through audio.cpp and the PS5 Vulkan backend.
 #include "audiocpp.h"
+#include "../../../include/generated_output_path.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +18,6 @@ std::uint64_t sceKernelGetProcessTime(void);
 
 namespace
 {
-constexpr char kOutput[] = "/download0/ProsperoAI/work/audio/ace-step-1.5.wav";
 audiocpp_registry *g_registry;
 audiocpp_model *g_model;
 audiocpp_options *g_options;
@@ -58,7 +58,7 @@ bool write_wav(const char *path, const float *samples, std::size_t frames,
         return false;
     const std::size_t sample_count = frames * static_cast<std::size_t>(channels);
     const std::uint32_t data_bytes = static_cast<std::uint32_t>(sample_count * 2u);
-    std::FILE *file = std::fopen(path, "wb");
+    std::FILE *file = std::fopen(path, "wbx");
     if (!file)
         return false;
     std::fwrite("RIFF", 1, 4, file);
@@ -139,6 +139,9 @@ extern "C" int ps5_ace_step_generate(const char *root, const char *prompt,
 {
     if (!root || !*root || !prompt || !*prompt || !response || !response_capacity)
         return 1;
+    char output[160];
+    if (!prospero_generated_output_path(output, sizeof(output), "audio", "ace-step-1.5", "wav"))
+        return 1;
     const std::string model_root(root);
     audiocpp_request *request = nullptr;
     audiocpp_result *result = nullptr;
@@ -172,13 +175,14 @@ extern "C" int ps5_ace_step_generate(const char *root, const char *prompt,
         std::size_t frames = 0;
         int sample_rate = 0, channels = 0;
         if (audiocpp_result_audio(result, &samples, &frames, &sample_rate, &channels) != AUDIOCPP_OK ||
-            !write_wav(kOutput, samples, frames, sample_rate, channels))
+            !write_wav(output, samples, frames, sample_rate, channels))
         {
             log_error("WAV output failed");
+            std::remove(output);
             result_code = 5;
             break;
         }
-        std::snprintf(response, response_capacity, "Music generated locally at %s", kOutput);
+        std::snprintf(response, response_capacity, "Music generated locally at %s", output);
     } while (false);
     audiocpp_result_free(result);
     audiocpp_request_free(request);

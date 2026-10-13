@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "runtime_adapter.hpp"
+#include "runtime_settings.hpp"
 
 #include "runtime_vulkan.hpp"
 #include <string>
@@ -10,7 +11,7 @@ int ps5_sd_generate(const char *, const char *, char *, std::size_t, std::uint64
                     gpt_runtime_progress_fn);
 int ps5_stable_audio_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
                               gpt_runtime_progress_fn);
-int ps5_kokoro_tts_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
+int ps5_kokoro_tts_generate(const char *, const char *, const char *, char *, std::size_t, std::uint64_t *,
                             gpt_runtime_progress_fn);
 int ps5_ace_step_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
                           gpt_runtime_progress_fn);
@@ -71,9 +72,13 @@ int generate_media(const GenerationRequest &request)
                                                &elapsed, request.progress);
         break;
     case Modality::Speech:
-        result = ps5_kokoro_tts_generate(request.model.root.c_str(), prompt, request.output,
+    {
+        const auto runtime = prospero_settings::get();
+        const char *voice = runtime.kokoro_voice == 1 ? "af_bella" : "af_heart";
+        result = ps5_kokoro_tts_generate(request.model.root.c_str(), voice, prompt, request.output,
                                          request.output_capacity, &elapsed, request.progress);
         break;
+    }
     case Modality::Text:
         return 1;
     }

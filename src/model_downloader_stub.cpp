@@ -57,6 +57,11 @@ bool download(std::size_t)
 {
     return false;
 }
+
+bool delete_model_files(const char *)
+{
+    return false;
+}
 bool cancel()
 {
     return false;

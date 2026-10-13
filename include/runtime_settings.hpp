@@ -8,7 +8,7 @@
 #define PROSPERO_SETTINGS_PATH "/download0/prosperoai.cfg"
 #endif
 namespace prospero_settings {
-struct Runtime { unsigned context = 0, kv = 0; bool thinking = false; unsigned idle_unload_minutes = 2; };
+struct Runtime { unsigned context = 0, kv = 0; bool thinking = false; unsigned idle_unload_minutes = 2; unsigned kokoro_voice = 0; };
 inline std::mutex mutex;
 inline bool valid_context(unsigned n) {
     return n == 0 || n == 4096 || n == 8192 || n == 16384 || n == 32768 || n == 65536 ||
@@ -26,6 +26,7 @@ inline Runtime read_unlocked() {
             // Legacy kv= values are ignored: cache precision is automatic.
             else if (std::sscanf(line, "thinking=%u", &v) == 1) p.thinking = v != 0;
             else if (std::sscanf(line, "idle_unload_minutes=%u", &v) == 1 && valid_idle_unload_minutes(v)) p.idle_unload_minutes = v;
+            else if (std::sscanf(line, "kokoro_voice=%u", &v) == 1 && v < 2) p.kokoro_voice = v;
         }
         std::fclose(f);
     }
@@ -33,16 +34,16 @@ inline Runtime read_unlocked() {
 }
 inline Runtime get() { std::lock_guard<std::mutex> lock(mutex); return read_unlocked(); }
 inline bool set_unlocked(Runtime p) {
-    if (!valid_context(p.context) || p.kv != 0 || !valid_idle_unload_minutes(p.idle_unload_minutes)) return false;
+    if (!valid_context(p.context) || p.kv != 0 || !valid_idle_unload_minutes(p.idle_unload_minutes) || p.kokoro_voice >= 2) return false;
     std::string contents;
     if (auto *f = std::fopen(PROSPERO_SETTINGS_PATH, "rb")) {
         char line[256];
         while (std::fgets(line, sizeof(line), f))
-            if (std::strncmp(line, "context=", 8) && std::strncmp(line, "kv=", 3) && std::strncmp(line, "thinking=", 9) && std::strncmp(line, "idle_unload_minutes=", 20)) contents += line;
+            if (std::strncmp(line, "context=", 8) && std::strncmp(line, "kv=", 3) && std::strncmp(line, "thinking=", 9) && std::strncmp(line, "idle_unload_minutes=", 20) && std::strncmp(line, "kokoro_voice=", 13)) contents += line;
         std::fclose(f);
     }
     if (!contents.empty() && contents.back() != '\n') contents += '\n';
-    char fields[128]; std::snprintf(fields, sizeof(fields), "context=%u\nkv=%u\nthinking=%u\nidle_unload_minutes=%u\n", p.context, p.kv, p.thinking ? 1U : 0U, p.idle_unload_minutes);
+    char fields[160]; std::snprintf(fields, sizeof(fields), "context=%u\nkv=%u\nthinking=%u\nidle_unload_minutes=%u\nkokoro_voice=%u\n", p.context, p.kv, p.thinking ? 1U : 0U, p.idle_unload_minutes, p.kokoro_voice);
     contents += fields;
     auto *f = std::fopen(PROSPERO_SETTINGS_PATH ".tmp", "wb");
     if (!f) return false;
