@@ -30,7 +30,7 @@ how it is built, and what a run on a console showed.
 > on the PS5 GPU. It is not production software.
 
 > [!NOTE]
-> `vulkan-runtime` is moving to one upstream GGML v0.26.0/Vulkan runtime for llama.cpp text,
+> `vulkan-runtime` uses one upstream GGML v0.26.0/Vulkan runtime for llama.cpp text,
 > Stable Diffusion, audio.cpp and Kokoro adapters on RADV. The dedicated AGC inference
 > backend is removed. CPU operations still handle remaining media kernels; RADV
 > continues to use the platform GPU driver. See [current status](docs/VK_ACTIVE.md),
@@ -104,6 +104,10 @@ Full JSON records and validated artifacts: [two-pass text benchmark](docs/perfor
 [ACE-Step retry](docs/performance/2026-10-13/pr27-ace-step-two-pass.json),
 [Kokoro benchmark](docs/performance/2026-10-13/pr27-kokoro-two-pass.json), and
 [Chatterbox failure record](docs/performance/2026-10-13/pr27-chatterbox-two-pass.json).
+
+The Chatterbox GGUF preset currently fails its PS5 allocation check. The planned Q4 ONNX
+replacement, its pinned model files, runtime build work and PS5 acceptance steps are tracked in
+[PR 27 remaining work](docs/PR27_REMAINING_WORK.md).
 
 The linked repositories contain the exact file layout, integrity hashes, upstream provenance,
 licenses, and preparation recipe for each preset. The app releases its selected runtime after
