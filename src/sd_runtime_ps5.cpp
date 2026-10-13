@@ -3,6 +3,7 @@ static_assert(GGML_MAX_NAME == 160, "SD and llama must share the tensor ABI");
 #include "stable-diffusion.h"
 
 #include "ggml-backend.h"
+#include "../inference/adapters/airllm/ps5_streaming.hpp"
 
 #include <cstddef>
 #include <cstdarg>
@@ -23,6 +24,19 @@ sd_ctx_t *context;
 char context_root[192];
 void (*progress_callback)(const char *);
 bool backend_registered;
+
+bool is_z_image_turbo_model(const char *root)
+{
+    char path[512];
+    if (!root || std::snprintf(path, sizeof(path), "%s/diffusion_model.gguf", root) >=
+                     static_cast<int>(sizeof(path)))
+        return false;
+    std::FILE *file = std::fopen(path, "rb");
+    if (!file)
+        return false;
+    std::fclose(file);
+    return true;
+}
 
 void log_line(const char *format, ...)
 {
@@ -132,17 +146,51 @@ bool ensure_context(const char *root)
 
     sd_ctx_params_t parameters;
     sd_ctx_params_init(&parameters);
-    parameters.model_path = root;
+    const bool z_image_turbo = is_z_image_turbo_model(root);
+    char diffusion_model_path[512];
+    char llm_path[512];
+    char vae_path[512];
+    if (z_image_turbo &&
+        (std::snprintf(diffusion_model_path, sizeof(diffusion_model_path), "%s/diffusion_model.gguf", root) >=
+             static_cast<int>(sizeof(diffusion_model_path)) ||
+         std::snprintf(llm_path, sizeof(llm_path), "%s/qwen3-4b-instruct-2507-q2-k.gguf", root) >=
+             static_cast<int>(sizeof(llm_path)) ||
+         std::snprintf(vae_path, sizeof(vae_path), "%s/ae.safetensors", root) >=
+             static_cast<int>(sizeof(vae_path))))
+        return false;
+    if (z_image_turbo)
+    {
+        std::FILE *encoder = std::fopen(llm_path, "rb");
+        if (!encoder && std::snprintf(llm_path, sizeof(llm_path),
+                                      "%s/qwen3-4b-instruct-2507-q4-k-m.gguf", root) >=
+                            static_cast<int>(sizeof(llm_path)))
+            return false;
+        if (encoder)
+            std::fclose(encoder);
+        parameters.model_path = nullptr;
+        parameters.diffusion_model_path = diffusion_model_path;
+        parameters.llm_path = llm_path;
+        parameters.vae_path = vae_path;
+        parameters.vae_format = SD_VAE_FORMAT_FLUX;
+    }
+    else
+        parameters.model_path = root;
     parameters.n_threads = 1;
     parameters.wtype = SD_TYPE_F16;
     parameters.rng_type = CUDA_RNG;
-    parameters.prediction = EPS_PRED;
-    parameters.enable_mmap = false;
+    parameters.prediction = z_image_turbo ? FLOW_PRED : EPS_PRED;
+    parameters.enable_mmap = z_image_turbo;
     parameters.eager_load = false;
     parameters.diffusion_conv_direct = false;
     parameters.vae_conv_direct = false;
-    parameters.backend = "CPU,diffusion=Vulkan0,vae=Vulkan0";
-    parameters.params_backend = "Vulkan0";
+    parameters.diffusion_flash_attn = z_image_turbo;
+    parameters.backend = z_image_turbo ? "CPU,diffusion=Vulkan0,te=Vulkan0,vae=CPU"
+                                       : "CPU,diffusion=Vulkan0,vae=Vulkan0";
+    if (z_image_turbo)
+        prospero::inference::airllm::apply_ps5_streaming_profile(
+            parameters, prospero::inference::airllm::ModelProfile::ZImageTurbo);
+    else
+        parameters.params_backend = "Vulkan0";
     context = new_sd_ctx(&parameters);
     if (!context || !sd_ctx_supports_image_generation(context))
     {
@@ -173,7 +221,7 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
         return 1;
     progress_callback = progress;
     if (progress_callback)
-        progress_callback("Loading SD-Turbo");
+        progress_callback(is_z_image_turbo_model(root) ? "Loading Z-Image Turbo" : "Loading SD-Turbo");
     std::remove(oracle_output);
     std::remove(display_output);
     const std::uint64_t start = sceKernelGetProcessTime();
@@ -191,8 +239,12 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
     parameters.height = 512;
     parameters.seed = 42;
     parameters.batch_count = 1;
-    parameters.sample_params.sample_steps = 1;
+    const bool z_image_turbo = is_z_image_turbo_model(root);
+    parameters.sample_params.sample_steps = z_image_turbo ? 8 : 1;
+    parameters.sample_params.sample_method = z_image_turbo ? EULER_SAMPLE_METHOD : EULER_A_SAMPLE_METHOD;
     parameters.sample_params.guidance.txt_cfg = 1.0f;
+    if (z_image_turbo)
+        parameters.sample_params.guidance.distilled_guidance = 1.0f;
 
     sd_image_t *images = nullptr;
     int image_count = 0;

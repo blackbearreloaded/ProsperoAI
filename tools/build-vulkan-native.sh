@@ -36,7 +36,7 @@ objects=()
 sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens.cpp src/native_ui_style.cpp
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
- src/ps5_opencl.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
+ src/ps5_opencl.cpp inference/adapters/airllm/ps5_streaming.cpp src/sd_runtime_ps5.cpp src/stable_audio_runtime_ps5.cpp src/agc_lifecycle.cpp
  vulkan/gpt_runtime_router.cpp vulkan/media_vulkan.cpp
  vulkan/storage.cpp vulkan/storage_paths.cpp vulkan/elevation/elevation.cpp vulkan/debug_tee.cpp src/debug_log.cpp
  src/native_ui_update.cpp vulkan/update_ps5.cpp
@@ -63,6 +63,8 @@ for relative in "${sources[@]}"; do
  abi_definitions+=(-DGGML_MAX_NAME=160)
  case "$relative" in
   src/sd_runtime_ps5.cpp)
+   media_includes=(-I "$root/.deps/stable-diffusion-vulkan/include");;
+  inference/adapters/airllm/ps5_streaming.cpp)
    media_includes=(-I "$root/.deps/stable-diffusion-vulkan/include");;
  esac
  object="$work/obj/${relative//\//_}.o"
