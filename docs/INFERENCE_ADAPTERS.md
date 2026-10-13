@@ -71,18 +71,10 @@ stack plus the pinned audio.cpp SA3 runtime built by `tools/build-audio-cpp-sa3-
 Build-time source adjustments are repeatable and confined to `build/` by
 `tools/prepare-audio-cpp-sa3.py` and `tools/prepare-ggml-graph-setter.py`.
 
-## Z-Image Turbo image preset
+## Realistic Vision v5.1 image preset
 
-The shared Stable Diffusion adapter detects the preset's `diffusion_model.gguf` and loads its
-Q2_K diffusion weights, Qwen3 4B Q4_K_M text encoder, and Flux-format VAE through the pinned
-stable-diffusion.cpp C API. The Qwen encoder and diffusion run on Vulkan while the VAE runs on
-CPU to avoid the PS5 CPU buffer allocation failure observed with this encoder. Vulkan
-residency is capped at 11 GiB with prefetch disabled. The profile uses flow prediction, Euler
-sampling, guidance 1.0, and eight steps at 512 × 512. The three files are pinned across leejet,
-Unsloth, and Comfy-Org repositories; the bundle is about 5.05 GiB. The 2.59 GB Q2_K diffusion
-file reduces the Q3_K model by 551 MB; the previous Q2_K trial applied to the encoder and failed
-while allocating its weights. With Q3_K diffusion, the PS5 Vulkan memory query reported a
-free-byte sentinel larger than total heap, now handled conservatively as total heap minus
-tracked residency. The 10 GiB budget left 43 MB too little for a 547 MB workspace at peak
-residency; an 11 GiB attempt reached a privileged-instruction crash. The Q2_K diffusion preset
-is being tested at 10.5 GiB.
+The preset uses the official FP16 no-EMA SD 1.5 checkpoint and the repository's VAE file.
+The adapter loads the standalone checkpoint through `model_path`, passes the VAE explicitly,
+and uses 512 × 512 output, 20 Euler steps, and CFG 7. The upstream model card recommends a
+separate VAE to avoid artifacts. Z-Image Turbo and its high-memory streaming adapter are tracked
+in PR #20.

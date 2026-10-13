@@ -12,7 +12,6 @@ static_assert(GGML_MAX_NAME == 160, "SD and llama must share the tensor ABI");
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <string>
 #include <vector>
 
 extern "C"
@@ -68,12 +67,12 @@ bool is_sdxl_checkpoint(const char *root)
     return true;
 }
 
-bool is_z_image_turbo_model(const char *root)
+bool is_realistic_vision_v51(const char *root)
 {
     if (!root || !*root)
         return false;
     char path[512];
-    if (std::snprintf(path, sizeof(path), "%s/diffusion_model.gguf", root) >=
+    if (std::snprintf(path, sizeof(path), "%s/Realistic_Vision_V5.1_fp16-no-ema.safetensors", root) >=
         static_cast<int>(sizeof(path)))
         return false;
     std::FILE *file = std::fopen(path, "rb");
@@ -220,32 +219,18 @@ bool ensure_context(const char *root)
     char checkpoint_path[512];
     const bool sdxl_checkpoint = is_sdxl_checkpoint(root);
     const bool sdxl = sdxl_checkpoint || model_index_has(root, "StableDiffusionXLPipeline");
-    const bool z_image_turbo = is_z_image_turbo_model(root);
+    const bool realistic_vision = is_realistic_vision_v51(root);
     if (sdxl_checkpoint &&
         std::snprintf(checkpoint_path, sizeof(checkpoint_path), "%s/sd_xl_base_1.0.safetensors", root) >=
             static_cast<int>(sizeof(checkpoint_path)))
         return false;
-    if (z_image_turbo &&
-        (std::snprintf(diffusion_model_path, sizeof(diffusion_model_path), "%s/diffusion_model.gguf", root) >=
-             static_cast<int>(sizeof(diffusion_model_path)) ||
-         std::snprintf(llm_path, sizeof(llm_path), "%s/qwen3-4b-instruct-2507-q2-k.gguf", root) >=
-             static_cast<int>(sizeof(llm_path)) ||
-         std::snprintf(vae_path, sizeof(vae_path), "%s/ae.safetensors", root) >=
+    if (realistic_vision &&
+        (std::snprintf(checkpoint_path, sizeof(checkpoint_path),
+                       "%s/Realistic_Vision_V5.1_fp16-no-ema.safetensors", root) >=
+             static_cast<int>(sizeof(checkpoint_path)) ||
+         std::snprintf(vae_path, sizeof(vae_path), "%s/vae.safetensors", root) >=
              static_cast<int>(sizeof(vae_path))))
         return false;
-    if (z_image_turbo)
-    {
-        std::FILE *encoder = std::fopen(llm_path, "rb");
-        if (!encoder)
-        {
-            if (std::snprintf(llm_path, sizeof(llm_path),
-                              "%s/qwen3-4b-instruct-2507-q4-k-m.gguf", root) >=
-                static_cast<int>(sizeof(llm_path)))
-                return false;
-        }
-        else
-            std::fclose(encoder);
-    }
     if (flux2_klein &&
         (std::snprintf(diffusion_model_path, sizeof(diffusion_model_path), "%s/diffusion_model.gguf", root) >=
              static_cast<int>(sizeof(diffusion_model_path)) ||
@@ -254,38 +239,30 @@ bool ensure_context(const char *root)
          std::snprintf(vae_path, sizeof(vae_path), "%s/vae.safetensors", root) >=
              static_cast<int>(sizeof(vae_path))))
         return false;
-    parameters.model_path = (flux2_klein || z_image_turbo) ? nullptr
-                            : sdxl_checkpoint ? checkpoint_path
+    parameters.model_path = flux2_klein ? nullptr
+                            : (sdxl_checkpoint || realistic_vision) ? checkpoint_path
                                                                   : root;
-    if (flux2_klein || z_image_turbo)
+    if (flux2_klein)
     {
         parameters.diffusion_model_path = diffusion_model_path;
         parameters.llm_path = llm_path;
         parameters.vae_path = vae_path;
-        parameters.vae_format = z_image_turbo ? SD_VAE_FORMAT_FLUX : SD_VAE_FORMAT_FLUX2;
+        parameters.vae_format = SD_VAE_FORMAT_FLUX2;
     }
+    if (realistic_vision)
+        parameters.vae_path = vae_path;
     parameters.n_threads = 1;
     parameters.wtype = SD_TYPE_F16;
     parameters.rng_type = CUDA_RNG;
-    parameters.prediction = (is_sd3_model(root) || flux2_klein || z_image_turbo) ? FLOW_PRED : EPS_PRED;
-    parameters.enable_mmap = z_image_turbo;
+    parameters.prediction = (is_sd3_model(root) || flux2_klein) ? FLOW_PRED : EPS_PRED;
+    parameters.enable_mmap = false;
     parameters.eager_load = false;
     parameters.diffusion_conv_direct = false;
     parameters.vae_conv_direct = false;
-    parameters.diffusion_flash_attn = z_image_turbo;
-    parameters.backend = z_image_turbo ? "CPU,diffusion=Vulkan0,te=CPU,vae=CPU"
-                             : sdxl ? "CPU,diffusion=Vulkan0,vae=CPU"
-                             : "CPU,diffusion=Vulkan0,vae=Vulkan0";
-    parameters.params_backend = z_image_turbo ? "CPU" : "Vulkan0";
-    if (sdxl || z_image_turbo)
-    {
-        // Bound weight and runner residency so Z-Image's encoder and diffusion
-        // workspace can coexist within the PS5 Vulkan heap.
-        parameters.max_vram = z_image_turbo ? "11.0" : "10.5";
-        parameters.disable_prefetch = true;
-        parameters.diffusion_conv_direct = true;
-        parameters.vae_conv_direct = true;
-    }
+    parameters.diffusion_flash_attn = false;
+    parameters.backend = sdxl ? "CPU,diffusion=Vulkan0,vae=CPU"
+                              : "CPU,diffusion=Vulkan0,vae=Vulkan0";
+    parameters.params_backend = "Vulkan0";
     context = new_sd_ctx(&parameters);
     if (!context || !sd_ctx_supports_image_generation(context))
     {
@@ -320,11 +297,9 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
     const bool sd3 = is_sd3_model(root);
     const bool sdxl = model_index_has(root, "StableDiffusionXLPipeline") || is_sdxl_checkpoint(root);
     const bool flux2_klein = is_flux2_klein_model(root);
-    const bool z_image_turbo = is_z_image_turbo_model(root);
     progress_callback = progress;
     if (progress_callback)
-        progress_callback(z_image_turbo ? "Loading Z-Image Turbo"
-                          : flux2_klein ? "Loading FLUX.2 Klein 4B"
+        progress_callback(flux2_klein ? "Loading FLUX.2 Klein 4B"
                           : sdxl       ? "Loading Stable Diffusion XL"
                           : sd3        ? "Loading Stable Diffusion 3"
                                             : "Loading SD-Turbo");
@@ -345,19 +320,20 @@ extern "C" int ps5_sd_generate(const char *root, const char *prompt, char *respo
     parameters.height = parameters.width;
     parameters.seed = 42;
     parameters.batch_count = 1;
-    parameters.sample_params.sample_steps = z_image_turbo ? 8
-                                            : flux2_klein ? 4
+    parameters.sample_params.sample_steps = flux2_klein ? 4
                                             : sdxl ? 10
                                             : sd3 ? 28
+                                            : is_realistic_vision_v51(root) ? 20
                                                   : 1;
-    parameters.sample_params.sample_method = (sdxl || sd3 || flux2_klein || z_image_turbo)
+    parameters.sample_params.sample_method = (sdxl || sd3 || flux2_klein || is_realistic_vision_v51(root))
                                                  ? EULER_SAMPLE_METHOD
                                                  : EULER_A_SAMPLE_METHOD;
     if (flux2_klein)
         parameters.sample_params.scheduler = FLUX2_SCHEDULER;
-    if (flux2_klein || z_image_turbo)
+    if (flux2_klein)
         parameters.sample_params.guidance.distilled_guidance = 1.0f;
-    parameters.sample_params.guidance.txt_cfg = sdxl ? 5.0f : sd3 ? 4.5f : 1.0f;
+    parameters.sample_params.guidance.txt_cfg = is_realistic_vision_v51(root) ? 7.0f
+                                               : sdxl ? 5.0f : sd3 ? 4.5f : 1.0f;
 
     sd_image_t *images = nullptr;
     int image_count = 0;

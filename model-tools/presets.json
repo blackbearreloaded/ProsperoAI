@@ -57,6 +57,27 @@
     ]
   },
   {
+    "id": "realistic-vision-v51-fp16",
+    "name": "Realistic Vision v5.1 FP16",
+    "kind": 1,
+    "repository": "SG161222/Realistic_Vision_V5.1_noVAE",
+    "revision": "305469dfd7d7410cff6299d34727e237374b5f36",
+    "files": [
+      {
+        "source": "Realistic_Vision_V5.1_fp16-no-ema.safetensors",
+        "path": "Realistic_Vision_V5.1_fp16-no-ema.safetensors",
+        "size": 2132625894,
+        "sha256": "99a75a901f4fec732056930a89fa34cf360f6f72d75ce5bf333ddf82adf8dd2a"
+      },
+      {
+        "source": "vae/diffusion_pytorch_model.safetensors",
+        "path": "vae.safetensors",
+        "size": 334643276,
+        "sha256": "68a430f8a51413e80ecec6c13fff4b6b63e57600a2ec661a016a14fd1037fa4b"
+      }
+    ]
+  },
+  {
     "id": "stable-audio-3-small-sfx-vulkan",
     "name": "Stable Audio 3 Small SFX (Vulkan)",
     "kind": 2,
@@ -68,37 +89,6 @@
         "path": "stable-audio-3-small-sfx-q8_0.gguf",
         "size": 1683570688,
         "sha256": "5bb1ec653134e63dac46264e336ae198a2590195fc996fcd0605021215e9b26f"
-      }
-    ]
-  },
-  {
-    "id": "z-image-turbo-q3-k",
-    "name": "Z-Image Turbo Q2_K + Qwen3 4B Q2_K (8-step)",
-    "kind": 1,
-    "repository": "leejet/Z-Image-Turbo-GGUF",
-    "revision": "c61c0e422dc8b541b7548cf33a4ef8302b0f8085",
-    "files": [
-      {
-        "source": "z_image_turbo-Q2_K.gguf",
-        "path": "diffusion_model.gguf",
-        "size": 2592442304,
-        "sha256": "a9cf1b0368e24c2f9d542d2951c01f6f7fc85ed8c9ed39b5b37b15375508d58a"
-      },
-      {
-        "source": "Qwen3-4B-Instruct-2507-Q2_K.gguf",
-        "path": "qwen3-4b-instruct-2507-q2-k.gguf",
-        "size": 1669500000,
-        "sha256": "f7ed2f57713ad29e1a4ec093be0cdf3d7fd31e137e8fd4fc3edcfd04a5267862",
-        "repository": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
-        "revision": "1e1094e82febb22ad75c2802fc1cbc94c74f8481"
-      },
-      {
-        "source": "split_files/vae/ae.safetensors",
-        "path": "ae.safetensors",
-        "size": 335304388,
-        "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38",
-        "repository": "Comfy-Org/z_image_turbo",
-        "revision": "6fc90a3b1b653e935a0d175e260736de25b84df5"
       }
     ]
   },
