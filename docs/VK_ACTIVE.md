@@ -40,6 +40,12 @@ Updated: 2026-10-13. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_L
   m, and forced wave32 were measured and rejected.
 - Run-to-run spread under this protocol is about `0.5` tokens/s; treat smaller deltas as
   noise. Evidence: `performance/2026-10-12/rdna2-*.json`.
+- PR #29's PS5 Pro settings are now available as an explicit `ps5pro` tuning profile. On
+  PPSA99023 (base PS5), the same Mistral 7B Q4_0 4K/256-token benchmark measured 72.27 and
+  72.31 tok/s with the `ps5` profile before and after the Pro run, versus 69.17 tok/s using
+  `DMMV_WG=1` and subgroup 32. Keep `ps5` as the default; the Pro profile is not validated on
+  Pro hardware. See `docs/PS5_VULKAN_PROFILES.md` and
+  `performance/2026-10-13/pr29-ps5-profile-comparison.json`.
 
 ## Speech on ggml/Vulkan
 

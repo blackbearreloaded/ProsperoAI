@@ -21,6 +21,7 @@
 #include "ui/motion.hpp"
 
 #include <map>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,7 +29,7 @@
 namespace prospero
 {
 // The Settings categories that are more than a form.
-constexpr int kDiagnostics = 4, kAbout = 5;
+constexpr int kDiagnostics = 3, kAbout = 4;
 // Where the debug log is written, as the console names the folder.
 std::string logs_folder_text();
 
@@ -79,13 +80,18 @@ struct NativeUI::Impl
     void change_page(int page);
     void refresh_models();
     void refresh_sessions();
+    void refresh_mobile_link();
+    void begin_model_selection();
     void build_form();
+    void build_generation_form();
     void apply_form();
+    void apply_generation_form();
     void type(char character, ui::Feedback &feedback);
     void backspace(ui::Feedback &feedback);
     void submit(ui::Feedback &feedback);
     void keyboard_result(const char *value);
     void upload_visible_image();
+    int selected_audio_row() const;
     void release();
     void draw_header(ui::Canvas &canvas) const;
     void draw_footer(gfx::DrawList &list) const;
@@ -114,6 +120,7 @@ struct NativeUI::Impl
     void draw_model_art(gfx::DrawList &list, int kind, float cx, float cy, float size, Color color,
                         float phase, float focus) const;
     void draw_settings(ui::Canvas &canvas) const;
+    void draw_mobile(ui::Canvas &canvas) const;
 
     // ---- native_ui_style.cpp: small drawing helpers ----
     float text(gfx::DrawList &list, std::string_view value, float x, float y, float size,
@@ -156,6 +163,11 @@ struct NativeUI::Impl
     ui::GridView models_;
     ui::SearchField search_, session_search_;
     std::vector<unsigned> visible_sessions_;
+    std::vector<unsigned> workspace_model_indices_;
+    std::vector<std::uint8_t> mobile_qr_modules_;
+    int mobile_qr_size_ = 0;
+    std::string mobile_url_;
+    int workspace_voice_row_ = -1;
     unsigned session_category_ = 0;
     std::string session_query_;
     ui::Keyboard keyboard_;
@@ -186,7 +198,7 @@ struct NativeUI::Impl
     std::vector<int> visible_models_;
     struct ChatRow
     {
-        std::string text, role, image_path;
+        std::string text, role, image_path, audio_path;
         bool audio = false;
         std::vector<std::string> lines;
         float y = 0, height = 0, width = 0, age = 10;
@@ -201,9 +213,13 @@ struct NativeUI::Impl
 
     float clock_ = 0, page_age_ = 10, body_size_ = 28, session_sync_age_ = 0;
     float boot_ = 1, boot_age_ = 0, busy_seconds_ = 0, hero_age_ = 10;
-    bool welcomed_ = false, was_busy_ = false;
-    bool conversation_ = false, search_open_ = false, chat_keyboard_open_ = false,
-        rail_ = false, category_focus_ = false;
+    bool welcomed_ = false, was_busy_ = false, selecting_model_ = false;
+    bool kokoro_voice_picker_open_ = false;
+    int kokoro_voice_picker_focus_ = 0;
+    bool voice_picker_chatterbox_ = false;
+    bool conversation_ = false, search_open_ = false, chat_keyboard_open_ = false, rail_ = false,
+         category_focus_ = false, workspace_generation_open_ = false,
+         conversation_restore_pending_ = false;
     bool empty_models_download_focus_ = true;
     bool keyboard_pending_ = false, quit_ = false;
     int download_focus_ = 0;

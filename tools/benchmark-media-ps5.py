@@ -36,6 +36,7 @@ status = subprocess.check_output(['python3', str(Path(__file__).with_name('ps5ct
 assert f'title={title}' in status, status
 fixtures = {
     'sd-turbo-fp16': 'A red apple on a wooden table, natural window light, photographic detail.',
+    'realistic-vision-v51-fp16': 'A portrait of a woman in a garden, natural light, realistic photography.',
     'stable-audio-3-small-sfx-vulkan': 'A short, clear bell chime with a soft resonant decay.',
     'ace-step-1.5-turbo-q8-0': 'A short instrumental track with warm piano, soft strings, and a gentle steady rhythm.',
     'kokoro-82m-vulkan': 'Hello from Prospero AI.'}
@@ -156,7 +157,7 @@ try:
             save()
             assert not response.get('error'), response
             record['output'] = artifact(response['response'], model + '-' + phase)
-            if model == 'sd-turbo-fp16':
+            if model in ('sd-turbo-fp16', 'realistic-vision-v51-fp16'):
                 record['png_output'] = png_artifact(response['response'], model + '-' + phase)
             if model == 'stable-audio-3-small-sfx-vulkan':
                 assert record['output']['rate'] == 44100 and record['output']['channels'] == 2 and record['output']['frames'] == 176400

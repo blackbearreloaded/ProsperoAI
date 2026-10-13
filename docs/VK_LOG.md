@@ -1085,3 +1085,19 @@ bounded residency move to the subsequent draft PR.
   `use_cache=True` behavior is already provided by llama.cpp; improving prefix reuse needs a
   separate investigation. No cache code was changed.
 - PPSA99023 remained running. PPSA99004 was not touched; no reboot.
+
+## 2026-10-13 — PR #29 PS5/PS5 Pro tuning profile A/B
+
+- Added explicit `ps5` and opt-in `ps5pro` app profiles plus guarded environment overrides in
+  the pinned ggml-vulkan source. The existing PS5 mat-vec tuning remains the default; the Pro
+  profile uses `GGML_VK_PS5_DMMV_WG=1`, subgroup 32, and batch/ubatch 512. A configurable
+  `vulkan_env.txt` applies individual experiment overrides after profile defaults.
+- Built and deployed the profile-enabled app only to the unmounted folder-backed test title
+  PPSA99023. With Mistral 7B Instruct v0.3 Q4_0, context 4096, batch/ubatch 512 and 256 output
+  tokens, five-run medians were 72.27 tok/s on `ps5`, 69.17 tok/s with the PR #29 Pro values,
+  then 72.31 tok/s after returning to `ps5`. The paired base profile readings are stable; the
+  Pro values are about 4.31% slower on this base PS5. These results do not measure a PS5 Pro.
+- PPSA99023 remains running with the `ps5` profile. PPSA99004 was not changed; no reboot.
+  Full reports: `performance/2026-10-13/pr29-ps5-base-profile.json`,
+  `pr29-ps5pro-profile-on-ps5.json`, `pr29-ps5-base-profile-after.json`, and
+  `pr29-ps5-profile-comparison.json`.

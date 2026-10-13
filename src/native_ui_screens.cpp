@@ -98,28 +98,25 @@ void NativeUI::Impl::draw_welcome(ui::Canvas &canvas) const
              text(list, "A space to think, imagine, and create.", 120, 560, 29, palette_.muted);
              text(list, "Powered by your PS5. Entirely yours.", 120, 604, 29, palette_.muted);
          });
-    part(list, arrival(4),
-         [&]
-         {
-             const Rect button{120, 652, 372, 74};
-             const bool ready = app_.can_send();
-             const char *action = ready                  ? "Start a conversation"
-                                  : app_.busy()          ? "Getting ready..."
-                                  : state.models.empty() ? "Add a model to begin"
-                                                         : "Choose a model";
-             if (ready)
-                 list.glow(button, 37, 30,
-                           palette_.accent.with_alpha(0.10f + 0.12f * ui::breathe(clock_, 2.8f)));
-             ui::Painter paint(list, fonts_, theme_);
-             paint.button(button, action, ui::ButtonKind::primary, {1, 0, !ready && app_.busy()});
-             float x = 520;
-             if (app_.busy())
-             {
-                 spinner(list, x + 12, 690, 11, palette_.accent);
-                 x += 38;
-             }
-             text(list, fit(state.status, 23, 640, false), x, 698, 23, palette_.muted);
-         });
+    // Keep the main action and its status text stable while the catalogue refreshes.
+    // Replaying the page entrance fade made “Choose a model” appear to blink.
+    {
+        const Rect button{120, 652, 372, 74};
+        const bool ready = app_.can_send();
+        const char *action = app_.busy() ? "Getting ready..." : "Start Conversation";
+        if (ready)
+            list.glow(button, 37, 30,
+                      palette_.accent.with_alpha(0.10f + 0.12f * ui::breathe(clock_, 2.8f)));
+        ui::Painter paint(list, fonts_, theme_);
+        paint.button(button, action, ui::ButtonKind::primary, {1, 0, !ready && app_.busy()});
+        float x = 520;
+        if (app_.busy())
+        {
+            spinner(list, x + 12, 690, 11, palette_.accent);
+            x += 38;
+        }
+        text(list, fit(state.status, 23, 640, false), x, 698, 23, palette_.muted);
+    }
     // The sculpture: the app's one piece of art, drawn from lines.
     const float grown = arrival(2);
     list.glow({1240, 330, 300, 220}, 110, 150, palette_.accent.with_alpha(0.07f * grown));
@@ -176,7 +173,8 @@ void NativeUI::Impl::draw_conversation(ui::Canvas &canvas) const
              label(list, "YOUR SPACE", 122, 246, palette_.muted);
              static constexpr const char *titles[] = {"All conversations", "Text", "Image", "Audio",
                                                       "Voice"};
-             text(list, titles[session_category_], 122, 292, 31, palette_.ink, true);
+             text(list, selecting_model_ ? "Choose a model" : titles[session_category_], 122, 292,
+                  31, palette_.ink, true);
              sessions_.draw(canvas);
          });
 
@@ -271,11 +269,21 @@ void NativeUI::Impl::draw_conversation(ui::Canvas &canvas) const
             else if (row.audio)
             {
                 const Rect card{0, y, 640, 92};
-                panel(list, card, 20);
+                const bool selected = static_cast<int>(index) == selected_audio_row();
+                if (selected)
+                {
+                    list.rounded_rect(card, 20, gfx::mix(palette_.panel, palette_.accent, 0.16f));
+                    list.bordered_rect(card, 20, Color::rgb(0x000000, 0), 2,
+                                       palette_.accent.with_alpha(0.9f));
+                }
+                else
+                    panel(list, card, 20);
                 const auto glyphs = palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
                 ui::draw_button(list, fonts_, glyphs, ui::Button::triangle, card.x + 26, card.cy(),
                                 34);
-                text(list, "Play saved audio", card.x + 78, card.cy() + 9, 26, palette_.ink, true);
+                text(list, selected ? "Selected audio · press △" : "Play saved audio",
+                     card.x + 78, card.cy() + 9, selected ? 23 : 26,
+                     selected ? palette_.accent : palette_.ink, true);
                 list.push_clip(card.inset(1));
                 draw_model_art(list, 2, card.x + card.w - 110, card.cy(), 34,
                                kind_color(capability), static_cast<float>(index), 0);
@@ -332,6 +340,15 @@ void NativeUI::Impl::draw_conversation(ui::Canvas &canvas) const
                            palette_.accent.with_alpha(0.35f * send_pulse_.value));
              composer_.draw(canvas);
          });
+
+    if (workspace_generation_open_)
+    {
+        list.rounded_rect({0, 0, gfx::kVirtualWidth, gfx::kVirtualHeight}, 0,
+                          Color::rgb(0x05070b, 0.78f));
+        label(list, "YOUR SPACE  /  GENERATION", 536, 206, palette_.accent);
+        text(list, "Tune this conversation", 536, 244, 32, palette_.ink, true);
+        form_.draw(canvas);
+    }
 }
 
 void NativeUI::Impl::draw_download_progress(gfx::DrawList &list, const Rect &bounds) const
@@ -685,4 +702,45 @@ void NativeUI::Impl::draw_settings(ui::Canvas &canvas) const
              list.pop_clip();
          });
 }
+
+void NativeUI::Impl::draw_mobile(ui::Canvas &canvas) const
+{
+    auto &list = canvas.list;
+    label(list, "YOUR PHONE, YOUR SPACE", 120, 238, palette_.accent);
+    text(list, "Open ProsperoAI on mobile", 120, 286, 43, palette_.ink, true);
+    text(list, "Scan this code while your phone is on the same network as your PS5.", 120, 332, 24,
+         palette_.muted);
+
+    const Rect card{390, 390, 1140, 490};
+    panel(list, card, 28, 0.3f);
+    const Rect qr_box{438, 420, 430, 430};
+    list.rounded_rect(qr_box, 10, Color::rgb(0xffffff));
+    if (mobile_qr_size_ > 0 && !mobile_qr_modules_.empty())
+    {
+        const float module = qr_box.w / static_cast<float>(mobile_qr_size_ + 8);
+        const float origin_x = qr_box.x + (qr_box.w - module * mobile_qr_size_) * 0.5f;
+        const float origin_y = qr_box.y + (qr_box.h - module * mobile_qr_size_) * 0.5f;
+        const Color ink = Color::rgb(0x111318);
+        for (int y = 0; y < mobile_qr_size_; ++y)
+            for (int x = 0; x < mobile_qr_size_; ++x)
+                if (mobile_qr_modules_[static_cast<std::size_t>(y * mobile_qr_size_ + x)])
+                    list.rounded_rect({origin_x + static_cast<float>(x) * module,
+                                       origin_y + static_cast<float>(y) * module, module, module},
+                                      0, ink);
+    }
+    else
+        text(list, "Network address unavailable", qr_box.cx(), qr_box.cy(), 22,
+             Color::rgb(0x343943), true, gfx::Align::center);
+
+    const float info_x = 920;
+    label(list, "MOBILE WEB APP", info_x, 468, palette_.accent);
+    text(list, mobile_url_.empty() ? "Connect your PS5 to a network" : "Scan to open the web UI",
+         info_x, 516, 30, palette_.ink, true);
+    if (!mobile_url_.empty())
+        text(list, fit(mobile_url_, 22, 540, false), info_x, 562, 22, palette_.muted);
+    text(list, "Your phone and PS5 must be on the same local network.", info_x, 650, 21,
+         palette_.muted);
+    text(list, "Models and generation stay on your console.", info_x, 684, 21, palette_.muted);
+}
+
 } // namespace prospero

@@ -3,7 +3,10 @@
 // OpenCL archive, whose wall time sat in its own CPU code rather than in any kernel the PS5
 // OpenCL shim could forward to the GPU.
 #include "kokoro.h"
+#include "generated_voice_catalog.hpp"
+#include "runtime_voice_catalog.hpp"
 #include "ggml-vulkan.h"
+#include "storage.hpp"
 #include "../../../include/generated_output_path.hpp"
 
 #include <cstddef>
@@ -23,11 +26,15 @@ namespace
 {
 // The voice pack that ships with the model folder. Other packs are additional GGUF files.
 constexpr char kModelFile[] = "kokoro-82m-f16.gguf";
-const char *voice_file(const char *voice)
+std::string voice_file(const char *voice)
 {
-    if (voice && std::strcmp(voice, "af_bella") == 0)
-        return "kokoro-voice-af_bella.gguf";
-    return "kokoro-voice-af_heart.gguf";
+    if (voice)
+        for (std::size_t i = 0; i < prospero_voice::kokoro_count; ++i)
+            if (std::strcmp(voice, prospero_voice::kokoro[i].id) == 0)
+                return prospero_voice::kokoro[i].filename;
+    std::string stem;
+    if (prospero_voice::safe_voice_stem(voice, stem)) return stem + ".gguf";
+    return prospero_voice::kokoro[0].filename;
 }
 
 void log_line(const char *text)
@@ -119,7 +126,13 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *voice_id, c
 
     const std::string base(root);
     const std::string model = base + "/" + kModelFile;
-    const std::string voice = base + "/" + voice_file(voice_id);
+    const std::string voice_filename = voice_file(voice_id);
+    std::string voice = prospero::storage().data_root + "/voices/kokoro/" + voice_filename;
+    std::FILE *voice_check = std::fopen(voice.c_str(), "rb");
+    if (!voice_check)
+        voice = base + "/" + voice_filename;
+    else
+        std::fclose(voice_check);
     // espeak-ng reads its dictionaries from the model folder's assets, not from a system path.
     const std::string espeak_data = base + "/assets";
     setenv("KOKORO_ESPEAK_DATA_PATH", espeak_data.c_str(), 1);

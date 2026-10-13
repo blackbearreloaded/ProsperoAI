@@ -12,6 +12,7 @@ mkdir -p "$TMPDIR"
 options=(-DPROS_LLAMA_SOURCE="$source_tree" -DPROS_PRISM_RUNTIME=ON -DVulkan_INCLUDE_DIR="$root/.deps/Vulkan-Headers/include" -DGGML_CCACHE=ON)
 if [[ $mode == ps5 ]]; then
     python3 "$root/tools/prepare-llama-ps5-io.py" --source "$source_tree"
+    python3 "$root/tools/prepare-llama-ps5-vulkan.py" --source "$source_tree"
     python3 "$root/tools/prepare-kokoro-ps5.py" --source "$root/.deps/kokoro.cpp"
     mkdir -p "$root/build/llama-vulkan/include-shim/spirv"
     ln -sfn /usr/include/spirv/unified1 "$root/build/llama-vulkan/include-shim/spirv/unified1"

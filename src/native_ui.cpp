@@ -4,6 +4,8 @@
 
 #include "native_ui_impl.hpp"
 #include "runtime_settings.hpp"
+#include "http_server.hpp"
+#include "../third_party/qrcodegen/qrcodegen.hpp"
 
 #include "debug_log.hpp"
 #if defined(PROSPERO_UI_VULKAN) && !defined(PROSPERO_HOST)
@@ -38,13 +40,14 @@ std::string logs_folder_text()
 namespace
 {
 constexpr float kBootSeconds = 1.6f; // the opening is never shorter than its chime
-constexpr const char *kTabs[] = {"Workspace", "Models", "Settings"};
-constexpr const char *kCategories[] = {"Appearance",    "Generation",  "Sound",
-                                       "Accessibility", "Diagnostics", "About"};
+constexpr const char *kTabs[] = {"Workspace", "Models", "Settings", "Mobile"};
+constexpr const char *kCategories[] = {"Appearance", "Sound", "Accessibility", "Diagnostics",
+                                       "About"};
 enum DialogAction
 {
     kUseModel = 1,
     kDeleteConversation,
+    kDeleteModel,
     kCloseApp,
     kCancelDownload
 };
@@ -65,7 +68,7 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     tabs_.style.height = 62;
     std::vector<ui::TabItem> tabs;
     tabs_width_ = 0;
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 4; ++i)
     {
         tabs.push_back({kTabs[i], 0, false, i});
         tabs_width_ += fonts_.semibold.measure(kTabs[i], 25) + 16 + (i ? 38.0f : 0.0f);
@@ -232,12 +235,48 @@ void NativeUI::Impl::apply_theme()
 
 void NativeUI::Impl::change_page(int page)
 {
+    if (page != 0 && workspace_generation_open_)
+    {
+        workspace_generation_open_ = false;
+        build_form();
+    }
     tabs_.set_active(page);
+    if (page == 2)
+        build_form();
+    if (page == 3)
+        refresh_mobile_link();
     page_age_ = 0;
     hero_age_ = 0;
     models_.enter();
     form_.enter();
     sessions_.enter();
+}
+
+void NativeUI::Impl::refresh_mobile_link()
+{
+    char url[128]{};
+    mobile_qr_modules_.clear();
+    mobile_qr_size_ = 0;
+    mobile_url_.clear();
+    if (!prospero_http_server_mobile_url(url, sizeof(url)))
+        return;
+    try
+    {
+        const auto qr = qrcodegen::QrCode::encodeText(url, qrcodegen::QrCode::Ecc::MEDIUM);
+        mobile_qr_size_ = qr.getSize();
+        mobile_qr_modules_.resize(static_cast<std::size_t>(mobile_qr_size_ * mobile_qr_size_));
+        for (int y = 0; y < mobile_qr_size_; ++y)
+            for (int x = 0; x < mobile_qr_size_; ++x)
+                mobile_qr_modules_[static_cast<std::size_t>(y * mobile_qr_size_ + x)] =
+                    qr.getModule(x, y) ? 1 : 0;
+        mobile_url_ = url;
+    }
+    catch (const std::exception &)
+    {
+        mobile_qr_modules_.clear();
+        mobile_qr_size_ = 0;
+        mobile_url_.clear();
+    }
 }
 
 void NativeUI::Impl::announce(ui::Feedback &feedback)
@@ -250,13 +289,20 @@ void NativeUI::Impl::announce(ui::Feedback &feedback)
         {
         case Notice::ModelReady:
             pending_model_ = -1;
+            selecting_model_ = false;
+            conversation_ = true;
+            rail_ = false;
+            change_page(0);
+            refresh_sessions();
             toasts_.push(ui::StatusKind::success, std::string(current_name()) + " is ready",
                          "A new conversation starts with this model.");
             break;
         case Notice::ModelFailed:
             pending_model_ = -1;
+            if (tabs_.active() == 0)
+                begin_model_selection();
             toasts_.push(ui::StatusKind::danger, "The model could not be prepared",
-                         "Choose it again in Models to retry.", 6);
+                         "Choose it again in Your Space to retry.", 6);
             break;
         case Notice::ModelMissing:
             toasts_.push(ui::StatusKind::warning, "This model is not installed",
@@ -394,6 +440,34 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     }
     else if (update_ui_ != UpdateUi::hidden)
         update_modal(input, dt, feedback);
+    else if (kokoro_voice_picker_open_)
+    {
+        if (input.nav == Direction::up || input.nav == Direction::down)
+        {
+            const int count = static_cast<int>(prospero_voice::runtime_voices(voice_picker_chatterbox_).size());
+            kokoro_voice_picker_focus_ =
+                (kokoro_voice_picker_focus_ + (input.nav == Direction::down ? 1 : count - 1)) %
+                count;
+            feedback.play(audio::Cue::focus);
+        }
+        else if (input.is_pressed(Action::back))
+        {
+            kokoro_voice_picker_open_ = false;
+            feedback.play(audio::Cue::modal_close);
+        }
+        else if (input.is_pressed(Action::confirm))
+        {
+            auto preferences = app_.state().preferences;
+            if (voice_picker_chatterbox_)
+                preferences.chatterbox_voice = static_cast<unsigned>(kokoro_voice_picker_focus_);
+            else
+                preferences.kokoro_voice = static_cast<unsigned>(kokoro_voice_picker_focus_);
+            app_.set_preferences(std::move(preferences));
+            kokoro_voice_picker_open_ = false;
+            refresh_sessions();
+            feedback.play(audio::Cue::select);
+        }
+    }
     else if (chat_keyboard_open_)
     {
         const auto event = keyboard_.handle(input, feedback);
@@ -428,20 +502,26 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
             }
             else if (dialog_action_ == kDeleteConversation)
                 accepted = app_.delete_session(static_cast<unsigned>(dialog_index_));
+            else if (dialog_action_ == kDeleteModel)
+            {
+                const auto &models = app_.state().models;
+                accepted = dialog_index_ >= 0 &&
+                           static_cast<std::size_t>(dialog_index_) < models.size() &&
+                           app_.state().selected_model != dialog_index_ &&
+                           prospero_model_download::delete_model_files(
+                               models[static_cast<std::size_t>(dialog_index_)].id.c_str());
+                if (accepted)
+                {
+                    app_.refresh_models();
+                    feedback.play(audio::Cue::tab);
+                }
+            }
             else if (dialog_action_ == kCloseApp)
                 accepted = quit_ = !app_.busy() && !app_.state().unsaved;
             else if (dialog_action_ == kCancelDownload)
                 accepted = cancel_pending_ = prospero_model_download::cancel();
             if (!accepted)
                 feedback.play(audio::Cue::error);
-        }
-    }
-    else if (input.is_pressed(Action::l3) && tabs_.active() != 1)
-    {
-        if (tabs_.active() != 1)
-        {
-            change_page(1);
-            feedback.play(audio::Cue::tab);
         }
     }
     else if (input.is_pressed(Action::menu))
@@ -468,6 +548,10 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
         handle_models(input, feedback);
     else if (tabs_.active() == 2)
         handle_settings(input, feedback);
+    else if (tabs_.active() == 3)
+    {
+        // The mobile page is informational; the R1/L1 tabs remain its only controls.
+    }
     else
         handle_workspace(input, feedback);
 
@@ -483,6 +567,7 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
 
     sessions_.set_active(rail_);
     categories_.set_active(category_focus_);
+    form_.set_active(workspace_generation_open_ || (tabs_.active() == 2 && !category_focus_));
     composer_.set_active(!rail_ && !app_.busy());
     composer_.set_disabled(app_.busy());
     tabs_.update(dt);
@@ -557,7 +642,7 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
             download_focus_ =
                 std::min(static_cast<int>(prospero_model_download::candidate_count()) - 1,
                          download_focus_ + 1);
-        else if (input.is_pressed(Action::confirm) || input.is_pressed(Action::l3))
+        else if (input.is_pressed(Action::confirm))
         {
             if (state == prospero_model_download::State::Downloading)
             {
@@ -607,9 +692,25 @@ void NativeUI::Impl::handle_models(const InputFrame &input, ui::Feedback &feedba
     }
     if (input.is_pressed(Action::west))
         open_search();
-    else if ((input.is_pressed(Action::l3) ||
-              models_.handle(input, feedback) == ui::Event::activated) &&
-             !visible_models_.empty())
+    else if (input.is_pressed(Action::l3) && !visible_models_.empty())
+    {
+        const int index = visible_models_[static_cast<std::size_t>(models_.focus())];
+        if (index >= 0 && static_cast<std::size_t>(index) < app_.state().models.size())
+        {
+            const auto &model = app_.state().models[static_cast<std::size_t>(index)];
+            if (index == app_.state().selected_model)
+                toasts_.push(ui::StatusKind::info, "Model is in use",
+                             "Choose another model before deleting this one.");
+            else
+                open_dialog(kDeleteModel, index, "Delete this model?",
+                            model.name + " and its installed files will be removed from the "
+                                         "console.",
+                            "Delete model", true, feedback);
+        }
+        else
+            feedback.play(audio::Cue::error);
+    }
+    else if (models_.handle(input, feedback) == ui::Event::activated && !visible_models_.empty())
     {
         const int index = visible_models_[static_cast<std::size_t>(models_.focus())];
         const auto &state = app_.state();
@@ -675,8 +776,42 @@ void NativeUI::Impl::handle_settings(const InputFrame &input, ui::Feedback &feed
         apply_form();
 }
 
+int NativeUI::Impl::selected_audio_row() const
+{
+    const float top = chat_.offset_y();
+    const float bottom = top + chat_.bounds().h;
+    const float center = top + chat_.bounds().h * 0.5f;
+    int selected = -1;
+    float closest_distance = 0;
+    for (std::size_t index = 0; index < chat_rows_.size(); ++index)
+    {
+        const auto &row = chat_rows_[index];
+        if (!row.audio || row.audio_path.empty() || row.y + row.height < top || row.y > bottom)
+            continue;
+        const float distance = std::abs(row.y + row.height * 0.5f - center);
+        if (selected < 0 || distance < closest_distance)
+        {
+            selected = static_cast<int>(index);
+            closest_distance = distance;
+        }
+    }
+    return selected;
+}
+
 void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &feedback)
 {
+    if (workspace_generation_open_)
+    {
+        if (input.is_pressed(Action::back))
+        {
+            workspace_generation_open_ = false;
+            build_form();
+            feedback.play(audio::Cue::back);
+        }
+        else if (form_.handle(input, feedback) == ui::Event::changed)
+            apply_generation_form();
+        return;
+    }
     chat_.handle(input, feedback);
     if (rail_ && (input.is_pressed(Action::jump_prev) || input.is_pressed(Action::jump_next)))
     {
@@ -694,10 +829,7 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
     {
         if (app_.new_session())
         {
-            conversation_ = true;
-            rail_ = false;
-            composer_.clear();
-            page_age_ = 0;
+            begin_model_selection();
             feedback.play(audio::Cue::open);
         }
         else
@@ -706,11 +838,17 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
     else if (!conversation_)
     {
         if (input.is_pressed(Action::confirm))
-            submit(feedback);
-        else if (input.nav == Direction::left && !app_.state().sessions.empty())
         {
             conversation_ = rail_ = true;
             page_age_ = 0;
+            refresh_sessions();
+            feedback.play(audio::Cue::open);
+        }
+        else if (input.nav == Direction::left)
+        {
+            conversation_ = rail_ = true;
+            page_age_ = 0;
+            refresh_sessions();
             feedback.play(audio::Cue::open);
         }
     }
@@ -719,37 +857,118 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
         rail_ = true;
         feedback.play(audio::Cue::focus, 0.94f, -0.4f);
     }
-    else if (rail_ && (input.nav == Direction::right || input.is_pressed(Action::back)))
+    else if (rail_ && selecting_model_ && input.is_pressed(Action::back))
+    {
+        selecting_model_ = false;
+        refresh_sessions();
+        feedback.play(audio::Cue::back);
+    }
+    else if (rail_ && (input.nav == Direction::right ||
+                       (!selecting_model_ && input.is_pressed(Action::back))))
     {
         rail_ = false;
         feedback.play(audio::Cue::focus, 1.0f, 0.2f);
     }
     else if (rail_)
     {
-        if (input.is_pressed(Action::north) && sessions_.focus() > 0)
+        if (input.is_pressed(Action::l3) && selecting_model_ && sessions_.focus() >= 0 &&
+            static_cast<std::size_t>(sessions_.focus()) < workspace_model_indices_.size())
+        {
+            const unsigned index =
+                workspace_model_indices_[static_cast<std::size_t>(sessions_.focus())];
+            const auto &model = app_.state().models[index];
+            if (static_cast<int>(index) == app_.state().selected_model)
+                toasts_.push(ui::StatusKind::info, "Model is in use",
+                             "Choose another model before deleting this one.");
+            else
+                open_dialog(kDeleteModel, static_cast<int>(index), "Delete this model?",
+                            model.name + " and its installed files will be removed from the "
+                                         "console.",
+                            "Delete model", true, feedback);
+        }
+        else if (input.is_pressed(Action::l3) && !selecting_model_ && sessions_.focus() == 0 &&
+                 app_.state().selected_model >= 0)
+        {
+            begin_model_selection();
+            feedback.play(audio::Cue::open);
+        }
+        else if (input.is_pressed(Action::l3) && !selecting_model_ &&
+                 sessions_.focus() >= 3 + (workspace_voice_row_ >= 0 ? 1 : 0) &&
+                 static_cast<std::size_t>(sessions_.focus() - 3 -
+                                          (workspace_voice_row_ >= 0 ? 1 : 0)) <
+                     visible_sessions_.size())
         {
             if (app_.busy())
                 feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.7f);
             else
-                open_dialog(kDeleteConversation, visible_sessions_[sessions_.focus() - 1],
+                open_dialog(kDeleteConversation,
+                            visible_sessions_[static_cast<std::size_t>(
+                                sessions_.focus() - (workspace_voice_row_ >= 0 ? 1 : 0) - 3)],
                             "Delete this conversation?",
-                            "The conversation and its saved media will be removed from this "
-                            "console.",
+                            "The conversation will be removed. Generated image, audio, and "
+                            "voice files will remain on this console.",
                             "Delete", true, feedback);
         }
         else if (sessions_.handle(input, feedback) == ui::Event::activated)
         {
-            const bool accepted = sessions_.focus() == 0
-                                      ? app_.new_session()
-                                      : app_.open_session(visible_sessions_[sessions_.focus() - 1]);
-            if (accepted)
+            if (selecting_model_)
             {
-                rail_ = false;
-                composer_.clear();
-                page_age_ = 0;
+                if (sessions_.focus() >= 0 &&
+                    static_cast<std::size_t>(sessions_.focus()) < workspace_model_indices_.size())
+                {
+                    const unsigned index =
+                        workspace_model_indices_[static_cast<std::size_t>(sessions_.focus())];
+                    const auto &model = app_.state().models[index];
+                    open_dialog(kUseModel, static_cast<int>(index), "Use " + model.name + "?",
+                                "This model will load into memory for the new conversation.",
+                                "Use model", false, feedback);
+                }
+                else
+                    feedback.play(audio::Cue::error);
+            }
+            else if (sessions_.focus() == 0)
+                begin_model_selection();
+            else if (sessions_.focus() == 1)
+            {
+                workspace_generation_open_ = true;
+                build_generation_form();
+                form_.enter();
+                feedback.play(audio::Cue::open);
+            }
+            else if (sessions_.focus() == 2)
+            {
+                if (app_.new_session())
+                    begin_model_selection();
+                else
+                    feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.7f);
+            }
+            else if (sessions_.focus() == workspace_voice_row_ && workspace_voice_row_ >= 0)
+            {
+                const auto &model = app_.state().models[static_cast<std::size_t>(app_.state().selected_model)];
+                voice_picker_chatterbox_ = model.id.find("chatterbox") != std::string::npos;
+                kokoro_voice_picker_focus_ = static_cast<int>(voice_picker_chatterbox_
+                    ? app_.state().preferences.chatterbox_voice
+                    : app_.state().preferences.kokoro_voice);
+                kokoro_voice_picker_open_ = true;
+                feedback.play(audio::Cue::modal_open);
             }
             else
-                feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.7f);
+            {
+                selecting_model_ = false;
+                const int session_index =
+                    sessions_.focus() - (workspace_voice_row_ >= 0 ? 1 : 0) - 3;
+                if (session_index >= 0 &&
+                    static_cast<std::size_t>(session_index) < visible_sessions_.size() &&
+                    app_.open_session(visible_sessions_[static_cast<std::size_t>(session_index)]))
+                {
+                    rail_ = false;
+                    composer_.clear();
+                    page_age_ = 0;
+                    conversation_restore_pending_ = true;
+                }
+                else
+                    feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.7f);
+            }
         }
     }
     else if (input.is_pressed(Action::back) && app_.state().messages.empty() && !app_.busy())
@@ -763,7 +982,16 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
         submit(feedback);
     else if (input.is_pressed(Action::north))
     {
-        const bool accepted = app_.state().retry_available ? app_.retry() : app_.play_audio();
+        bool accepted = false;
+        if (app_.state().retry_available)
+            accepted = app_.retry();
+        else
+        {
+            const int selected = selected_audio_row();
+            accepted = selected >= 0
+                           ? app_.play_audio(chat_rows_[static_cast<std::size_t>(selected)].audio_path)
+                           : app_.play_audio();
+        }
         feedback.play(accepted ? audio::Cue::select : audio::Cue::error, 1.0f, 0.0f,
                       accepted ? 1.0f : 0.7f);
     }
@@ -835,10 +1063,75 @@ void NativeUI::Impl::refresh_sessions()
     static constexpr const char *kinds[] = {"all", "text", "image", "audio", "voice"};
     const auto &state = app_.state();
     std::vector<ui::ListItem> rows;
+    if (selecting_model_)
+    {
+        workspace_model_indices_.clear();
+        for (unsigned i = 0; i < state.models.size(); ++i)
+        {
+            const auto &model = state.models[i];
+            ui::ListItem item;
+            item.title = model.name;
+            static constexpr const char *kCapabilityNames[] = {"Text", "Image", "Audio", "Voice"};
+            item.subtitle = std::string(kCapabilityNames[static_cast<unsigned>(model.capability)]) +
+                            (state.ready && static_cast<int>(i) == state.selected_model
+                                 ? " · Loaded in memory"
+                                 : " · Select to load");
+            rows.push_back(std::move(item));
+            workspace_model_indices_.push_back(i);
+        }
+        if (rows.empty())
+        {
+            ui::ListItem item;
+            item.title = "No models installed";
+            item.subtitle = "Install a model before starting a conversation";
+            rows.push_back(std::move(item));
+        }
+        bool changed = rows.size() != sessions_.items().size();
+        for (std::size_t i = 0; !changed && i < rows.size(); ++i)
+            changed = rows[i].title != sessions_.items()[i].title ||
+                      rows[i].subtitle != sessions_.items()[i].subtitle;
+        if (changed)
+        {
+            const int focus = sessions_.focus();
+            sessions_.set_items(std::move(rows));
+            sessions_.set_focus(
+                std::min<int>(focus, static_cast<int>(sessions_.items().size()) - 1));
+        }
+        return;
+    }
+    workspace_model_indices_.clear();
+    workspace_voice_row_ = -1;
     ui::ListItem first;
-    first.title = "New conversation";
-    first.subtitle = "Start fresh";
+    first.title = "Choose model";
+    first.subtitle = state.selected_model >= 0
+                         ? std::string(state.ready ? "Loaded in memory · " : "Selected · ") +
+                               state.models[static_cast<std::size_t>(state.selected_model)].name
+                         : "Select one to load it into memory";
     rows.push_back(std::move(first));
+    ui::ListItem second;
+    second.title = "Generation settings";
+    second.subtitle = "Response · context · thinking";
+    rows.push_back(std::move(second));
+    ui::ListItem third;
+    third.title = "New conversation";
+    third.subtitle = "Start fresh";
+    rows.push_back(std::move(third));
+    if (state.selected_model >= 0 &&
+        state.models[static_cast<std::size_t>(state.selected_model)].capability ==
+            Capability::Voice)
+    {
+        workspace_voice_row_ = static_cast<int>(rows.size());
+        ui::ListItem voice;
+        const bool chatterbox = state.models[static_cast<std::size_t>(state.selected_model)]
+                                    .id.find("chatterbox") != std::string::npos;
+        voice.title = chatterbox ? "Chatterbox voice" : "Kokoro voice";
+        const auto voice_list = prospero_voice::runtime_voices(chatterbox);
+        const auto selected_index = chatterbox ? state.preferences.chatterbox_voice : state.preferences.kokoro_voice;
+        const auto &selected_voice = voice_list[std::min<std::size_t>(selected_index, voice_list.size()-1)];
+        voice.subtitle = selected_voice.name + " · " + selected_voice.locale +
+                         " · Select to change";
+        rows.push_back(std::move(voice));
+    }
     visible_sessions_.clear();
     for (unsigned i = 0; i < state.sessions.size(); ++i)
     {
@@ -869,6 +1162,16 @@ void NativeUI::Impl::refresh_sessions()
         sessions_.set_items(std::move(rows));
         sessions_.set_focus(focus);
     }
+}
+
+void NativeUI::Impl::begin_model_selection()
+{
+    selecting_model_ = true;
+    conversation_ = true;
+    rail_ = true;
+    sessions_.set_focus(0);
+    refresh_sessions();
+    page_age_ = 0;
 }
 
 void NativeUI::Impl::type(char character, ui::Feedback &feedback)
@@ -934,18 +1237,16 @@ void NativeUI::Impl::submit(ui::Feedback &feedback)
     }
     if (!app_.can_send())
     {
-        // Nothing can answer yet: the library is where that is put right.
-        change_page(1);
-        feedback.play(audio::Cue::tab);
-        toasts_.push(ui::StatusKind::info,
-                     app_.state().models.empty() ? "No models installed" : "Choose a model first",
-                     app_.state().models.empty()
-                         ? "Copy a model folder into the app's models folder."
-                         : "This conversation's model is not ready.");
+        begin_model_selection();
+        feedback.play(audio::Cue::open);
         return;
     }
     if (!conversation_)
-        page_age_ = 0;
+    {
+        begin_model_selection();
+        feedback.play(audio::Cue::open);
+        return;
+    }
     conversation_ = true;
     rail_ = false;
     if (!composer_.text().empty())
@@ -990,60 +1291,21 @@ void NativeUI::Impl::build_form()
     auto p = app_.state().preferences;
     const auto runtime = prospero_settings::get();
     p.context_length = runtime.context;
+    p.output_limit = runtime.output_limit;
     p.kv_cache = runtime.kv;
     p.thinking = runtime.thinking;
     p.idle_unload_minutes = runtime.idle_unload_minutes;
     p.kokoro_voice = runtime.kokoro_voice;
     form_.clear();
+    form_.set_bounds({494, 362, 912, 520});
     if (category_ == 0)
     {
         form_.add_choice(1, "Color theme", {"Midnight", "Daylight"}, static_cast<int>(p.theme));
         form_.add_choice(2, "Accent color", {"Amber", "Mist", "Sage"}, static_cast<int>(p.accent));
     }
     else if (category_ == 1)
-    {
-        form_.add_choice(6, "Response style", {"Balanced", "Precise", "Creative"},
-                         static_cast<int>(p.style));
-        form_.add_choice(7, "Response length",
-                         {"Auto", "64 tokens", "128 tokens", "192 tokens", "256 tokens",
-                          "512 tokens", "1024 tokens", "2048 tokens", "4096 tokens", "8192 tokens",
-                          "16384 tokens", "32768 tokens", "65536 tokens", "131072 tokens"},
-                         p.output_limit == 0       ? 0
-                         : p.output_limit <= 256   ? static_cast<int>(p.output_limit / 64)
-                         : p.output_limit == 512   ? 5
-                         : p.output_limit == 1024  ? 6
-                         : p.output_limit == 2048  ? 7
-                         : p.output_limit == 4096  ? 8
-                         : p.output_limit == 8192  ? 9
-                         : p.output_limit == 16384 ? 10
-                         : p.output_limit == 32768 ? 11
-                                                   : 12);
-        constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
-        int selected_context = 0;
-        for (int i = 0; i < 8; ++i)
-            if (contexts[i] == p.context_length)
-                selected_context = i;
-        form_.add_choice(17, "Context length",
-                         {"Auto", "4K", "8K", "16K", "32K", "64K", "128K", "256K"},
-                         selected_context);
-        form_.add_toggle(19, "Thinking", p.thinking);
-        form_.add_value(21, "Model memory", "Release the runtime when idle.");
-        constexpr unsigned idle_minutes[] = {1, 2, 5, 10, 30, 60};
-        int selected_idle = 1;
-        for (int i = 0; i < 6; ++i)
-            if (idle_minutes[i] == p.idle_unload_minutes)
-                selected_idle = i;
-        form_.add_choice(
-            20, "Unload model after",
-            {"1 minute", "2 minutes", "5 minutes", "10 minutes", "30 minutes", "60 minutes"},
-            selected_idle);
-        form_.add_choice(22, "Kokoro voice", {"Heart · US English", "Bella · US English"},
-                         static_cast<int>(p.kokoro_voice));
-        form_.add_value(9, "Processing", "On this console");
-    }
-    else if (category_ == 2)
         form_.add_slider(3, "Interface sounds", static_cast<float>(p.volume), 0, 100, 5).unit = "%";
-    else if (category_ == 3)
+    else if (category_ == 2)
     {
         form_.add_toggle(4, "Reduce motion", p.reduced_motion);
         form_.add_toggle(5, "High contrast", p.high_contrast);
@@ -1069,6 +1331,52 @@ void NativeUI::Impl::build_form()
     form_.enter();
 }
 
+void NativeUI::Impl::build_generation_form()
+{
+    const auto p = app_.state().preferences;
+    const auto runtime = prospero_settings::get();
+    form_.clear();
+    form_.set_bounds({536, 262, 1288, 676});
+    form_.add_header("Generation");
+    form_.add_choice(6, "Response style", {"Balanced", "Precise", "Creative"},
+                     static_cast<int>(p.style));
+    const unsigned output = runtime.output_limit;
+    form_.add_choice(7, "Response length",
+                     {"Auto", "64 tokens", "128 tokens", "192 tokens", "256 tokens",
+                      "512 tokens", "1024 tokens", "2048 tokens", "4096 tokens", "8192 tokens",
+                      "16384 tokens", "32768 tokens", "65536 tokens", "131072 tokens"},
+                     output == 0       ? 0
+                     : output <= 256   ? static_cast<int>(output / 64)
+                     : output == 512   ? 5
+                     : output == 1024  ? 6
+                     : output == 2048  ? 7
+                     : output == 4096  ? 8
+                     : output == 8192  ? 9
+                     : output == 16384 ? 10
+                     : output == 32768 ? 11
+                                       : 12);
+    constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
+    int selected_context = 0;
+    for (int i = 0; i < 8; ++i)
+        if (contexts[i] == runtime.context)
+            selected_context = i;
+    form_.add_choice(17, "Context length",
+                     {"Auto", "4K", "8K", "16K", "32K", "64K", "128K", "256K"},
+                     selected_context);
+    form_.add_toggle(19, "Thinking", runtime.thinking);
+    form_.add_value(21, "Model memory", "Release the runtime when idle.");
+    constexpr unsigned idle_minutes[] = {1, 2, 5, 10, 30, 60};
+    int selected_idle = 1;
+    for (int i = 0; i < 6; ++i)
+        if (idle_minutes[i] == runtime.idle_unload_minutes)
+            selected_idle = i;
+    form_.add_choice(20, "Unload model after",
+                     {"1 minute", "2 minutes", "5 minutes", "10 minutes", "30 minutes", "60 minutes"},
+                     selected_idle);
+    form_.add_value(9, "Processing", "On this console");
+    form_.enter();
+}
+
 void NativeUI::Impl::apply_form()
 {
     auto p = app_.state().preferences;
@@ -1078,22 +1386,8 @@ void NativeUI::Impl::apply_form()
         p.accent = static_cast<unsigned>(form_.choice_index(2));
     }
     else if (category_ == 1)
-    {
-        p.style = static_cast<unsigned>(form_.choice_index(6));
-        constexpr unsigned limits[] = {0,    64,   128,  192,   256,   512,   1024,
-                                       2048, 4096, 8192, 16384, 32768, 65536, 131072};
-        p.output_limit = limits[std::clamp(form_.choice_index(7), 0, 13)];
-        constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
-        p.context_length = contexts[std::clamp(form_.choice_index(17), 0, 7)];
-        p.kv_cache = 0;
-        p.thinking = form_.toggle_value(19);
-        constexpr unsigned idle_minutes[] = {1, 2, 5, 10, 30, 60};
-        p.idle_unload_minutes = idle_minutes[std::clamp(form_.choice_index(20), 0, 5)];
-        p.kokoro_voice = static_cast<unsigned>(std::clamp(form_.choice_index(22), 0, 1));
-    }
-    else if (category_ == 2)
         p.volume = static_cast<unsigned>(form_.slider_value(3));
-    else if (category_ == 3)
+    else if (category_ == 2)
     {
         p.reduced_motion = form_.toggle_value(4);
         p.high_contrast = form_.toggle_value(5);
@@ -1120,6 +1414,22 @@ void NativeUI::Impl::apply_form()
     debug::line("setting", "category %d changed", category_);
     app_.set_preferences(std::move(p));
     apply_theme();
+}
+
+void NativeUI::Impl::apply_generation_form()
+{
+    auto p = app_.state().preferences;
+    p.style = static_cast<unsigned>(form_.choice_index(6));
+    constexpr unsigned limits[] = {0,    64,   128,   192,   256,   512,   1024,
+                                   2048, 4096, 8192, 16384, 32768, 65536, 131072};
+    p.output_limit = limits[std::clamp(form_.choice_index(7), 0, 13)];
+    constexpr unsigned contexts[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
+    p.context_length = contexts[std::clamp(form_.choice_index(17), 0, 7)];
+    p.kv_cache = 0;
+    p.thinking = form_.toggle_value(19);
+    constexpr unsigned idle_minutes[] = {1, 2, 5, 10, 30, 60};
+    p.idle_unload_minutes = idle_minutes[std::clamp(form_.choice_index(20), 0, 5)];
+    app_.set_preferences(std::move(p));
 }
 
 void NativeUI::Impl::sync()
@@ -1162,7 +1472,7 @@ void NativeUI::Impl::sync()
     refresh_sessions();
     font_set_.note(composer_.text());
 
-    const bool follow = chat_.max_y() - chat_.offset_y() < 80;
+    const bool follow = conversation_restore_pending_ || chat_.max_y() - chat_.offset_y() < 80;
     const float size = state.preferences.text_size ? 34.0f : 28.0f;
     const bool remeasure = body_size_ != size || faces_changed;
     body_size_ = size;
@@ -1178,29 +1488,47 @@ void NativeUI::Impl::sync()
         const bool stored = i < state.messages.size();
         const char *value = stored ? state.messages[i].content.c_str() : state.stream.c_str();
         const char *role = stored ? state.messages[i].role : "assistant";
+        const bool user = std::strcmp(role, "user") == 0;
+        std::string visible = value;
+        std::string image_path;
+        std::string audio_path;
+        bool audio = false;
+        if (std::strcmp(role, "assistant") == 0)
+        {
+            const auto extract_path = [&](const char *extension)
+            {
+                constexpr char prefix[] = "/download0/";
+                const std::size_t extension_length = std::strlen(extension);
+                for (auto start = visible.find(prefix); start != std::string::npos;
+                     start = visible.find(prefix, start + sizeof(prefix) - 1))
+                {
+                    const auto end = visible.find(extension, start);
+                    const auto newline = visible.find_first_of("\r\n", start);
+                    if (end != std::string::npos &&
+                        (newline == std::string::npos || newline > end))
+                        return visible.substr(start, end + extension_length - start);
+                }
+                return std::string{};
+            };
+            image_path = extract_path(".tga");
+            audio_path = extract_path(".wav");
+            audio = !audio_path.empty();
+            const auto media_start = visible.find("/download0/");
+            if ((!image_path.empty() || audio) && media_start != std::string::npos)
+                visible.resize(media_start);
+            while (!visible.empty() && (visible.back() == '\n' || visible.back() == '\r'))
+                visible.pop_back();
+        }
         if (i >= previous)
             row.age = 0;
-        if (remeasure || row.text != value || row.role != role)
+        if (remeasure || row.text != value || row.role != role || row.image_path != image_path ||
+            row.audio_path != audio_path)
         {
             row.text = value;
             row.role = role;
-            row.image_path.clear();
-            row.audio = false;
-            std::string visible = row.text;
-            const bool user = row.role == "user";
-            if (!user)
-            {
-                const auto start = visible.find("/download0/");
-                const auto end = start == std::string::npos ? start : visible.find(".tga", start);
-                if (end != std::string::npos)
-                    row.image_path = visible.substr(start, end + 4 - start);
-                row.audio =
-                    start != std::string::npos && visible.find(".wav", start) != std::string::npos;
-                if (!row.image_path.empty() || row.audio)
-                    visible.resize(start);
-                while (!visible.empty() && (visible.back() == '\n' || visible.back() == '\r'))
-                    visible.pop_back();
-            }
+            row.image_path = std::move(image_path);
+            row.audio_path = std::move(audio_path);
+            row.audio = audio;
             font_set_.note(visible);
             row.lines = fonts_.regular.font->wrap(visible, body_size_, user ? 900.0f : 1240.0f);
             row.width = 0;
@@ -1219,6 +1547,7 @@ void NativeUI::Impl::sync()
     chat_.set_content_size(chat_.bounds().w, y);
     if (follow)
         chat_.scroll_to(0, chat_.max_y());
+    conversation_restore_pending_ = false;
     if (!state.messages.empty() && !conversation_)
     {
         conversation_ = true;
@@ -1300,6 +1629,8 @@ void NativeUI::Impl::draw(UiFrame &frame) const
         draw_models(canvas);
     else if (tabs_.active() == 2)
         draw_settings(canvas);
+    else if (tabs_.active() == 3)
+        draw_mobile(canvas);
     else if (conversation_)
         draw_conversation(canvas);
     else
@@ -1318,6 +1649,37 @@ void NativeUI::Impl::draw(UiFrame &frame) const
         frame.glass = true;
         ui::Canvas frosted{frame.overlay, fonts_, frame.glass_texture, clock_};
         dialog_.draw(frosted);
+    }
+    if (kokoro_voice_picker_open_)
+    {
+        frame.glass = true;
+        auto &popup = frame.overlay;
+        popup.rounded_rect({0, 0, gfx::kVirtualWidth, gfx::kVirtualHeight}, 0,
+                           Color::rgb(0x000000, palette_.day ? 0.45f : 0.72f));
+        const Rect panel{530, 270, 860, 540};
+        popup.shadow({panel.x, panel.y + 14, panel.w, panel.h}, 24, 50, Color::rgb(0x000000, 0.4f));
+        popup.bordered_rect(panel, 24, palette_.panel.with_alpha(1.0f / palette_.panel.a), 1,
+                            palette_.line);
+        label(popup, voice_picker_chatterbox_ ? "CHATTERBOX VOICE" : "KOKORO VOICE",
+              panel.x + 42, panel.y + 52, palette_.accent);
+        text(popup, "Choose a voice", panel.x + 42, panel.y + 101, 34, palette_.ink, true);
+        const auto voice_list = prospero_voice::runtime_voices(voice_picker_chatterbox_);
+        const int voice_count = static_cast<int>(voice_list.size());
+        for (int i = 0; i < voice_count; ++i)
+        {
+            const float y = panel.y + 140 + static_cast<float>(i) * 70;
+            const Rect row{panel.x + 28, y, panel.w - 56, 60};
+            if (i == kokoro_voice_picker_focus_)
+                popup.rounded_rect(row, 12, palette_.accent.with_alpha(0.22f));
+            const auto &voice = voice_list[static_cast<std::size_t>(i)];
+            text(popup, voice.name, row.x + 20, row.y + 22, 24,
+                 i == kokoro_voice_picker_focus_ ? palette_.ink : palette_.muted,
+                 i == kokoro_voice_picker_focus_);
+            text(popup, voice.locale, row.x + row.w - 20, row.y + 22, 21, palette_.muted, false,
+                 gfx::Align::right);
+        }
+        text(popup, "↑  ↓  Select     ✕  Confirm     ○  Cancel", 960, panel.y + panel.h - 28, 18,
+             palette_.muted, false, gfx::Align::center);
     }
     draw_update_notes(overlay);
     draw_update(overlay);
@@ -1349,7 +1711,10 @@ void NativeUI::Impl::draw_header(ui::Canvas &canvas) const
                        : state.selected_model >= 0 && state.ready       ? palette_.good
                        : state.selected_model < 0 && !state.initialized ? palette_.muted
                                                                         : palette_.bad;
-    std::string status = state.selected_model >= 0 ? fit(current_name(), 19, 250) : std::string();
+    std::string status = state.selected_model >= 0
+                             ? std::string(state.ready ? "Loaded · " : "Selected · ") +
+                                   fit(current_name(), 19, 250)
+                             : std::string();
     if (!status.empty())
         status += "  \xC2\xB7  ";
     status += activity_text();
@@ -1424,23 +1789,29 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
             hints[count++] = {ui::Button::square, "Search"};
         }
     }
+    else if (tabs_.active() == 3)
+    {
+        hints[count++] = {ui::Button::l1, "Settings"};
+        hints[count++] = {ui::Button::r1, "Workspace"};
+    }
     else if (tabs_.active() == 2)
     {
         hints[count++] = {ui::Button::cross, category_focus_ ? "Open" : "Adjust"};
         if (!category_focus_)
             hints[count++] = {ui::Button::circle, "Categories"};
     }
+    else if (workspace_generation_open_)
+    {
+        hints[count++] = {ui::Button::circle, "Back"};
+        hints[count++] = {ui::Button::dpad, "Adjust"};
+    }
     else if (!conversation_)
     {
-        hints[count++] = {ui::Button::cross, app_.can_send() ? "Start" : "Models"};
-        if (!state.sessions.empty())
-            hints[count++] = {ui::Button::dpad, "Conversations"};
+        hints[count++] = {ui::Button::cross, "Start Conversation"};
     }
     else if (rail_)
     {
-        hints[count++] = {ui::Button::cross, "Open"};
-        if (sessions_.focus() > 0)
-            hints[count++] = {ui::Button::triangle, "Delete"};
+        hints[count++] = {ui::Button::cross, selecting_model_ ? "Use model" : "Open"};
         hints[count++] = {ui::Button::circle, "Back"};
         hints[count++] = {ui::Button::square, "Search"};
         hints[count++] = {ui::Button::l2, "Type"};
@@ -1454,7 +1825,7 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
         if (state.retry_available)
             hints[count++] = {ui::Button::triangle, "Retry"};
         else if (audio)
-            hints[count++] = {ui::Button::triangle, "Play audio"};
+            hints[count++] = {ui::Button::triangle, "Play visible audio"};
         hints[count++] = {ui::Button::square, "New"};
         hints[count++] = {ui::Button::right_stick, "Scroll"};
     }
@@ -1463,8 +1834,21 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
         hints[count++] = {ui::Button::options, "Close"};
     if (!dialog_.is_open() && !search_open_ && !chat_keyboard_open_ &&
         update_ui_ == UpdateUi::hidden)
-        hints[count++] = {ui::Button::left_stick,
-                          tabs_.active() == 1 ? "Select" : "Models"};
+    {
+        if (tabs_.active() == 1)
+            hints[count++] = {ui::Button::left_stick, "L3  Delete model"};
+        else if (conversation_ && rail_ && selecting_model_ && !workspace_model_indices_.empty())
+            hints[count++] = {ui::Button::left_stick, "L3  Delete model"};
+        else if (conversation_ && rail_ && !selecting_model_ && sessions_.focus() == 0 &&
+                 app_.state().selected_model >= 0)
+            hints[count++] = {ui::Button::left_stick, "L3  Delete model"};
+        else if (conversation_ && rail_ && !selecting_model_ &&
+                 sessions_.focus() >= 3 + (workspace_voice_row_ >= 0 ? 1 : 0) &&
+                 static_cast<std::size_t>(sessions_.focus() - 3 -
+                                          (workspace_voice_row_ >= 0 ? 1 : 0)) <
+                     visible_sessions_.size())
+            hints[count++] = {ui::Button::left_stick, "L3  Delete conversation"};
+    }
     auto glyphs = palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
     glyphs.label = palette_.ink;
     ui::HintLayout layout;
@@ -1581,18 +1965,19 @@ void NativeUI::Impl::draw_search(ui::Canvas &canvas) const
     overlay.bordered_rect(sheet, 26, palette_.panel.with_alpha(1.0f / palette_.panel.a), 1,
                           palette_.line);
     label(overlay,
-          chat_keyboard_open_ ? "WRITE A MESSAGE"
-          : tabs_.active() == 0 ? "SEARCH CONVERSATIONS"
+          chat_keyboard_open_      ? "WRITE A MESSAGE"
+          : tabs_.active() == 0    ? "SEARCH CONVERSATIONS"
           : filters_.active() == 0 ? "FIND A MODEL TO DOWNLOAD"
                                    : "SEARCH YOUR MODELS",
           364, 492, palette_.accent);
-    const std::string &value = chat_keyboard_open_
-                                   ? composer_.text()
-                                   : tabs_.active() == 0 ? session_search_.text() : search_.text();
+    const std::string &value = chat_keyboard_open_   ? composer_.text()
+                               : tabs_.active() == 0 ? session_search_.text()
+                                                     : search_.text();
     const bool empty = value.empty();
-    text(overlay, empty ? (chat_keyboard_open_ ? "Type your message..." : "Type to search...")
-                        : fit(value, 32, 900).c_str(), 364, 548, 32,
-         empty ? palette_.muted : palette_.ink, !empty);
+    text(overlay,
+         empty ? (chat_keyboard_open_ ? "Type your message..." : "Type to search...")
+               : fit(value, 32, 900).c_str(),
+         364, 548, 32, empty ? palette_.muted : palette_.ink, !empty);
     char found[64];
     std::snprintf(found, sizeof(found), "%zu found",
                   tabs_.active() == 0 ? visible_sessions_.size() : visible_models_.size());

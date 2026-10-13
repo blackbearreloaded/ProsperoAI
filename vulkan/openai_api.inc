@@ -87,7 +87,7 @@ struct ApiChatRequest {
     ApiJson tools = ApiJson::array();
     std::string forced_tool;
     bool stream = false, include_usage = false, structured = false, required = false;
-    unsigned max_tokens = prospero_generation::MaxOutputTokens;
+    unsigned max_tokens = 0;
     unsigned context_tokens = 0;
     float temperature = 0;
     bool parallel_tools = true;
@@ -115,15 +115,17 @@ ApiChatRequest parse_api_chat(const ApiJson &body) {
     result.parallel_tools = body.value("parallel_tool_calls", true);
     if (body.contains("stream_options") && !body["stream_options"].is_null())
         result.include_usage = body["stream_options"].value("include_usage", false);
-    const auto limit = body.contains("max_completion_tokens")
-                           ? body["max_completion_tokens"]
-                           : body.value("max_tokens", ApiJson(prospero_generation::MaxOutputTokens));
-    if (!limit.is_number_integer() || limit.get<long long>() <= 0)
-        throw ApiError("400 Bad Request", "invalid_max_tokens", "max_tokens must be a positive integer.");
-    if (limit.get<long long>() > prospero_generation::MaxOutputTokens)
-        throw ApiError("400 Bad Request", "invalid_max_tokens",
-                       "max_tokens must not exceed 131072.");
-    result.max_tokens = static_cast<unsigned>(limit.get<long long>());
+    if (body.contains("max_completion_tokens") || body.contains("max_tokens")) {
+        const auto limit = body.contains("max_completion_tokens") ? body["max_completion_tokens"] : body["max_tokens"];
+        if (!limit.is_number_integer() || limit.get<long long>() <= 0)
+            throw ApiError("400 Bad Request", "invalid_max_tokens", "max_tokens must be a positive integer.");
+        if (limit.get<long long>() > prospero_generation::MaxOutputTokens)
+            throw ApiError("400 Bad Request", "invalid_max_tokens",
+                           "max_tokens must not exceed 131072.");
+        result.max_tokens = static_cast<unsigned>(limit.get<long long>());
+    } else {
+        result.max_tokens = prospero_settings::get().output_limit;
+    }
     if (body.contains("context_tokens")) {
         const auto &context = body["context_tokens"];
         if (!context.is_number_integer() || context.get<long long>() < 512 ||

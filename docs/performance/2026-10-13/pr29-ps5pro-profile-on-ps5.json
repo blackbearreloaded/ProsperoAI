@@ -1,0 +1,61 @@
+{
+  "schema": 1,
+  "prompt": "Explain how a GPU executes quantized matrix multiplication, including workgroups, cache use and synchronization.",
+  "tokens": 256,
+  "runs_per_cell": 5,
+  "cells": [
+    {
+      "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+      "context": 4096,
+      "batch": 512,
+      "ubatch": 512,
+      "runs": [
+        {
+          "wall_seconds": 3.762397,
+          "prompt_tokens": 28,
+          "generated_tokens": 256,
+          "decode_seconds": 3.746174,
+          "decode_tokens_per_second": 68.0694,
+          "run": 1
+        },
+        {
+          "wall_seconds": 3.699035,
+          "prompt_tokens": 28,
+          "generated_tokens": 256,
+          "decode_seconds": 3.679458,
+          "decode_tokens_per_second": 69.3037,
+          "run": 2
+        },
+        {
+          "wall_seconds": 3.705044,
+          "prompt_tokens": 28,
+          "generated_tokens": 256,
+          "decode_seconds": 3.686527,
+          "decode_tokens_per_second": 69.1708,
+          "run": 3
+        },
+        {
+          "wall_seconds": 3.775404,
+          "prompt_tokens": 28,
+          "generated_tokens": 256,
+          "decode_seconds": 3.756617,
+          "decode_tokens_per_second": 67.8802,
+          "run": 4
+        },
+        {
+          "wall_seconds": 3.695763,
+          "prompt_tokens": 28,
+          "generated_tokens": 256,
+          "decode_seconds": 3.677953,
+          "decode_tokens_per_second": 69.332,
+          "run": 5
+        }
+      ],
+      "summary": {
+        "passed": 5,
+        "failed": 0,
+        "median_decode_tokens_per_second": 69.1708
+      }
+    }
+  ]
+}

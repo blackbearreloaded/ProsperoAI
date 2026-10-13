@@ -57,6 +57,7 @@ unsigned selected = 0;
 bool scanned = false;
 std::mutex mutex;
 std::mutex inference_mutex;
+std::atomic<unsigned> active_generations{0};
 std::atomic<std::uint64_t> last_inference_activity_us{0};
 std::atomic<bool> runtime_idle_unloaded{false};
 std::atomic<unsigned> configured_idle_timeout_seconds{120};
@@ -224,6 +225,10 @@ void log_change(const Model &from, const Model &to)
 bool gpt_runtime_available()
 {
     return gpt_runtime_model_count() != 0;
+}
+unsigned gpt_runtime_generations_running()
+{
+    return active_generations.load(std::memory_order_acquire);
 }
 unsigned gpt_runtime_model_count()
 {
@@ -478,6 +483,11 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
                       modality_name(model.modality));
         return 1;
     }
+    struct GenerationCounterGuard
+    {
+        GenerationCounterGuard() { active_generations.fetch_add(1, std::memory_order_acq_rel); }
+        ~GenerationCounterGuard() { active_generations.fetch_sub(1, std::memory_order_acq_rel); }
+    } generation_guard;
     const int result = adapter->generate(
         GenerationRequest{model, messages, count, settings, output, capacity, stats, progress});
     note_inference_activity();

@@ -15,5 +15,8 @@ bool prospero_http_server_start(unsigned short port);
 // Thread-safe; safe to call from the UI thread on each tick.
 void prospero_http_server_last_status(char *text, std::size_t capacity);
 
+// Copies the console's current LAN URL for the hosted web interface.
+bool prospero_http_server_mobile_url(char *text, std::size_t capacity);
+
 // Ensure shared model storage is available, automatically starting the bundled
 // title-scoped helper through the console-local ELF loader when needed.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -30,5 +31,12 @@ inline unsigned read_inference_setting(const char *root, const char *name,
         } else return fallback;
     }
     return digits && value >= minimum ? value : fallback;
+}
+
+// PR #29 measured batch/ubatch 512 on PS5 Pro. Keep the tested base PS5
+// default, and let explicit batch_size.txt/ubatch_size.txt override either profile.
+inline unsigned vulkan_profile_batch_default() {
+    const char *profile = std::getenv("PROSPERO_VULKAN_PROFILE");
+    return profile && std::strcmp(profile, "ps5pro") == 0 ? 512 : 256;
 }
 }

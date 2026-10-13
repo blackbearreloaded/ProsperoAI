@@ -261,9 +261,11 @@ bool prepare() {
     cp.type_k = kv_type;
     cp.type_v = kv_type;
     cp.n_batch = requested_batch_setting ? requested_batch_setting
-        : prospero::read_inference_setting("/app0", "batch_size.txt", 256, 32, 2048);
+        : prospero::read_inference_setting("/app0", "batch_size.txt",
+                                            prospero::vulkan_profile_batch_default(), 32, 2048);
     cp.n_ubatch = requested_ubatch_setting ? requested_ubatch_setting
-        : prospero::read_inference_setting("/app0", "ubatch_size.txt", 256, 32, 2048);
+        : prospero::read_inference_setting("/app0", "ubatch_size.txt",
+                                            prospero::vulkan_profile_batch_default(), 32, 2048);
     cp.n_ubatch = std::min(cp.n_batch, cp.n_ubatch);
     cp.n_threads = prospero::read_inference_setting("/app0", "threads.txt", 4, 1, 16);
     cp.n_threads_batch = prospero::read_inference_setting("/app0", "threads_batch.txt", 4, 1, 16);

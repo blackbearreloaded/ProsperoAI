@@ -69,8 +69,11 @@ inline constexpr PresetFile preset_files_5[] = {
     {"kokoro-82m-fp16/assets/espeak-ng-data/voices/en-us", "assets/espeak-ng-data/voices/en-us", "4c5f247313a4206d2d5b2b411b973a007b0617f0633add363a74717aba8d421c", 272ULL, nullptr, nullptr},
     {"provenance/model-preparation.json", "licenses/provenance/model-preparation.json", "f9e710c3079daa116b5341964acfb3e1aea5fc21909bfa7745709cdc56b3c996", 14562ULL, nullptr, nullptr},
     {"kokoro-82m-f16.gguf", "kokoro-82m-f16.gguf", "597926de84f5550e1526ce0abde4e496209d464afc9274d8603d14f3c04d1f67", 163728096ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
-    {"voices/kokoro-voice-af_heart.gguf", "kokoro-voice-af_heart.gguf", "c2f44076dfb8f9c098a85d634f6d6b46b038f80e3afdf695ff3b90f6d9ef473f", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
-    {"voices/kokoro-voice-af_bella.gguf", "kokoro-voice-af_bella.gguf", "63d24d0e5d91cb6cf3bca294a3b8c0b4428aa54ac9b5de42e5ba07f6bd110ea8", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
+    {"voices/kokoro-voice-af_heart.gguf", "voices/kokoro/kokoro-voice-af_heart.gguf", "c2f44076dfb8f9c098a85d634f6d6b46b038f80e3afdf695ff3b90f6d9ef473f", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
+    {"voices/kokoro-voice-af_bella.gguf", "voices/kokoro/kokoro-voice-af_bella.gguf", "63d24d0e5d91cb6cf3bca294a3b8c0b4428aa54ac9b5de42e5ba07f6bd110ea8", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
+    {"voices/kokoro-voice-af_nicole.gguf", "voices/kokoro/kokoro-voice-af_nicole.gguf", "04bee67dd22b1eb687e50187c6851db96b6a1ebeee96daf5ec9448427a1bce42", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
+    {"voices/kokoro-voice-af_sarah.gguf", "voices/kokoro/kokoro-voice-af_sarah.gguf", "43cedb17753fd8fae61a1583a81b93a2bf360ccc48c69b9ea2f1a09aa647f0bc", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
+    {"voices/kokoro-voice-am_adam.gguf", "voices/kokoro/kokoro-voice-am_adam.gguf", "4cad76e54f38f2ba97811caa97ed220feb7f0973b0fbfe719e0a8b8ca2561634", 522560ULL, "simonfxr/kokoro.cpp-GGUF", "c64650d0950e0b718b6eeb2f18620e25daf5c90b"},
 };
 inline constexpr PresetFile preset_files_6[] = {
     {"MiniCPM5-2B-Q8_0.gguf", "", "c5415f8989bf88a8288f1b55a3cc371af53c07b0faa220a63bd7a990cfaba078", 2679710688ULL, nullptr, nullptr},
@@ -86,19 +89,32 @@ inline constexpr PresetFile preset_files_8[] = {
 inline constexpr PresetFile preset_files_9[] = {
     {"bohf-12b-moe-3a-q3_k_m.gguf", "", "a13ef6785d0753fe7270d96c061d8c0f32e1bc2b8c17acf6e28fd021ebb5023b", 4703718432ULL, nullptr, nullptr},
 };
+inline constexpr PresetFile preset_files_10[] = {
+    {"Chatterbox-GGUF/chatterbox-q8_0.gguf", "chatterbox-q8_0.gguf", "d586dd1aa59613cab8046176fb7ca5ba191c02a9b10ffa5b0d892ed22b470656", 2088393668ULL, nullptr, nullptr},
+    {"tokenizer.json", "tokenizer.json", "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5", 25470ULL, "ResembleAI/chatterbox", "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"},
+    {"grapheme_mtl_merged_expanded_v1.json", "grapheme_mtl_merged_expanded_v1.json", "69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf", 69989ULL, "ResembleAI/chatterbox", "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"},
+    {"Cangjie5_TC.json", "Cangjie5_TC.json", "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c", 1920163ULL, "ResembleAI/chatterbox", "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"},
+    {"conds.pt", "conds.pt", "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e", 107374ULL, "ResembleAI/chatterbox", "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"},
+    {"webui/native/demo_voices/demo_1_man.wav", "voices/chatterbox/demo_1_man.wav", "3e5321095813b09c6b108e9b12dfd988155020b35602ef074498aa0fa771fd39", 905294ULL, "github:0xShug0/audio.cpp", "886076fc89c09b9902592aa4bfbd12922d4a9e26"},
+    {"voices/alana_jordan.flac", "voices/chatterbox/alana_jordan.flac", "6f4e1266cc39c2b426894bdfcddac5c23a9086b4dcd8fb06320fe3865009538e", 305301ULL, "github:CoisLR/TTS-Reference-Voices", "f6be3bc580483c1027e4a66a887ca8510566ae40"},
+    {"voices/alan_davis_drake.flac", "voices/chatterbox/alan_davis_drake.flac", "7f7c5358f7f38700bdaf6f640e03fae44962fcb6f5c7f8b5d439eb34b219d8d8", 227727ULL, "github:CoisLR/TTS-Reference-Voices", "f6be3bc580483c1027e4a66a887ca8510566ae40"},
+    {"voices/ruth_golding.flac", "voices/chatterbox/ruth_golding.flac", "f381a6ea1e26bcd24f30a61946ec8056cc34eea6bfdbcaad72efd2f72ebd2405", 295300ULL, "github:CoisLR/TTS-Reference-Voices", "f6be3bc580483c1027e4a66a887ca8510566ae40"},
+    {"voices/phil_chenevert.flac", "voices/chatterbox/phil_chenevert.flac", "2c66f024ceee942fec277f9700d07abcffcd5dbccb81e714eb48d95505f117da", 296237ULL, "github:CoisLR/TTS-Reference-Voices", "f6be3bc580483c1027e4a66a887ca8510566ae40"},
+};
 inline constexpr Preset presets[] = {
     {"qwen3.8-9b-distill-q4-k-m.gguf", "Qwen3.8 9B Distill Q4_K_M", "empero-ai/Qwen3.8-9B-Distill-GGUF", "760121cd70bb4c36b2b5ec58eb765e0df5987efe", 0, 5780090176ULL, preset_files_0, 1},
     {"sd-turbo-fp16", "SD-Turbo FP16", "blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5", "77d748daee145ea432a0cc20744ba18b5ef4c137", 1, 2580079090ULL, preset_files_1, 8},
     {"realistic-vision-v51-fp16", "Realistic Vision v5.1 FP16", "SG161222/Realistic_Vision_V5.1_noVAE", "305469dfd7d7410cff6299d34727e237374b5f36", 1, 2467269170ULL, preset_files_2, 2},
     {"stable-audio-3-small-sfx-vulkan", "Stable Audio 3 Small SFX (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 1683570688ULL, preset_files_3, 1},
     {"ace-step-1.5-turbo-q8-0", "ACE-Step 1.5 Turbo Q8_0 (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 6244194798ULL, preset_files_4, 15},
-    {"kokoro-82m-vulkan", "Kokoro 82M Vulkan", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 165757083ULL, preset_files_5, 25},
+    {"kokoro-82m-vulkan", "Kokoro 82M Vulkan", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 167324763ULL, preset_files_5, 28},
     {"minicpm5-2b-q8-0.gguf", "MiniCPM5 2B Q8_0", "openbmb/MiniCPM5-2B-GGUF", "2079a22f3beaa4e306449978533478fe0522f4b3", 0, 2679710688ULL, preset_files_6, 1},
 #ifdef PROSPERO_PRISM_RUNTIME
     {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "Ternary Bonsai 2 27B PTQ1_0", "prism-ml/Ternary-Bonsai-2-27B-gguf", "b072e1d3b35a0a630cece372c2127528e0994386", 0, 5946648928ULL, preset_files_7, 1},
 #endif
     {"granite-4.0-h-tiny-q4-k-m.gguf", "Granite 4.0 H-Tiny Q4_K_M", "ibm-granite/granite-4.0-h-tiny-GGUF", "08d5a8a9741dd5c1a95d2d39e25253226aa1464e", 0, 4230976352ULL, preset_files_8, 1},
     {"bohf-12b-moe-3a-q3-k-m.gguf", "BoHF 12B MoE 3A Q3_K_M", "theprint/Bohf-12B-MoE-3A-GGUF", "a0ab1f1455f4bad47f31c8c52f6aec1569699da5", 0, 4703718432ULL, preset_files_9, 1},
+    {"chatterbox-500m-q8-0", "Chatterbox 500M Q8_0 (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 3, 2092546523ULL, preset_files_10, 10},
 };
 inline constexpr std::size_t preset_count = sizeof(presets) / sizeof(presets[0]);
 }

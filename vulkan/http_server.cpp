@@ -15,6 +15,8 @@
 
 #include "gpt_runtime.hpp"
 #include "runtime_settings.hpp"
+#include "generated_voice_catalog.hpp"
+#include "runtime_voice_catalog.hpp"
 #include "session_store.hpp"
 #include "generation_limits.hpp"
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
@@ -48,6 +50,9 @@ extern "C"
                          void *argument, const char *name);
     int scePthreadJoin(void *thread, void **result);
     int sceNetInit(void);
+    int sceNetCtlInit(void);
+    void sceNetCtlTerm(void);
+    int sceNetCtlGetInfo(int code, void *info);
     int sceNetPoolCreate(const char *name, int size, int flags);
     int sceNetSocket(const char *name, int domain, int type, int protocol);
     int sceNetSocketClose(int sock);
@@ -398,6 +403,7 @@ bool serve_ui_asset(const NetApi &api, int sock, const char *path)
         {"/", "index.html", "text/html; charset=utf-8"},
         {"/app.css", "app.css", "text/css; charset=utf-8"},
         {"/app.js", "app.js", "text/javascript; charset=utf-8"},
+        {"/voice-catalog.js", "voice-catalog.js", "text/javascript; charset=utf-8"},
         {"/fonts/Inter-Regular.ttf", "fonts/Inter-Regular.ttf", "font/ttf"},
         {"/fonts/Inter-SemiBold.ttf", "fonts/Inter-SemiBold.ttf", "font/ttf"},
         {"/fonts/Montserrat-Medium.ttf", "fonts/Montserrat-Medium.ttf", "font/ttf"},
@@ -547,17 +553,17 @@ void handle_generate(const NetApi &api, int sock, const char *request_body)
     }
     const gpt_runtime_message_t messages[1] = {{"user", prompt}};
     std::vector<char> response_text(kResponseTextCapacity);
-    const unsigned max_tokens = request_option(request_body, "num_predict",
-                                               prospero_generation::MaxOutputTokens,
-                                               prospero_generation::MaxOutputTokens);
-    const unsigned context_tokens = request_option(request_body, "num_ctx", 0,
-                                                   prospero_generation::MaxContextTokens);
+    const unsigned max_tokens =
+        request_option(request_body, "num_predict", prospero_generation::MaxOutputTokens,
+                       prospero_generation::MaxOutputTokens);
+    const unsigned context_tokens =
+        request_option(request_body, "num_ctx", 0, prospero_generation::MaxContextTokens);
     const unsigned batch_tokens = request_option(request_body, "num_batch", 0, 2048);
     const unsigned ubatch_tokens = request_option(request_body, "num_ubatch", 0, 2048);
     gpt_runtime_stats_t stats{};
-    const bool ok = run_generation(messages, 1, response_text.data(), response_text.size(),
-                                   max_tokens, &stats, model, context_tokens, batch_tokens,
-                                   ubatch_tokens);
+    const bool ok =
+        run_generation(messages, 1, response_text.data(), response_text.size(), max_tokens, &stats,
+                       model, context_tokens, batch_tokens, ubatch_tokens);
 
     char created_at[32];
     iso8601_now(created_at, sizeof(created_at));
@@ -811,7 +817,8 @@ void handle_model_download_action(const NetApi &api, int sock, const char *body,
 }
 #endif
 
-std::size_t read_request(const NetApi &api, int sock, char *buffer, std::size_t capacity)
+std::size_t read_request(const NetApi &api, int sock, char *buffer, std::size_t capacity,
+                         std::size_t *body_size)
 {
     std::size_t total = 0;
     const char *header_end = nullptr;
@@ -901,6 +908,7 @@ std::size_t read_request(const NetApi &api, int sock, char *buffer, std::size_t 
         total += received;
     }
     buffer[wanted] = '\0';
+    if (body_size) *body_size = content_length;
     return wanted;
 }
 
@@ -917,7 +925,7 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                          "Expected a settings object.");
             return;
         }
-        constexpr const char *contexts[] = {"auto", "4k",  "8k",  "16k",
+        constexpr const char *contexts[] = {"auto", "4k",  "8k",   "16k",
                                             "32k",  "64k", "128k", "256k"};
         constexpr unsigned values[] = {0, 4096, 8192, 16384, 32768, 65536, 131072, 262144};
         for (auto it = j.begin(); it != j.end(); ++it)
@@ -931,6 +939,15 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                         p.context = values[i];
                         valid = true;
                     }
+            }
+            else if (it.key() == "output_limit" && it.value().is_number_unsigned())
+            {
+                const auto limit = it.value().get<unsigned>();
+                if (prospero_generation::valid_output_limit(limit))
+                {
+                    p.output_limit = limit;
+                    valid = true;
+                }
             }
             else if (it.key() == "kv" && it.value().is_string())
             {
@@ -948,11 +965,14 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
             else if (it.key() == "kokoro_voice" && it.value().is_string())
             {
                 const auto voice = it.value().get<std::string>();
-                if (voice == "af_heart" || voice == "af_bella")
-                {
-                    p.kokoro_voice = voice == "af_bella" ? 1U : 0U;
-                    valid = true;
-                }
+                const int index = prospero_voice::runtime_voice_index(false, voice);
+                if (index >= 0 && index < 128) { p.kokoro_voice = static_cast<unsigned>(index); valid = true; }
+            }
+            else if (it.key() == "chatterbox_voice" && it.value().is_string())
+            {
+                const auto voice = it.value().get<std::string>();
+                const int index = prospero_voice::runtime_voice_index(true, voice);
+                if (index >= 0 && index < 128) { p.chatterbox_voice = static_cast<unsigned>(index); valid = true; }
             }
             else if (it.key() == "idle_unload_minutes" && it.value().is_number_integer())
             {
@@ -979,14 +999,104 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
         gpt_runtime_set_idle_unload_timeout(p.idle_unload_minutes * 60);
     }
     const std::string context = p.context ? std::to_string(p.context / 1024) + "k" : "auto";
-    const auto response = nlohmann::json{
-        {"context", context},
-        {"kv", prospero_settings::kv_name(p.kv)},
-        {"thinking",
-         p.thinking},
-        {"idle_unload_minutes", p.idle_unload_minutes},
-        {"kokoro_voice", p.kokoro_voice == 1 ? "af_bella" : "af_heart"}}.dump();
+    const auto response =
+        nlohmann::json{{"context", context},
+                       {"output_limit", p.output_limit},
+                       {"kv", prospero_settings::kv_name(p.kv)},
+                       {"thinking", p.thinking},
+                       {"idle_unload_minutes", p.idle_unload_minutes},
+                       {"kokoro_voice", prospero_voice::runtime_voice(false, p.kokoro_voice)->id},
+                       {"chatterbox_voice", prospero_voice::runtime_voice(true, p.chatterbox_voice)->id},
+                       {"kokoro_voices", [&] { nlohmann::json a=nlohmann::json::array(); for (const auto &v : prospero_voice::runtime_voices(false)) a.push_back({{"id",v.id},{"name",v.name},{"locale",v.locale}}); return a; }()},
+                       {"chatterbox_voices", [&] { nlohmann::json a=nlohmann::json::array(); for (const auto &v : prospero_voice::runtime_voices(true)) a.push_back({{"id",v.id},{"name",v.name},{"locale",v.locale}}); return a; }()}}
+            .dump();
     send_json(api, sock, response.c_str());
+}
+
+std::uint16_t wav_u16(const unsigned char *p)
+{
+    return static_cast<std::uint16_t>(p[0] | (static_cast<unsigned>(p[1]) << 8));
+}
+
+std::uint32_t wav_u32(const unsigned char *p)
+{
+    return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8) |
+           (static_cast<std::uint32_t>(p[2]) << 16) | (static_cast<std::uint32_t>(p[3]) << 24);
+}
+
+bool valid_chatterbox_voice_wav(const unsigned char *data, std::size_t length)
+{
+    if (!data || length < 44 || length > 200000 || std::memcmp(data, "RIFF", 4) ||
+        std::memcmp(data + 8, "WAVE", 4)) return false;
+    unsigned format = 0, channels = 0, rate = 0, bits = 0;
+    bool has_data = false;
+    for (std::size_t at = 12; at + 8 <= length;)
+    {
+        const std::uint32_t size = wav_u32(data + at + 4);
+        const std::size_t payload = at + 8;
+        if (size > length - payload) return false;
+        if (!std::memcmp(data + at, "fmt ", 4) && size >= 16)
+        {
+            format = wav_u16(data + payload);
+            channels = wav_u16(data + payload + 2);
+            rate = wav_u32(data + payload + 4);
+            bits = wav_u16(data + payload + 14);
+        }
+        else if (!std::memcmp(data + at, "data", 4))
+            has_data = size > 0 && size % 2 == 0;
+        at = payload + size + (size & 1u);
+    }
+    return format == 1 && channels == 1 && rate == 16000 && bits == 16 && has_data;
+}
+
+void handle_chatterbox_custom_voice(const NetApi &api, int sock, const char *method,
+                                    const char *body, std::size_t body_size)
+{
+    constexpr const char *path = "/data/prosperoai/voices/chatterbox/custom.wav";
+    if (std::strcmp(method, "GET") == 0)
+    {
+        struct stat info{};
+        bool available = stat(path, &info) == 0 && S_ISREG(info.st_mode) && info.st_size >= 44;
+        if (!available)
+        {
+            mkdir("/data/prosperoai", 0777);
+            mkdir("/data/prosperoai/voices", 0777);
+            mkdir("/data/prosperoai/voices/chatterbox", 0777);
+            if (rename("/download0/ProsperoAI/voices/chatterbox/custom.wav", path) == 0)
+                available = stat(path, &info) == 0 && S_ISREG(info.st_mode) && info.st_size >= 44;
+        }
+        const auto response = nlohmann::json{{"available", available}}.dump();
+        send_json(api, sock, response.c_str());
+        return;
+    }
+    if (std::strcmp(method, "POST") != 0 || !valid_chatterbox_voice_wav(
+            reinterpret_cast<const unsigned char *>(body), body_size))
+    {
+        send_status(api, sock, "400 Bad Request", "application/json",
+                    "{\"error\":\"Upload a mono 16 kHz PCM16 WAV no larger than 200 KB.\"}");
+        return;
+    }
+    mkdir("/data/prosperoai", 0777);
+    mkdir("/data/prosperoai/voices", 0777);
+    mkdir("/data/prosperoai/voices/chatterbox", 0777);
+    constexpr const char *temporary = "/data/prosperoai/voices/chatterbox/custom.wav.part";
+    std::FILE *file = std::fopen(temporary, "wb");
+    if (!file)
+    {
+        send_status(api, sock, "500 Internal Server Error", "application/json",
+                    "{\"error\":\"Could not create the voice sample on the console.\"}");
+        return;
+    }
+    const bool written = std::fwrite(body, 1, body_size, file) == body_size;
+    const int closed = std::fclose(file);
+    if (!written || closed != 0 || std::rename(temporary, path) != 0)
+    {
+        std::remove(temporary);
+        send_status(api, sock, "500 Internal Server Error", "application/json",
+                    "{\"error\":\"Could not save the voice sample on the console.\"}");
+        return;
+    }
+    send_json(api, sock, "{\"available\":true}");
 }
 
 void handle_model_selection(const NetApi &api, int sock, const char *method,
@@ -1015,8 +1125,15 @@ void handle_model_selection(const NetApi &api, int sock, const char *method,
         {
             if (!gpt_runtime_select_model(index))
             {
-                send_status(api, sock, "409 Conflict", "application/json",
-                            "{\"error\":\"The model cannot be switched while generation is busy.\"}");
+                send_status(
+                    api, sock, "409 Conflict", "application/json",
+                    "{\"error\":\"The model cannot be switched while generation is busy.\"}");
+                return;
+            }
+            if (gpt_runtime_prepare() != 0)
+            {
+                send_status(api, sock, "500 Internal Server Error", "application/json",
+                            "{\"error\":\"The selected model could not be prepared.\"}");
                 return;
             }
             const auto response = nlohmann::json{{"id", candidate}}.dump();
@@ -1097,10 +1214,11 @@ void handle_media_file(const NetApi &api, int sock, const char *path)
                   "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %ld\r\n"
                   "X-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\nConnection: "
                   "close\r\n\r\n",
-                  is_wav ? "audio/wav"
-                         : is_png ? "image/png"
-                         : is_json ? "application/json"
-                                   : is_text ? "text/plain; charset=utf-8" : "application/octet-stream",
+                  is_wav    ? "audio/wav"
+                  : is_png  ? "image/png"
+                  : is_json ? "application/json"
+                  : is_text ? "text/plain; charset=utf-8"
+                            : "application/octet-stream",
                   size);
     send_all(api, sock, header, std::strlen(header));
     char buffer[16384];
@@ -1300,7 +1418,8 @@ void handle_connection(const NetApi &api, int sock)
 {
     auto storage = std::make_unique<char[]>(kRequestCapacity);
     char *request = storage.get();
-    const std::size_t length = read_request(api, sock, request, kRequestCapacity);
+    std::size_t request_body_size = 0;
+    const std::size_t length = read_request(api, sock, request, kRequestCapacity, &request_body_size);
     if (length == 0)
     {
         api.socket_close(sock);
@@ -1339,6 +1458,9 @@ void handle_connection(const NetApi &api, int sock)
         handle_runtime_settings(api, sock);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/settings/runtime") == 0)
         handle_runtime_settings(api, sock, body);
+    else if (std::strcmp(path, "/api/voices/chatterbox/custom") == 0 &&
+             (std::strcmp(method, "GET") == 0 || std::strcmp(method, "POST") == 0))
+        handle_chatterbox_custom_voice(api, sock, method, body, request_body_size);
     else if ((std::strcmp(method, "GET") == 0 || std::strcmp(method, "POST") == 0) &&
              std::strcmp(path, "/api/models/selection") == 0)
         handle_model_selection(api, sock, method, body);
@@ -1394,6 +1516,11 @@ void *server_worker(void *)
     char up[128];
     std::snprintf(up, sizeof(up), "HTTP net up (%s)", last_net_detail);
     log_line(up);
+#if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+    // Keep voice references out of the app package and fetch missing files directly to
+    // persistent data storage as soon as networking is ready.
+    (void)prospero_model_download::download_voice_assets();
+#endif
 
     const int listen_sock = api.socket("prosperoai-http", kAfInet, kSockStream, 0);
     log_result("sceNetSocket(listen)", listen_sock);
@@ -1478,6 +1605,27 @@ void prospero_http_server_last_status(char *text, std::size_t capacity)
 {
     std::lock_guard<std::mutex> lock(last_status_mutex);
     std::snprintf(text, capacity, "%s", last_status);
+}
+
+bool prospero_http_server_mobile_url(char *text, std::size_t capacity)
+{
+    if (text == nullptr || capacity == 0)
+        return false;
+    text[0] = '\0';
+    if (sceNetCtlInit() < 0)
+        return false;
+    char info[0x100]{};
+    const int result = sceNetCtlGetInfo(0xE, info); // SCE_NET_CTL_INFO_IP_ADDRESS
+    sceNetCtlTerm();
+    if (result < 0 || info[0] == '\0' || std::memchr(info, '\0', 16) == nullptr)
+        return false;
+    const int written = std::snprintf(text, capacity, "http://%s:%u/", info, kHttpServerPort);
+    if (written < 0 || static_cast<std::size_t>(written) >= capacity)
+    {
+        text[0] = '\0';
+        return false;
+    }
+    return true;
 }
 
 bool prospero_http_server_start(unsigned short port)

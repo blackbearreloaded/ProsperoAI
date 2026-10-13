@@ -42,6 +42,8 @@ struct gpt_runtime_stats_t
 using gpt_runtime_progress_fn = void (*)(const char *text);
 
 bool gpt_runtime_available();
+// Number of active model generations across text, image, audio, and speech.
+unsigned gpt_runtime_generations_running();
 const char *gpt_runtime_name();
 const char *gpt_runtime_backend();
 const char *gpt_runtime_purpose();

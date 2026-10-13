@@ -5,6 +5,7 @@
 #include "storage.hpp"
 
 #include "elevation/elevation.hpp"
+#include "generated_voice_catalog.hpp"
 #include "model_paths.hpp"
 
 #include <cerrno>
@@ -202,6 +203,15 @@ bool copy_tree(const std::string &from, const std::string &to, int depth)
 void adopt_sandbox_data()
 {
     const std::string sandbox = "/mnt/sandbox/" + settled.title_id + "_000" + kSandboxDownload;
+    const std::string voice_marker = settled.data_root + "/.sandbox-voices-copied";
+    if (!is_file(voice_marker))
+    {
+        const std::string source = sandbox + "/ProsperoAI/voices";
+        if (!is_directory(source) ||
+            copy_tree(source, settled.data_root + "/voices", 0))
+            if (std::FILE *file = std::fopen(voice_marker.c_str(), "wb"))
+                std::fclose(file);
+    }
     const std::string work_marker = settled.data_root + "/.sandbox-work-copied";
     if (!is_file(work_marker) && is_directory(sandbox + "/ProsperoAI/work"))
     {
@@ -228,6 +238,27 @@ void adopt_sandbox_data()
     if (ok)
         if (std::FILE *file = std::fopen(marker.c_str(), "wb"))
             std::fclose(file);
+}
+
+void seed_voice_catalog()
+{
+    const std::string kokoro_root = settled.data_root + "/voices/kokoro";
+    const auto model_folders = names_in(settled.model_root);
+    for (const auto &voice : prospero_voice::kokoro)
+    {
+        const std::string target = kokoro_root + "/" + voice.filename;
+        if (is_file(target))
+            continue;
+        for (const auto &folder : model_folders)
+        {
+            const std::string candidate = settled.model_root + "/" + folder;
+            const std::string source = candidate + "/" + voice.filename;
+            if (!is_directory(candidate) || !is_file(source))
+                continue;
+            if (std::rename(source.c_str(), target.c_str()) == 0 || copy_file(source, target))
+                break;
+        }
+    }
 }
 
 bool starts_with(const char *path, const char *prefix, const char **rest)
@@ -274,7 +305,8 @@ const Storage &prepare_storage()
     else
         ::mkdir(kSandboxData, 0777);
     settled.model_root = settled.data_root + "/models";
-    for (const char *folder : {"/models", "/sessions", "/logs", "/work", "/work/text",
+    for (const char *folder : {"/models", "/sessions", "/logs", "/voices",
+                               "/voices/chatterbox", "/voices/kokoro", "/work", "/work/text",
                                "/work/image", "/work/audio", "/work/voice", "/work/tmp"})
         ::mkdir((settled.data_root + folder).c_str(), 0777);
     model_root_slot() = settled.model_root.c_str();
@@ -291,6 +323,7 @@ const Storage &prepare_storage()
             settled.moved_models += adopt_models("/data/homebrew/" + settled.title_id + "/models");
         adopt_sandbox_data();
     }
+    seed_voice_catalog();
     say("[prosperoai] storage: access=%d route=%s step=\"%s\" code=%d app=%s data=%s models=%s "
         "moved=%u\n",
         settled.access, settled.route, elevation::step(), elevation::step_code(),

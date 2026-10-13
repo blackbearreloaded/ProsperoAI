@@ -31,7 +31,7 @@ struct Preferences
 {
     unsigned style = 0, output_limit = 0; // 0 = Auto (fill the remaining context)
     unsigned context_length = 0, kv_cache = 0;
-    unsigned idle_unload_minutes = 2, kokoro_voice = 0;
+    unsigned idle_unload_minutes = 2, kokoro_voice = 0, chatterbox_voice = 0;
     bool thinking = false;
     unsigned theme = 0, accent = 0, volume = 35, text_size = 0;
     bool reduced_motion = false, high_contrast = false;
@@ -121,6 +121,7 @@ class App
     bool send(const std::string &text);
     bool retry();
     bool play_audio();
+    bool play_audio(const std::string &path);
     void set_preferences(Preferences preferences);
     // The notices of the jobs that finished since the last call, oldest first.
     std::vector<Notice> take_notices();
@@ -151,6 +152,7 @@ class App
     Job job_ = Job::Discover;
     unsigned argument_ = 0;
     std::string session_id_;
+    std::string audio_path_;
     std::vector<Notice> notices_;
     bool running_ = false, preferences_dirty_ = false;
     std::atomic<bool> done_{false};

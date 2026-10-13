@@ -33,12 +33,13 @@ export CCACHE_DIR=${CCACHE_DIR:-$root/build/ccache}
 source "$root/tools/ninja-build.sh"
 ninja_begin "$work/app.ninja"
 objects=()
-sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens.cpp src/native_ui_style.cpp
+sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens.cpp src/native_ui_style.cpp third_party/qrcodegen/qrcodegen.cpp
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
  src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
  src/agc_lifecycle.cpp inference/router.cpp inference/adapters/registry.cpp
  inference/adapters/media/stable_diffusion_ps5.cpp inference/adapters/media/stable_audio_ps5.cpp
  inference/adapters/media/kokoro_ps5.cpp inference/adapters/media/ace_step_ps5.cpp
+ inference/adapters/media/chatterbox_ps5.cpp
  vulkan/storage.cpp vulkan/storage_paths.cpp vulkan/elevation/elevation.cpp vulkan/debug_tee.cpp src/debug_log.cpp
  src/native_ui_update.cpp vulkan/update_ps5.cpp
  inference/adapters/llama/vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
@@ -73,6 +74,9 @@ for relative in "${sources[@]}"; do
    media_includes=(-I "$root/build/audio-cpp-upstream/include");;
   inference/adapters/media/ace_step_ps5.cpp)
    media_includes=(-I "$root/build/audio-cpp-upstream/include");;
+  inference/adapters/media/chatterbox_ps5.cpp)
+   media_includes=(-I "$root/build/audio-cpp-upstream/include"
+    -I "$root/.deps/pacbrew/v0.40.2/sysroot/user/homebrew/include");;
   inference/adapters/media/kokoro_ps5.cpp)
    media_includes=(-I "$root/.deps/kokoro.cpp/include"
     -I "$root/build/prism-llama-source/ggml/include");;
@@ -165,6 +169,7 @@ audio_build="$root/build/audio-cpp-sa3-ps5-repro"
 audio_archives=("$audio_build/bin/libaudiocpp.a" "$audio_build/libengine_runtime.a"
  "$audio_build/external/sentencepiece/src/libsentencepiece.a" "$audio_build/libcjson_vendor.a"
  "$audio_build/libyaml_vendor.a")
+audio_archives+=("$root/.deps/pacbrew/v0.40.2/sysroot/user/homebrew/lib/libFLAC.a")
 for audio_input in "${audio_archives[@]}"; do
  [[ -f $audio_input ]] || { echo "Run make vulkan-runtime-libs first: missing $audio_input" >&2; exit 2; }
 done
@@ -206,6 +211,7 @@ cp "$fonts/"*.huifont "$fonts/"*.txt "$app/assets/fonts/"
 cp -a "$kit/assets/audio/sfx/." "$app/assets/audio/sfx/"
 mkdir -p "$app/assets/web/fonts"
 cp -a "$root/assets/web/." "$app/assets/web/"
+rm -rf "$app/assets/audio/chatterbox-voices"
 for font in Inter-Regular.ttf Inter-SemiBold.ttf Montserrat-Medium.ttf Inter-LICENSE.txt Montserrat-LICENSE.txt; do
     cp "$root/.deps/ui-kit/checkout/third_party/fonts/$font" "$app/assets/web/fonts/"
 done

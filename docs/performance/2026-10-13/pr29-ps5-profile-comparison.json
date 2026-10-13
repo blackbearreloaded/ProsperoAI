@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-13",
+  "test_title": "PPSA99023",
+  "device": "base PS5, not PS5 Pro",
+  "runtime": "ProsperoAI shared Prism/Vulkan runtime",
+  "build_sha256": "d74aa5889aea74d8fd4c2849683c64d0f6323e4ba3256fe79d9c20988c6ffe52",
+  "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+  "context_tokens": 4096,
+  "batch": 512,
+  "ubatch": 512,
+  "generated_tokens": 256,
+  "runs_per_profile": 5,
+  "profiles": {
+    "ps5_before_pro": {
+      "median_decode_tokens_per_second": 72.2717,
+      "report": "pr29-ps5-base-profile.json"
+    },
+    "ps5pro_values_on_ps5": {
+      "settings": {
+        "GGML_VK_PS5_DMMV_WG": "1",
+        "GGML_VK_PS5_DMMV_SUBGROUP": "32"
+      },
+      "median_decode_tokens_per_second": 69.1708,
+      "report": "pr29-ps5pro-profile-on-ps5.json"
+    },
+    "ps5_after_pro": {
+      "median_decode_tokens_per_second": 72.3053,
+      "report": "pr29-ps5-base-profile-after.json"
+    }
+  },
+  "comparison": {
+    "ps5_baseline_median_of_medians": 72.2885,
+    "ps5pro_values_delta_percent_on_base_ps5": -4.31,
+    "interpretation": "The PR #29 settings regressed decode speed on this base PS5. This does not evaluate them on PS5 Pro hardware."
+  },
+  "console_state": "PPSA99023 remains running with the ps5 profile. PPSA99004 was not changed; no reboot."
+}

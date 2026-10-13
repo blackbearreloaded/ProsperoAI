@@ -109,7 +109,8 @@ replace(vulkan, '''        if (device->architecture == AMD_GCN) {
 # narrower projections, which upstream enables only for NVIDIA and Intel. A console A/B on
 # Mistral 7B Q4_0 measured 66.49 versus 65.43 decode tokens/s (+1.6%) with the limit at
 # m <= 8192; letting the 14336-row FFN rows use it as well regressed to 62.13 tokens/s.
-replace(vulkan, """    if (b_type == GGML_TYPE_Q8_1) {
+if '/* prospero-ps5-vulkan-profile */' not in text:
+    replace(vulkan, """    if (b_type == GGML_TYPE_Q8_1) {
         if (ctx->device->vendor_id == VK_VENDOR_ID_INTEL) {
             dmmv_wg = DMMV_WG_SIZE_SUBGROUP;
         }

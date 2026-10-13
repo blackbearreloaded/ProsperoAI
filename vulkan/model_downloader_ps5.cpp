@@ -5,6 +5,7 @@
 #include "gpt_runtime.hpp"
 #include "debug_log.hpp"
 #include "model_paths.hpp"
+#include "storage.hpp"
 #include "net/https_get.h"
 #include <algorithm>
 #include <array>
@@ -658,8 +659,12 @@ bool fetch_preset_file(HttpSession &http, const Preset &preset, const PresetFile
     // the espeak dictionaries and licences beside them.
     const char *repository = item.repository ? item.repository : preset.repository;
     const char *revision = item.revision ? item.revision : preset.revision;
-    if (!fetch_verified(http, std::string("https://huggingface.co/") + repository +
-                        "/resolve/" + revision + "/" + encode_path(item.source),
+    const std::string source_url = std::strncmp(repository, "github:", 7) == 0
+        ? std::string("https://raw.githubusercontent.com/") + (repository + 7) + "/" +
+              revision + "/" + encode_path(item.source)
+        : std::string("https://huggingface.co/") + repository + "/resolve/" + revision +
+              "/" + encode_path(item.source);
+    if (!fetch_verified(http, source_url,
                         part, item.size, item.sha256, completed, item.path))
         return false;
     if (rename(part.c_str(), target.c_str()) != 0) {
@@ -679,7 +684,10 @@ void install_preset() {
     std::uint64_t completed = 0;
     for (std::size_t i = 0; i < preset.count; ++i) {
         const auto &file = preset.files[i];
-        const std::string target = preset.kind == 0 ? final : staging + "/" + file.path;
+        const bool voice_file = std::strncmp(file.path, "voices/", 7) == 0;
+        const std::string target = voice_file
+            ? std::string(prospero::storage().data_root) + "/" + file.path
+            : preset.kind == 0 ? final : staging + "/" + file.path;
         if (!fetch_preset_file(http, preset, file, target, completed)) {
             if (cancel_pending() && preset.kind != 0) remove_tree(staging);
             return;
@@ -710,8 +718,35 @@ void install_preset() {
     current.store(State::Complete, std::memory_order_release);
 }
 
+void install_voice_assets() {
+    const Preset *preset = nullptr;
+    for (const auto &candidate : presets)
+        if (std::strcmp(candidate.id, "chatterbox-500m-q8-0") == 0) { preset = &candidate; break; }
+    if (!preset) { set_status("Chatterbox voice catalog is unavailable."); current.store(State::Failed); return; }
+    if (!ensure_model_root()) { storage_error("Cannot open model storage"); return; }
+    HttpSession http;
+    if (!http.open()) return;
+    std::uint64_t completed = 0;
+    for (std::size_t i = 0; i < preset->count; ++i) {
+        const auto &file = preset->files[i];
+        if (std::strncmp(file.path, "voices/chatterbox/", 18) != 0) continue;
+        const std::string target = std::string(prospero::storage().data_root) + "/" + file.path;
+        struct stat existing{};
+        if (stat(target.c_str(), &existing) == 0 && S_ISREG(existing.st_mode) &&
+            static_cast<std::uint64_t>(existing.st_size) == file.size) continue;
+        if (!fetch_preset_file(http, *preset, file, target, completed)) return;
+    }
+    set_status("English Chatterbox reference voices are ready in persistent storage.");
+    current.store(State::Complete, std::memory_order_release);
+}
+
 void *worker_impl(void *) {
     const State action = current.load(std::memory_order_acquire);
+    if (action == State::Downloading && worker_preset == -2) {
+        install_voice_assets();
+        if (cancel_pending() && current.load() != State::Complete) finish_cancelled(State::Idle);
+        worker_done.store(true, std::memory_order_release); return nullptr;
+    }
     if (action == State::Downloading && worker_preset >= 0) {
         install_preset();
         if (cancel_pending() && current.load() != State::Complete) finish_cancelled(State::Idle);
@@ -846,8 +881,10 @@ bool preset_installed(std::size_t index) {
             static_cast<std::uint64_t>(file.st_size) == preset.files[0].size) return true;
     }
     for (std::size_t i = 0; i < preset.count; ++i) {
+        const bool voice_file = std::strncmp(preset.files[i].path, "voices/", 7) == 0;
+        if (voice_file) continue;
         const std::string path = std::string(prospero::model_root()) + "/" + preset.id +
-                                (preset.kind == 0 ? "" : std::string("/") + preset.files[i].path);
+                                 (preset.kind == 0 ? "" : std::string("/") + preset.files[i].path);
         struct stat file{};
         if (stat(path.c_str(), &file) != 0 || !S_ISREG(file.st_mode) ||
             static_cast<std::uint64_t>(file.st_size) != preset.files[i].size) return false;
@@ -861,6 +898,32 @@ bool download_preset(std::size_t index) {
     worker_preset = static_cast<int>(index);
     completed_bytes.store(0); total_bytes.store(presets[index].size);
     current.store(State::Downloading); set_status("Downloading pinned preset bundle...");
+    return start();
+}
+bool download_voice_assets() {
+    poll();
+    std::lock_guard<std::mutex> job_lock(job_mutex);
+    if (worker_thread || current.load() == State::Downloading) return false;
+    const Preset *preset = nullptr;
+    for (const auto &candidate : presets)
+        if (std::strcmp(candidate.id, "chatterbox-500m-q8-0") == 0) { preset = &candidate; break; }
+    if (!preset) return false;
+    std::uint64_t missing = 0;
+    const std::string root = std::string(prospero::storage().data_root) + "/";
+    for (std::size_t i = 0; i < preset->count; ++i) {
+        const auto &file = preset->files[i];
+        if (std::strncmp(file.path, "voices/chatterbox/", 18) != 0) continue;
+        struct stat existing{};
+        const std::string path = root + file.path;
+        if (stat(path.c_str(), &existing) != 0 || !S_ISREG(existing.st_mode) ||
+            static_cast<std::uint64_t>(existing.st_size) != file.size) missing += file.size;
+    }
+    if (!missing) return false;
+    worker_preset = -2;
+    completed_bytes.store(0, std::memory_order_release);
+    total_bytes.store(missing, std::memory_order_release);
+    current.store(State::Downloading, std::memory_order_release);
+    set_status("Downloading English Chatterbox voice references...");
     return start();
 }
 void poll() {

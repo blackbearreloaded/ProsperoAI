@@ -12,6 +12,8 @@ Fit estimate_fit(std::uint64_t file_bytes);
 struct Candidate { char name[160]; std::uint64_t size; Fit fit; };
 bool preset_installed(std::size_t index);
 bool download_preset(std::size_t index);
+// Best-effort background install of missing Chatterbox reference clips into persistent data storage.
+bool download_voice_assets();
 void poll();
 State state();
 int active_preset();

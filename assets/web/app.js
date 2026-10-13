@@ -15,21 +15,22 @@ let conversationSyncReady = load('prospero-sync-initialized', false), conversati
 let presetCatalog = [], modelFilter = 'all', downloadState = {state:'idle',active_preset:-1}, pendingDelete = '';
 const kindNames = ['Text','Image','Audio','Voice'];
 const modelKind = model => ['text-to-text','text-to-image','text-to-audio','text-to-speech'].indexOf(model.purpose || 'text-to-text');
-let current = null, models = [], selectedModel = '', pendingModel = '', controller = null;
+let current = null, models = [], selectedModel = '', pendingModel = '', controller = null, currentModelChosen = false;
+const modelChooser=$('workspace-model');
+function workspaceModelValue(){return current?.model||selectedModel;}
 let key = ''; try { key = sessionStorage.getItem('prospero-key') || ''; } catch {}
-const modelChooser=document.createElement('select');modelChooser.id='workspace-model';modelChooser.setAttribute('aria-label','Choose workspace model');const modelChooserLabel=document.createElement('label');modelChooserLabel.className='workspace-model-label';modelChooserLabel.textContent='Model';modelChooserLabel.append(modelChooser);$('model-chip').hidden=true;$('model-chip').before(modelChooserLabel);
 function page(name) { for (const p of ['workspace','models','settings']) $(p).hidden = p !== name; document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('selected', b.dataset.page === name); b.setAttribute('aria-current', b.dataset.page === name ? 'page' : 'false'); }); }
 document.querySelectorAll('[data-page]').forEach(b => b.onclick = () => page(b.dataset.page));
 document.querySelector('.brand').onclick = e => { e.preventDefault(); showWelcome(); };
-function showWelcome(){if(controller){$('feedback').textContent='Stop the current response before leaving this conversation.';return;}current=null;page('workspace');$('chat').hidden=true;$('welcome').hidden=false;renderHistory();}
+function showWelcome(){if(controller){$('feedback').textContent='Stop the current response before leaving this conversation.';return;}current=null;currentModelChosen=false;page('workspace');$('chat').hidden=true;$('welcome').hidden=false;renderHistory();}
 $('workspace-back').onclick=showWelcome;
 function applyPreferences() { document.body.classList.toggle('daylight', preferences.theme === 'daylight'); document.body.dataset.accent = preferences.accent; document.body.classList.toggle('large', preferences.size === 'large'); document.body.classList.toggle('reduce-motion', preferences.motion); document.body.classList.toggle('contrast', preferences.contrast); drawSculpture(0); }
-for (const [id, prop] of [['theme','theme'],['accent','accent'],['text-size','size'],['motion','motion'],['contrast','contrast'],['temperature','temperature'],['length','length'],['sounds','sounds'],['volume','volume']]) { const el = $(id); if (el.type === 'checkbox') el.checked = Boolean(preferences[prop]); else el.value = preferences[prop]; el.onchange = () => { preferences[prop] = el.type === 'checkbox' ? el.checked : ['temperature','length','context','volume'].includes(prop) ? Number(el.value) : el.value; $('temperature-value').textContent = preferences.temperature; save('prospero-preferences',preferences); applyPreferences(); }; }
+for (const [id, prop] of [['theme','theme'],['accent','accent'],['text-size','size'],['motion','motion'],['contrast','contrast'],['temperature','temperature'],['sounds','sounds'],['volume','volume']]) { const el = $(id); if (el.type === 'checkbox') el.checked = Boolean(preferences[prop]); else el.value = preferences[prop]; el.onchange = () => { preferences[prop] = el.type === 'checkbox' ? el.checked : ['temperature','volume'].includes(prop) ? Number(el.value) : el.value; $('temperature-value').textContent = preferences.temperature; save('prospero-preferences',preferences); applyPreferences(); }; }
 $('temperature-value').textContent = preferences.temperature;
 function drawMark() { const svg = document.querySelector('.mark'); for (let i=0;i<4;i++) { const r=10+i*3, start=-0.4+i*0.24,end=start+4.7; const p=document.createElementNS('http://www.w3.org/2000/svg','path'); p.setAttribute('d',`M ${25+r*Math.cos(start)} ${25+r*Math.sin(start)} A ${r} ${r} 0 1 1 ${25+r*Math.cos(end)} ${25+r*Math.sin(end)}`);p.setAttribute('fill','none');p.setAttribute('stroke','currentColor');p.setAttribute('stroke-width','1.4');svg.append(p); } }
 function drawSculpture(time) { const ctx=$('sculpture').getContext('2d'), size=300,cx=360,cy=360,turn=0.46+0.025*Math.sin(time*0.35);ctx.clearRect(0,0,720,720);ctx.lineWidth=1.25;const color=getComputedStyle(document.body).getPropertyValue('--accent').trim(); for(let band=0;band<40;band++){const v=band*2*Math.PI/40;let lx,ly;for(let step=0;step<=72;step++){const u=step*2*Math.PI/72,r=size*(0.70+0.24*Math.cos(v)),x=r*Math.cos(u),y=r*Math.sin(u),z=size*0.24*Math.sin(v),ty=y*0.62-z*0.78,depth=y*0.78+z*0.62,px=cx+x*Math.cos(turn)-ty*Math.sin(turn),py=cy+x*Math.sin(turn)+ty*Math.cos(turn);if(step){ctx.globalAlpha=0.22+0.70*(depth/size+1)*0.5;ctx.strokeStyle=color;ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(px,py);ctx.stroke();}lx=px;ly=py;}}ctx.globalAlpha=1; }
 let lastArt=0;function animate(t){if(t-lastArt>66&&!$('welcome').hidden&&!$('workspace').hidden&&!preferences.motion&&!matchMedia('(prefers-reduced-motion:reduce)').matches){drawSculpture(t/1000);lastArt=t;}requestAnimationFrame(animate);}drawMark();applyPreferences();requestAnimationFrame(animate);
-async function api(path, options={}) { if(path==='/v1/chat/completions'&&options.body&&current){try{const request=JSON.parse(options.body),model=models.find(item=>item.id===request.model);if(model&&modelKind(model)===0){request.output_session_id=current.id;request.output_message_index=current.messages.length;options={...options,body:JSON.stringify(request)};}}catch{}}const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(key?{Authorization:`Bearer ${key}`}:{})}});if(response.status===401){if(!$('key-dialog').open)$('key-dialog').showModal();throw Error('A connection key is required.');}if(!response.ok){let message=`Connection failed (${response.status}).`;try{const body=await response.json();message=body.error?.message||body.error||message;}catch{}throw Error(message);}return response; }
+async function api(path, options={}) { if(path==='/v1/chat/completions'&&options.body&&current){try{const request=JSON.parse(options.body),model=models.find(item=>item.id===request.model);if(model&&modelKind(model)===0){request.output_session_id=current.id;request.output_message_index=current.messages.length;options={...options,body:JSON.stringify(request)};}}catch{}}const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{}),...(key?{Authorization:`Bearer ${key}`}:{})}});if(response.status===401){if(!$('key-dialog').open)$('key-dialog').showModal();throw Error('A connection key is required.');}if(!response.ok){let message=`Connection failed (${response.status}).`;try{const body=await response.json();message=body.error?.message||body.error||message;}catch{}throw Error(message);}return response; }
 async function refreshModels(){
     try {
         const response=await api('/v1/models');
@@ -39,21 +40,22 @@ async function refreshModels(){
         presetCatalog=(await presets.json()).data||[];
         const selection=await api('/api/models/selection');
         const savedSelection=(await selection.json()).id;
-        selectedModel=models.some(m=>m.id===savedSelection)?savedSelection:models[0]?.id||'';
+        selectedModel=models.some(m=>m.id===savedSelection)?savedSelection:'';
         modelChooser.replaceChildren();
+        const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Choose a model…';modelChooser.append(placeholder);
         for(const model of models){const option=document.createElement('option');option.value=model.id;option.textContent=model.name||model.id;modelChooser.append(option);}
-        modelChooser.value=selectedModel;
-        $('status').textContent=selectedModel?'PS5 · Ready':'No models installed';
+        modelChooser.value=workspaceModelValue();
+        $('status').textContent=models.length?'PS5 · Connected':'No models installed';
         for(const [kind,id] of ['text-count','image-count','audio-count','voice-count'].entries()){
             const count=models.filter(m=>modelKind(m)===kind).length;
             $(id).textContent=count?`${count} ${count===1?'model':'models'} installed`:'No model yet';
         }
         renderModels();
         renderHistory();
-        $('model-chip').textContent=current?.model||selectedModel||'Choose a model';
+        updateModelChip();
     }catch(error){$('status').textContent='PS5 · Disconnected';$('feedback').textContent=error.message;}
 }
-async function refreshSelectedModel(){try{const response=await api('/api/models/selection');const selection=await response.json();if(models.some(model=>model.id===selection.id)){selectedModel=selection.id;modelChooser.value=selectedModel;$('model-chip').textContent=selectedModel;renderModels();}}catch{}}
+async function refreshSelectedModel(){try{const response=await api('/api/models/selection');const selection=await response.json();selectedModel=models.some(model=>model.id===selection.id)?selection.id:'';modelChooser.value=workspaceModelValue();renderModels();}catch{}}
 function renderModels(){
     const list=$('model-list');list.replaceChildren();
     const term=$('search').value.toLowerCase();
@@ -132,9 +134,9 @@ async function pollDownloads(){
     }catch(error){$('download-status').textContent=error.message;}
 }
 async function startModelDownload(index){$('download-status').textContent='Starting verified download…';try{await api('/api/models/download',{method:'POST',body:JSON.stringify({index})});await pollDownloads();}catch(error){$('download-status').textContent=error.message;}}
-async function chooseInstalledModel(id,beginConversation=false){try{await api('/api/models/selection',{method:'POST',body:JSON.stringify({id})});selectedModel=id;modelChooser.value=id;$('model-chip').textContent=id;if(beginConversation)newConversation();else if(current){const chosen=models.find(model=>model.id===id);current.model=id;current.modelName=chosen?.name||id;current.purpose=chosen?.purpose||'text-to-text';current.updatedAt=Date.now();void persistConversation(current);}renderModels();renderHistory();}catch(error){modelChooser.value=selectedModel;$('feedback').textContent=error.message;}}
-$('search').oninput=renderModels;$('model-chip').onclick=()=>page('models');$('model-dialog').addEventListener('close',()=>{if($('model-dialog').returnValue==='use')void chooseInstalledModel(pendingModel,true);});
-modelChooser.onchange=()=>chooseInstalledModel(modelChooser.value);
+async function chooseInstalledModel(id,beginConversation=false){try{if(beginConversation||!current||(current.model&&current.model!==id))newConversation();const loadStatus=$('model-load-status');loadStatus.textContent='Loading model into memory…';modelChooser.disabled=true;await api('/api/models/selection',{method:'POST',body:JSON.stringify({id})});selectedModel=id;currentModelChosen=true;modelChooser.value=id;const chosen=models.find(model=>model.id===id);current.model=id;current.modelName=chosen?.name||id;current.purpose=chosen?.purpose||'text-to-text';current.updatedAt=Date.now();loadStatus.textContent=`${current.modelName} selected for this conversation.`;openChat();renderModels();renderHistory();if(conversations.includes(current))void persistConversation(current);}catch(error){modelChooser.value='';$('model-load-status').textContent=error.message;}finally{modelChooser.disabled=false;}}
+$('search').oninput=renderModels;$('model-dialog').addEventListener('close',()=>{if($('model-dialog').returnValue==='use')void chooseInstalledModel(pendingModel,true);});
+modelChooser.onchange=()=>{if(modelChooser.value)void chooseInstalledModel(modelChooser.value);};
 function renderHistory(){
     const list=$('history');list.replaceChildren();
     const kind=$('history-kind').value, query=$('history-search').value.trim().toLocaleLowerCase();
@@ -148,7 +150,7 @@ function renderHistory(){
     for(const conversation of shown){
         const row=document.createElement('div');row.className='history-row';
         const open=document.createElement('button');open.textContent=conversation.title||'New conversation';open.classList.toggle('selected',conversation===current);
-        open.onclick=()=>{if(controller){$('feedback').textContent='Stop the current response before switching conversations.';return;}current=conversation;openChat();renderMessages();renderHistory();closeHistory();};
+        open.onclick=()=>{if(controller){$('feedback').textContent='Stop the current response before switching conversations.';return;}current=conversation;currentModelChosen=false;openChat();renderMessages();renderHistory();closeHistory();};
         const remove=document.createElement('button');remove.className='delete-conversation';remove.textContent='×';remove.setAttribute('aria-label','Delete '+(conversation.title||'conversation'));
         remove.onclick=()=>{if(controller&&current===conversation){$('feedback').textContent='Stop the response before deleting this conversation.';return;}pendingDelete=conversation.id;$('delete-dialog').returnValue='';$('delete-description').textContent=conversation.title||'New conversation';$('delete-dialog').showModal();};
         row.append(open,remove);list.append(row);
@@ -210,16 +212,16 @@ $('delete-dialog').addEventListener('close',async()=>{
     if(current?.id===pendingDelete)showWelcome();
     renderHistory();
 });
-function openChat(){page('workspace');$('welcome').hidden=true;$('chat').hidden=false;$('chat-title').textContent=current?.title||'A little room for big ideas.';$('model-chip').textContent=current?.model||selectedModel||'Choose a model';}
+function updateModelChip(){const chip=$('model-chip'),model=models.find(item=>item.id===current?.model),name=current?.modelName||model?.name||current?.model||'';chip.textContent=name?`Model: ${name}`:'Choose a model';chip.title=name?`This conversation uses ${name}`:'Choose a model for this conversation';chip.hidden=false;}
+function openChat(){page('workspace');$('welcome').hidden=true;$('chat').hidden=false;$('chat-title').textContent=current?.title||'A little room for big ideas.';updateModelChip();modelChooser.value=workspaceModelValue();$('model-load-status').textContent=currentModelChosen?`${current.modelName||current.model} is selected for this conversation.`:current?.model?'Choose this conversation’s model to load it into memory.':selectedModel?`${models.find(item=>item.id===selectedModel)?.name||selectedModel} is loaded. Choose it to use it in this conversation.`:'Choose a model to load it into memory.';const model=models.find(item=>item.id===(current?.model||selectedModel)),tts=currentModelChosen&&(current?.purpose==='text-to-speech'||model?.purpose==='text-to-speech');$('workspace-voice-group').hidden=!tts;if(tts){populateWorkspaceVoicePicker(model?.id||current?.model||selectedModel);const chatterbox=String(model?.id||current?.model||selectedModel).includes('chatterbox');$('chatterbox-upload-label').hidden=!chatterbox;void runtimeSettings();if(chatterbox)void refreshCustomChatterboxVoice();}}
 $('history-kind').onchange=renderHistory;
 $('history-search').oninput=renderHistory;
 function newConversation(){
     if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}
-    const model=models.find(model=>model.id===selectedModel);
-    current={id:globalThis.crypto?.randomUUID?.()||String(Date.now()),title:'New conversation',model:selectedModel,modelName:model?.name||selectedModel,purpose:model ? model.purpose||'text-to-text' : 'other',messages:[],updatedAt:Date.now()};
+    currentModelChosen=false;current={id:globalThis.crypto?.randomUUID?.()||String(Date.now()),title:'New conversation',model:'',modelName:'',purpose:'other',messages:[],updatedAt:Date.now()};
     openChat();renderMessages();renderHistory();$('prompt').focus();
 }
-function startKind(kind){if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}const candidates=models.filter(model=>modelKind(model)===kind);if(!candidates.length){modelFilter=String(kind);$('search').value='';for(const tab of document.querySelectorAll('[data-kind]'))tab.classList.toggle('selected',tab.dataset.kind===modelFilter);page('models');renderModels();return;}const id=candidates.find(model=>model.id===selectedModel)?.id||candidates[0].id;void chooseInstalledModel(id,true);}
+function startKind(kind){if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}newConversation();modelChooser.focus();$('model-load-status').textContent=`Choose a ${kindNames[kind].toLowerCase()} model to load it into memory.`;}
 function closeHistory(){$('chat').classList.remove('show-history');$('history-toggle').setAttribute('aria-expanded','false');}
 $('start').onclick=()=>startKind(0);for(const [kind,id] of ['converse','imagine','compose','speak'].entries())$(id).onclick=()=>startKind(kind);$('new').onclick=()=>{newConversation();closeHistory();};$('history-close').onclick=closeHistory;$('history-toggle').onclick=()=>{$('chat').classList.toggle('show-history');$('history-toggle').setAttribute('aria-expanded',String($('chat').classList.contains('show-history')));};
 function extractMedia(text){const paths=[...text.matchAll(/\/download0\/[^\s]+\.(?:png|tga|wav)/g)];if(!paths.length)return null;const match=paths.find(item=>item[0].startsWith('/download0/ProsperoAI/sessions/')||item[0].startsWith('/download0/ProsperoAI/work/image/'))||paths[0],path=match[0],kind=path.endsWith('.wav')?'audio':'image';return{path,kind,before:text.slice(0,match.index)};}
@@ -230,7 +232,7 @@ function appendMedia(el,media){api(media.path).then(r=>r.blob()).then(blob=>{if(
 function addMessage(message){const el=document.createElement('div');el.className=`message ${message.role==='user'?'user':'assistant'}`;const media=message.role!=='user'&&extractMedia(message.content||'');if(media){el.textContent=media.before.replace(/[\r\n]+$/,'');appendMedia(el,media);}else el.textContent=message.content||'';$('messages').append(el);return el;}
 function renderMessages(){$('messages').replaceChildren();for(const message of current?.messages||[])addMessage(message);$('messages').scrollTop=$('messages').scrollHeight;}
 $('prompt').oninput=()=>{$('prompt').style.height='auto';$('prompt').style.height=Math.min(180,$('prompt').scrollHeight)+'px';};$('prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&matchMedia('(min-width:701px)').matches){e.preventDefault();$('composer').requestSubmit();}};
-$('composer').onsubmit=async e=>{e.preventDefault();if(controller){controller.abort();return;}const text=$('prompt').value.trim();if(!text)return;if(!current)newConversation();if(!current.model){$('feedback').textContent='Choose an installed conversation model first.';page('models');return;}const conversation=current;if(!conversations.includes(conversation))conversations.unshift(conversation);conversation.messages.push({role:'user',content:text});if(conversation.messages.length===1)conversation.title=text.slice(0,70);conversation.updatedAt=Date.now();$('prompt').value='';$('prompt').style.height='auto';openChat();renderHistory();addMessage(conversation.messages.at(-1));const answer={role:'assistant',content:''};const el=addMessage(answer);controller=new AbortController();$('send').textContent='■';$('send').setAttribute('aria-label','Stop response');$('prompt').disabled=true;$('feedback').textContent='Thinking…';const start=performance.now();let received=false;try{await persistConversation(conversation);const response=await api('/v1/chat/completions',{method:'POST',signal:controller.signal,body:JSON.stringify({model:conversation.model,messages:conversation.messages,stream:!(models.find(model=>model.id===conversation.model)?.purpose&&modelKind(models.find(model=>model.id===conversation.model))!==0),temperature:preferences.temperature,...(preferences.length?{max_tokens:preferences.length}:{})})});if(!response.headers.get('Content-Type')?.includes('text/event-stream')){
+$('composer').onsubmit=async e=>{e.preventDefault();if(controller){controller.abort();return;}const text=$('prompt').value.trim();if(!text)return;if(!current)newConversation();if(!currentModelChosen){if(!modelChooser.value){$('feedback').textContent='Choose a model for this conversation before sending.';modelChooser.focus();return;}await chooseInstalledModel(modelChooser.value);if(!currentModelChosen)return;}const conversation=current;if(!conversations.includes(conversation))conversations.unshift(conversation);conversation.messages.push({role:'user',content:text});if(conversation.messages.length===1)conversation.title=text.slice(0,70);conversation.updatedAt=Date.now();$('prompt').value='';$('prompt').style.height='auto';openChat();renderHistory();addMessage(conversation.messages.at(-1));const answer={role:'assistant',content:''};const el=addMessage(answer);controller=new AbortController();$('send').textContent='■';$('send').setAttribute('aria-label','Stop response');$('prompt').disabled=true;$('feedback').textContent='Thinking…';const start=performance.now();let received=false;try{await persistConversation(conversation);const response=await api('/v1/chat/completions',{method:'POST',signal:controller.signal,body:JSON.stringify({model:conversation.model,messages:conversation.messages,stream:!(models.find(model=>model.id===conversation.model)?.purpose&&modelKind(models.find(model=>model.id===conversation.model))!==0),temperature:preferences.temperature})});if(!response.headers.get('Content-Type')?.includes('text/event-stream')){
     const result=await response.json();answer.content=result.choices?.[0]?.message?.content||'';received=Boolean(answer.content);const media=extractMedia(answer.content);if(media){el.textContent=media.before.replace(/[\r\n]+$/,'');appendMedia(el,media);}else el.textContent=answer.content;
 }else{
 const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';const event=block=>{const data=block.split('\n').filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trim()).join('\n');if(!data||data==='[DONE]')return;const part=JSON.parse(data);if(part.error)throw Error(part.error.message||'The response could not be completed.');const token=part.choices?.[0]?.delta?.content;if(typeof token==='string'){received=true;answer.content+=token;el.textContent=answer.content;const log=$('messages');if(log.scrollHeight-log.scrollTop-log.clientHeight<180)log.scrollTop=log.scrollHeight;}};while(true){const {value,done}=await reader.read();pending+=decoder.decode(value||new Uint8Array(),{stream:!done}).replace(/\r\n/g,'\n');let split;while((split=pending.indexOf('\n\n'))>=0){event(pending.slice(0,split));pending=pending.slice(split+2);}if(done){if(pending.trim())event(pending);break;}}}
@@ -244,24 +246,78 @@ document.addEventListener('click',e=>{if(e.target.closest('button'))sound();});
 for(const button of document.querySelectorAll('[data-category]'))button.onclick=()=>{for(const b of document.querySelectorAll('[data-category]')){const chosen=b===button;b.classList.toggle('selected',chosen);b.setAttribute('aria-selected',String(chosen));$('setting-'+b.dataset.category).hidden=!chosen;}};
 $('preview-send').onclick=()=>{newConversation();$('prompt').value='Tell me a story.';$('prompt').focus();};
 
+let savedKokoroVoice='af_heart',savedChatterboxVoice='cemo',customChatterboxVoiceAvailable=false;
 async function runtimeSettings(change) {
-  const controls = ['runtime-context','runtime-thinking','runtime-idle-unload','kokoro-voice'].map($);
+  const controls = ['runtime-context','length','runtime-thinking','runtime-idle-unload','kokoro-voice','workspace-voice'].map($).filter(Boolean);
   controls.forEach(el => el.disabled = true);
   try {
     const response = await api('/api/settings/runtime', change ? {method:'POST',body:JSON.stringify(change)} : {});
     if (!response.ok) throw new Error('Could not save or load runtime settings.');
     const settings = await response.json();
     $('runtime-context').value = settings.context;
+    $('length').value = String(settings.output_limit ?? 0);
     $('runtime-thinking').checked = settings.thinking;
     $('runtime-idle-unload').value = String(settings.idle_unload_minutes);
-    $('kokoro-voice').value = settings.kokoro_voice || 'af_heart';
+    savedKokoroVoice = settings.kokoro_voice || 'af_heart';
+    savedChatterboxVoice = settings.chatterbox_voice || 'cemo';
+    window.prosperoRuntimeVoiceCatalog={kokoro:settings.kokoro_voices||[],chatterbox:settings.chatterbox_voices||[]};
+    if($('kokoro-voice')){const select=$('kokoro-voice'),voices=window.prosperoRuntimeVoiceCatalog.kokoro;select.replaceChildren(...voices.map(voice=>{const option=document.createElement('option');option.value=voice.id;option.textContent=`${voice.name} · ${voice.locale}`;return option;}));}
+    if($('kokoro-voice'))$('kokoro-voice').value=savedKokoroVoice;
+    populateWorkspaceVoicePicker(current?.model || selectedModel);
     $('runtime-feedback').textContent = '';
-  } catch (error) { $('runtime-feedback').textContent = error.message; }
+    if($('workspace-voice-feedback'))$('workspace-voice-feedback').textContent = '';
+  } catch (error) {
+    if(change?.kokoro_voice && $('kokoro-voice'))$('kokoro-voice').value=savedKokoroVoice;
+    if(change?.chatterbox_voice)populateWorkspaceVoicePicker(current?.model || selectedModel);
+    $('runtime-feedback').textContent = error.message;
+    if($('workspace-voice-feedback'))$('workspace-voice-feedback').textContent = error.message;
+  }
   finally { controls.forEach(el => el.disabled = false); }
 }
-for (const [id,key] of [['runtime-context','context'],['runtime-thinking','thinking'],['runtime-idle-unload','idle_unload_minutes']]) {
-  $(id).onchange = () => runtimeSettings({[key]:key === 'thinking' ? $(id).checked : key === 'idle_unload_minutes' ? Number($(id).value) : $(id).value});
+for (const [id,key] of [['runtime-context','context'],['length','output_limit'],['runtime-thinking','thinking'],['runtime-idle-unload','idle_unload_minutes']]) {
+  $(id).onchange = () => runtimeSettings({[key]:['thinking'].includes(key) ? $(id).checked : ['idle_unload_minutes','output_limit'].includes(key) ? Number($(id).value) : $(id).value});
 }
 const memoryGroup=document.createElement('div');memoryGroup.className='model-memory-settings';const memoryHeading=document.createElement('h2');memoryHeading.textContent='Model memory';const memoryDescription=document.createElement('p');memoryDescription.className='muted';memoryDescription.textContent='Release the active model after it has been idle.';const idleLabel=document.createElement('label');idleLabel.htmlFor='runtime-idle-unload';idleLabel.textContent='Unload model after';const idleSelect=document.createElement('select');idleSelect.id='runtime-idle-unload';for(const [value,label] of [[1,'1 minute'],[2,'2 minutes'],[5,'5 minutes'],[10,'10 minutes'],[30,'30 minutes'],[60,'60 minutes']]){const option=document.createElement('option');option.value=String(value);option.textContent=label;idleSelect.append(option);}idleLabel.append(idleSelect);memoryGroup.append(memoryHeading,memoryDescription,idleLabel);$('runtime-feedback').before(memoryGroup);
-const kokoroLabel=document.createElement('label');kokoroLabel.className='kokoro-voice-setting';kokoroLabel.htmlFor='kokoro-voice';kokoroLabel.textContent='Kokoro voice';const kokoroVoice=document.createElement('select');kokoroVoice.id='kokoro-voice';for(const [value,label] of [['af_heart','Heart · US English'],['af_bella','Bella · US English']]){const option=document.createElement('option');option.value=value;option.textContent=label;kokoroVoice.append(option);}kokoroLabel.append(kokoroVoice);$('setting-sound').prepend(kokoroLabel);kokoroVoice.onchange=()=>runtimeSettings({kokoro_voice:kokoroVoice.value});
+const fallbackKokoroVoices=[['af_heart','Heart · en-US'],['af_bella','Bella · en-US'],['af_nicole','Nicole · en-US'],['af_sarah','Sarah · en-US'],['am_adam','Adam · en-US']];
+const kokoroCatalog=window.prosperoVoiceCatalog?.kokoro;
+const kokoroVoices=Array.isArray(kokoroCatalog)&&kokoroCatalog.length?kokoroCatalog.map(voice=>[voice.id,`${voice.name} · ${voice.locale}`]):fallbackKokoroVoices;
+const kokoroLabel=document.createElement('label');kokoroLabel.className='kokoro-voice-setting';kokoroLabel.htmlFor='kokoro-voice';kokoroLabel.textContent='Kokoro voice';const kokoroVoice=document.createElement('select');kokoroVoice.id='kokoro-voice';for(const [value,label] of kokoroVoices){const option=document.createElement('option');option.value=value;option.textContent=label;kokoroVoice.append(option);}kokoroLabel.append(kokoroVoice);$('setting-sound').prepend(kokoroLabel);kokoroVoice.onchange=()=>runtimeSettings({kokoro_voice:kokoroVoice.value});
+function populateWorkspaceVoicePicker(modelId){
+  const select=$('workspace-voice');if(!select)return;
+  const chatterbox=String(modelId||'').includes('chatterbox'),catalog=window.prosperoRuntimeVoiceCatalog||window.prosperoVoiceCatalog||{};
+  const list=chatterbox?(catalog.chatterbox||[]):(catalog.kokoro||[]);
+  const fallback=chatterbox?[['cemo','Cemo · English'],['custom','My voice · upload a sample']]:fallbackKokoroVoices;
+  const entries=list.length?list.map(voice=>[voice.id,`${voice.name} · ${voice.locale}`]):fallback;
+  select.replaceChildren();
+  for(const [value,label] of entries){const option=document.createElement('option');option.value=value;option.textContent=label;if(value==='custom'&&!customChatterboxVoiceAvailable){option.textContent='My voice · upload a sample';option.disabled=true;}select.append(option);}
+  $('workspace-voice-label').textContent=chatterbox?'Chatterbox voice':'Kokoro voice';
+  $('chatterbox-upload-label').hidden=!chatterbox;
+  select.value=chatterbox?savedChatterboxVoice:savedKokoroVoice;
+  if(![...select.options].some(option=>option.value===select.value))select.selectedIndex=0;
+  select.onchange=()=>runtimeSettings(chatterbox?{chatterbox_voice:select.value}:{kokoro_voice:select.value});
+}
+async function refreshCustomChatterboxVoice(){try{const response=await api('/api/voices/chatterbox/custom');customChatterboxVoiceAvailable=Boolean((await response.json()).available);populateWorkspaceVoicePicker(current?.model||selectedModel);if(!customChatterboxVoiceAvailable&&savedChatterboxVoice==='custom')$('workspace-voice-feedback').textContent='Upload a voice sample to use My voice.';}catch(error){$('workspace-voice-feedback').textContent=error.message;}}
+$('chatterbox-voice-upload').onchange=async()=>{
+  const file=$('chatterbox-voice-upload').files?.[0];if(!file)return;
+  $('workspace-voice-feedback').textContent='Preparing a five-second voice sample…';
+  try{
+    if(file.size>20*1024*1024)throw Error('Choose an audio sample smaller than 20 MB.');
+    const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(!AudioContextClass)throw Error('Audio conversion is unavailable in this browser.');
+    const context=new AudioContextClass();let decoded;
+    try{decoded=await context.decodeAudioData(await file.arrayBuffer());}finally{await context.close();}
+    const sourceFrames=Math.min(decoded.length,Math.floor(decoded.sampleRate*5)),frames=Math.floor(sourceFrames*16000/decoded.sampleRate);
+    if(frames<16000)throw Error('Choose a voice clip at least one second long.');
+    const pcm=new ArrayBuffer(44+frames*2),view=new DataView(pcm);const put=(offset,value)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));};
+    put(0,'RIFF');view.setUint32(4,36+frames*2,true);put(8,'WAVE');put(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,16000,true);view.setUint32(28,32000,true);view.setUint16(32,2,true);view.setUint16(34,16,true);put(36,'data');view.setUint32(40,frames*2,true);
+    const channels=Array.from({length:decoded.numberOfChannels},(_,i)=>decoded.getChannelData(i));
+    for(let i=0;i<frames;i++){const pos=i*decoded.sampleRate/16000,left=Math.floor(pos),frac=pos-left;let sample=0;for(const channel of channels){const a=channel[Math.min(left,sourceFrames-1)]||0,b=channel[Math.min(left+1,sourceFrames-1)]||0;sample+=(a+(b-a)*frac)/channels.length;}const value=Math.max(-1,Math.min(1,sample));view.setInt16(44+i*2,value<0?value*32768:value*32767,true);}
+    if(pcm.byteLength>200000)throw Error('That voice sample is too large after conversion.');
+    const response=await api('/api/voices/chatterbox/custom',{method:'POST',headers:{'Content-Type':'audio/wav'},body:pcm});
+    if(!response.ok)throw Error('The console could not save this voice sample.');
+    customChatterboxVoiceAvailable=true;$('workspace-voice-feedback').textContent='Voice saved on this console.';
+    populateWorkspaceVoicePicker(current?.model||selectedModel);await runtimeSettings({chatterbox_voice:'custom'});
+  }catch(error){$('workspace-voice-feedback').textContent=error.message||'Could not add this voice.';}
+  finally{$('chatterbox-voice-upload').value='';}
+};
 document.querySelector('[data-page="settings"]').addEventListener('click', () => runtimeSettings());
+void runtimeSettings();
