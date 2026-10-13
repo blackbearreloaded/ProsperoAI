@@ -1,18 +1,26 @@
 # PS5 Vulkan tuning profiles
 
-ProsperoAI currently defaults to the verified `ps5` profile. To select the
-experimental PS5 Pro settings, create `/app0/vulkan_tuning_profile.txt`
-containing:
+ProsperoAI creates `/data/prosperoai/vulkan_tuning_profile.txt` on first start
+with `ps5` as its default. Edit that persistent file and put one profile name in
+it to choose the Vulkan tuning profile:
+
+| File contents | Profile | Settings |
+| --- | --- | --- |
+| `ps5` | Standard PS5 | Verified base PS5 settings; default |
+| `ps5pro` | PS5 Pro | Experimental Pro settings |
+
+For example, to select the Pro profile, replace the file contents with:
 
 ```
 ps5pro
 ```
 
-Restart the app after changing the profile. The `ps5pro` profile selects the
-measured four subgroup mat-vec workgroup, subgroup size 32, and batch/ubatch 512.
-`/app0/batch_size.txt` and `/app0/ubatch_size.txt` override those batch defaults.
-The PR #29 values have not been measured on the base PS5, so they are not enabled
-by default there.
+Save the file and restart ProsperoAI for the change to take effect. The `ps5pro`
+profile selects the four subgroup mat-vec workgroup, subgroup size 32, and
+batch/ubatch 512. The `ps5` profile remains the default. PS5 Pro settings have
+not been verified on PS5 Pro hardware; on a base PS5 they were slower than the
+standard profile. `/app0/batch_size.txt` and `/app0/ubatch_size.txt` can override
+the batch defaults for experiments.
 
 For experiments, `/app0/vulkan_env.txt` may contain one `KEY=VALUE` per line.
 Supported ggml Vulkan tuning keys are:

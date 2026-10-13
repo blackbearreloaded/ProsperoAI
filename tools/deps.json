@@ -71,6 +71,14 @@
       "creates": "build/prism-llama-source/CMakeLists.txt"
     },
     {
+      "name": "ggml-upstream",
+      "about": "Upstream GGML v0.26.0 shared by llama.cpp, Stable Diffusion, Kokoro and audio.cpp",
+      "kind": "git",
+      "url": "https://github.com/ggml-org/ggml.git",
+      "commit": "d7cb574130e6f01ad25b3289685489200febcd74",
+      "path": "build/ggml-upstream"
+    },
+    {
       "name": "kokoro-cpp",
       "about": "kokoro.cpp: ggml/Vulkan runtime for Kokoro-82M speech; replaces the prebuilt OpenCL archive. Only Highway is checked out as a submodule, because KOKORO_GGML_DIR points at the pinned ggml this build already uses.",
       "kind": "git",
@@ -90,7 +98,7 @@
     },
     {
       "name": "audio-cpp",
-      "about": "Pinned audio.cpp C API for Stable Audio 3 on the shared PS5 ggml/Vulkan runtime",
+      "about": "Pinned audio.cpp C API for Stable Audio 3, ACE-Step and Chatterbox, built by the upstream GGML audio adapter",
       "kind": "git",
       "url": "https://github.com/0xShug0/audio.cpp.git",
       "commit": "886076fc89c09b9902592aa4bfbd12922d4a9e26",

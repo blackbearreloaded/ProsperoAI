@@ -7,10 +7,22 @@ import argparse
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--source", type=Path, required=True)
-source_root = parser.parse_args().source
-path = source_root / "ggml/src/ggml-vulkan/ggml-vulkan.cpp"
+parser.add_argument("--ggml-source", type=Path, required=True)
+args = parser.parse_args()
+path = args.ggml_source / "src/ggml-vulkan/ggml-vulkan.cpp"
 text = path.read_text()
 marker = "/* prospero-ps5-vulkan-profile */"
+chunk_default = "            device->suballocation_block_size = 1024*1024*1024;"
+chunk_256 = "            device->suballocation_block_size = 256*1024*1024; // PS5: keep weight buffers below large-allocation failures"
+chunk_ps5 = "            device->suballocation_block_size = 128*1024*1024; // PS5: keep weight buffers below large-allocation failures"
+if chunk_256 in text:
+    text = text.replace(chunk_256, chunk_ps5, 1)
+    path.write_text(text)
+elif chunk_default in text:
+    text = text.replace(chunk_default, chunk_ps5, 1)
+    path.write_text(text)
+elif chunk_ps5 not in text:
+    raise SystemExit(f"{path}: expected Vulkan suballocation block size default")
 if marker in text:
     print(f"{path}: PS5 Vulkan profile hooks already applied")
     raise SystemExit(0)
@@ -24,9 +36,22 @@ def replace(before: str, after: str, count: int = 1) -> None:
     text = text.replace(before, after)
 
 
-replace("#include <cmath>", "#include <cmath>\n#include <cstdlib>")
-replace(
+if "#include <cstdlib>" not in text:
+    if "#include <cmath>" in text:
+        replace("#include <cmath>", "#include <cmath>\n#include <cstdlib>")
+    elif '#include "ggml-vulkan-common.h"' in text:
+        replace('#include "ggml-vulkan-common.h"',
+                '#include "ggml-vulkan-common.h"\n#include <cstdlib>')
+    else:
+        raise SystemExit(f"{path}: no safe include insertion point for PS5 profile hooks")
+shader_loader_signature = next((signature for signature in (
     "static void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {",
+    "void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {",
+) if signature in text), None)
+if shader_loader_signature is None:
+    raise SystemExit(f"{path}: unsupported Vulkan shader-loader signature")
+replace(
+    shader_loader_signature,
     marker
     + r"""
 static bool prospero_vk_read_u32(const char *name, uint32_t minimum, uint32_t maximum,
@@ -49,7 +74,7 @@ static uint64_t prospero_vk_submit_flops(uint64_t fallback) {
     return static_cast<uint64_t>(parsed) * 1000000ULL;
 }
 
-static void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {""",
+""" + shader_loader_signature,
 )
 replace(
     "    uint32_t rm_iq = 2 * rm_kq;\n",

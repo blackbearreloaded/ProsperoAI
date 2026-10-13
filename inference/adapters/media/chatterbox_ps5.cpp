@@ -153,6 +153,12 @@ void log_line(const char *message) {
     std::snprintf(line, sizeof(line), "[prosperoai] chatterbox %s\n", message);
     sceKernelDebugOutText(0, line);
 }
+
+void log_failure(const char *stage) {
+    char message[320];
+    std::snprintf(message, sizeof(message), "%s: %.240s", stage, audiocpp_last_error());
+    log_line(message);
+}
 } // namespace
 
 extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_id,
@@ -187,6 +193,7 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
     const std::uint64_t start = sceKernelGetProcessTime();
     audiocpp_registry *raw_registry = nullptr;
     if (audiocpp_registry_create(nullptr, &raw_registry) != AUDIOCPP_OK || !raw_registry) {
+        log_failure("registry initialization failed");
         std::snprintf(response, response_capacity, "Could not initialize the Chatterbox runtime: %s",
                       audiocpp_last_error());
         return 3;
@@ -196,19 +203,34 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
     audiocpp_model_config config{"chatterbox", nullptr, nullptr, nullptr};
     audiocpp_model *raw_model = nullptr;
     if (audiocpp_model_load(raw_registry, root, &config, nullptr, &raw_model) != AUDIOCPP_OK || !raw_model) {
+        log_failure("model load failed");
         std::snprintf(response, response_capacity, "Could not load Chatterbox: %s", audiocpp_last_error());
         return 4;
     }
     const auto model = std::unique_ptr<audiocpp_model, decltype(&audiocpp_model_free)>(raw_model,
                                                                                        audiocpp_model_free);
-    audiocpp_backend_config backend{"vulkan", 0, 4};
+    // The smaller PS5 decode cache keeps the T3 graph within the CPU backend's
+    // bounded direct-memory allocation while we retain a clear size diagnostic.
+    audiocpp_backend_config backend{"cpu", 0, 4};
+    audiocpp_options *raw_session_options = audiocpp_options_create();
+    if (!raw_session_options ||
+        audiocpp_options_set(raw_session_options, "chatterbox.mem_saver", "true") != AUDIOCPP_OK) {
+        log_failure("low-memory options failed");
+        audiocpp_options_free(raw_session_options);
+        std::snprintf(response, response_capacity, "Could not configure low-memory Chatterbox mode: %s",
+                      audiocpp_last_error());
+        return 5;
+    }
+    const auto session_options = std::unique_ptr<audiocpp_options, decltype(&audiocpp_options_free)>(
+        raw_session_options, audiocpp_options_free);
     audiocpp_session *raw_session = nullptr;
-    if (audiocpp_session_create(raw_model, "clon", "offline", &backend, nullptr, &raw_session) != AUDIOCPP_OK || !raw_session) {
+    if (audiocpp_session_create(raw_model, "clon", "offline", &backend, raw_session_options, &raw_session) != AUDIOCPP_OK || !raw_session) {
+        log_failure("CPU session creation failed");
         std::snprintf(response, response_capacity, "Could not create Chatterbox session: %s", audiocpp_last_error());
         return 5;
     }
-    const auto session = std::unique_ptr<audiocpp_session, decltype(&audiocpp_session_free)>(raw_session,
-                                                                                            audiocpp_session_free);
+    auto session = std::unique_ptr<audiocpp_session, decltype(&audiocpp_session_free)>(raw_session,
+                                                                                        audiocpp_session_free);
     audiocpp_request *raw_request = audiocpp_request_create();
     if (!raw_request) { std::snprintf(response, response_capacity, "Could not allocate a speech request."); return 6; }
     const auto request = std::unique_ptr<audiocpp_request, decltype(&audiocpp_request_free)>(raw_request,
@@ -220,12 +242,14 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
         audiocpp_request_set_voice_audio(raw_request, reference.samples.data(),
                                          reference.samples.size() / static_cast<std::size_t>(reference.channels),
                                          reference.rate, reference.channels) != AUDIOCPP_OK) {
+        log_failure("voice request setup failed");
         std::snprintf(response, response_capacity, "Could not prepare the selected voice: %s", audiocpp_last_error());
         return 7;
     }
     if (progress) progress("Generating speech with Chatterbox");
     audiocpp_result *raw_result = nullptr;
     if (audiocpp_session_run(raw_session, raw_request, &raw_result) != AUDIOCPP_OK || !raw_result) {
+        log_failure("CPU generation failed");
         std::snprintf(response, response_capacity, "Chatterbox speech generation failed: %s", audiocpp_last_error());
         return 8;
     }

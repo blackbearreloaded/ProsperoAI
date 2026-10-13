@@ -124,11 +124,66 @@ def include_ace_step_dependencies(path: Path) -> None:
     path.write_text(source)
 
 
+def reuse_parent_ggml(path: Path) -> None:
+    """Reuse the parent runtime's upstream GGML target when added as a subproject."""
+    replace_once(
+        path,
+        'add_subdirectory("${AUDIOCPP_GGML_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/ggml")',
+        '''if (NOT TARGET ggml)
+    add_subdirectory("${AUDIOCPP_GGML_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/ggml")
+endif()''',
+    )
+
+
 def adapt_ace_step_ggml_round(source: Path) -> None:
     replace_once(
         source / "src/framework/modules/transformers/decoder.cpp",
         "return core::wrap_tensor(ggml_round_bf16(ctx.ggml, input.tensor), input.shape, GGML_TYPE_F32);",
         "return core::wrap_tensor(ggml_cast(ctx.ggml, ggml_cast(ctx.ggml, input.tensor, GGML_TYPE_BF16), GGML_TYPE_F32), input.shape, GGML_TYPE_F32);",
+    )
+
+
+def ggml_has_api(ggml_source: Path, *names: str) -> bool:
+    headers = list((ggml_source / "include").glob("ggml*.h"))
+    text = "\n".join(header.read_text(errors="replace") for header in headers)
+    return all(name in text for name in names)
+
+
+def adapt_chatterbox_s3_tokenizer_arena(source: Path) -> None:
+    """Keep Chatterbox's fixed graph metadata arenas within PS5 host allocation limits."""
+    path = source / "src/models/chatterbox/s3_tokenizer_impl.cpp"
+    replace_once(
+        path,
+        "        params.mem_size = 512ull * 1024ull * 1024ull;",
+        "        params.mem_size = 64ull * 1024ull * 1024ull; // PS5: graph metadata only",
+    )
+    replace_once(
+        path,
+        "        768ull * 1024ull * 1024ull);",
+        "        64ull * 1024ull * 1024ull); // PS5: tensor metadata only",
+    )
+    t3_runner = source / "src/models/chatterbox/components/t3_runtime.h"
+    replace_once(
+        t3_runner,
+        "        params.mem_size = 256ull * 1024ull * 1024ull;",
+        "        params.mem_size = 96ull * 1024ull * 1024ull; // PS5: graph metadata only",
+    )
+    t3_component = source / "src/models/chatterbox/t3_component.cpp"
+    replace_once(
+        t3_component,
+        "    constexpr int64_t kDecodeCapacityChunk = 256;",
+        "    constexpr int64_t kDecodeCapacityChunk = 32; // PS5: bound the decode cache allocation",
+    )
+    replace_once(
+        t3_runner,
+        '                throw std::runtime_error("failed to allocate backend tensors for T3 decode runner");',
+        '''                size_t requested_bytes = 0;
+                for (ggml_tensor * tensor = ggml_get_first_tensor(ggml_); tensor != nullptr;
+                     tensor = ggml_get_next_tensor(ggml_, tensor)) {
+                    requested_bytes += ggml_nbytes(tensor);
+                }
+                throw std::runtime_error("failed to allocate backend tensors for T3 decode runner (" +
+                    std::to_string(requested_bytes / (1024 * 1024)) + " MiB)");''',
     )
 
 
@@ -207,7 +262,10 @@ def adapt_gguf_streaming(path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=ROOT / "build/audio-cpp-upstream")
-    source = parser.parse_args().source.resolve()
+    parser.add_argument("--ggml-source", type=Path, default=ROOT / "build/prism-llama-source/ggml")
+    args = parser.parse_args()
+    source = args.source.resolve()
+    ggml_source = args.ggml_source.resolve()
     if not (source / "CMakeLists.txt").is_file():
         raise SystemExit(f"{source}: missing audio.cpp CMakeLists.txt")
     revision = subprocess.run(
@@ -221,7 +279,10 @@ def main() -> None:
     omit_cmake_sources(cmake)
     include_sa3_dependencies(cmake)
     include_ace_step_dependencies(cmake)
-    adapt_ace_step_ggml_round(source)
+    reuse_parent_ggml(cmake)
+    if not ggml_has_api(ggml_source, "ggml_round_bf16"):
+        adapt_ace_step_ggml_round(source)
+    adapt_chatterbox_s3_tokenizer_arena(source)
     replace_once(
         cmake,
         "add_library(audiocpp SHARED src/capi/audiocpp.cpp)",
@@ -251,8 +312,10 @@ static bool active_embedded_spec_checked = false;
 static std::optional<assets::GgufEmbeddedModelSpec> active_embedded_spec;
 static std::unordered_set<std::string> legacy_embedded_contract_warnings;""",
     )
-    replace_once(
-        source / "src/framework/modules/linear_module.cpp",
+    if not ggml_has_api(ggml_source, "GGML_MUL_MAT_LOWERING_VULKAN_F32_INPUTS",
+                        "ggml_mul_mat_set_lowering"):
+        replace_once(
+            source / "src/framework/modules/linear_module.cpp",
         """    if (config_.cuda_nvfp4_f16_activation_lowering) {
         ggml_mul_mat_set_lowering(projected_raw, GGML_MUL_MAT_LOWERING_CUDA_NVFP4_F16_ACTIVATION);
     }
@@ -260,39 +323,43 @@ static std::unordered_set<std::string> legacy_embedded_contract_warnings;""",
         ggml_mul_mat_set_lowering(projected_raw, GGML_MUL_MAT_LOWERING_VULKAN_F32_INPUTS);
     }""",
         "    // The pinned ProsperoAI ggml predates the optional backend-specific lowering hints.",
-    )
-    replace_once(
-        source / "src/framework/modules/structural_modules.cpp",
+        )
+    if not ggml_has_api(ggml_source, "GGML_CONCAT_LOWERING_CUDA_CONTIGUOUS_4D",
+                        "ggml_concat_set_lowering"):
+        replace_once(
+            source / "src/framework/modules/structural_modules.cpp",
         """    if (config_.cuda_contiguous_4d_lowering) {
         ggml_concat_set_lowering(raw, GGML_CONCAT_LOWERING_CUDA_CONTIGUOUS_4D);
     }
 """,
         "",
-    )
-    replace_once(
-        source / "src/framework/modules/conv_modules.cpp",
+        )
+    if not ggml_has_api(ggml_source, "ggml_mul_mat_acc"):
+        replace_once(
+            source / "src/framework/modules/conv_modules.cpp",
         """    // accumulate-in-place GEMM only where the tensor-core mm kernel applies
     // (mirrors the Metal supports gate); otherwise keep the mul_mat + add chain
     const bool use_acc = in_channels >= 64 && output_frames > 8;
 """,
         "",
-    )
-    replace_once(
-        source / "src/framework/modules/conv_modules.cpp",
+        )
+        replace_once(
+            source / "src/framework/modules/conv_modules.cpp",
         """        } else if (use_acc) {
             acc = ggml_mul_mat_acc(ctx.ggml, tap_weights, columns, acc);
         } else {""",
         "        } else {",
-    )
-    replace_once(
-        source / "src/framework/modules/primitive_modules.cpp",
+        )
+    if not ggml_has_api(ggml_source, "ggml_rope_interleaved_pairs"):
+        replace_once(
+            source / "src/framework/modules/primitive_modules.cpp",
         """    return core::wrap_tensor(
         ggml_rope_interleaved_pairs(ctx.ggml, even.tensor, odd.tensor, cos.tensor, sin.tensor),
         output_shape,
         even.type);""",
         """    (void) output_shape;
     throw std::runtime_error("RopeInterleavedPairs is unavailable in the pinned ProsperoAI ggml");""",
-    )
+        )
     for relative in (
         "src/framework/assets/tensor_source.cpp",
         "src/framework/model_spec/package.cpp",

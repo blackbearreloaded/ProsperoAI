@@ -229,8 +229,12 @@ bool prepare() {
                   "Vulkan memory: reported free=%zu total=%zu bytes\n", free_bytes, total_bytes);
     log_message(GGML_LOG_LEVEL_INFO, memory_line, nullptr);
     auto mp = llama_model_default_params();
-    mp.devices = devices;
-    mp.n_gpu_layers = 99;
+    const bool bonsai = files[selected].id.find("Ternary-Bonsai-2-27B-PTQ1_0") != std::string::npos;
+    // The build-time Bonsai GGML adapter currently provides the exact private
+    // codecs and CPU dot products. Keep these weights off Vulkan until their
+    // native GGML Vulkan kernels are part of the adapter.
+    mp.devices = bonsai ? nullptr : devices;
+    mp.n_gpu_layers = bonsai ? 0 : 99;
     mp.load_mode = LLAMA_LOAD_MODE_NONE;
     if (!model) model = llama_model_load_from_file(files[selected].path.c_str(), mp);
     if (!model) return false;

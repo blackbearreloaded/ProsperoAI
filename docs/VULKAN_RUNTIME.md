@@ -1,11 +1,12 @@
 # vulkan-runtime
 
-One inference runtime for PS5 text, images, audio and voice. The app links the complete
-Prism llama/ggml pin `e8fd209c975c80aa7fb36a8423571ff3b1b7e955`, one ggml ABI
-(`GGML_MAX_NAME=160`), source-built SD `f89d9b13d730eabeede7314ce49dacd18d3c90c2`
-and the Vulkan media bridge. No AGC inference backend, private ggml copies or legacy
-scratch allocator are linked. CPU operations remain where the media bridge requires
-them; RADV still links the console AGC platform driver.
+The PS5 runtime is migrating to upstream llama.cpp `cb7934c52ca8710994b2ecc19775ebefcfdb8d01`
+and one shared upstream GGML v0.26.0 `d7cb574130e6f01ad25b3289685489200febcd74` ABI
+(`GGML_MAX_NAME=160`). Text, source-built Stable Diffusion, audio.cpp and Kokoro link to the
+same upstream GGML/Vulkan target through model adapters. The production app keeps the RADV
+link recipe and console AGC platform-driver imports; AGC inference is removed. Prism's private
+PTQ1_0/PQ2_0 quant types are not part of upstream GGML and need a compatibility adapter before
+the Bonsai preset can be enabled on this runtime.
 
 ## Build and compatibility
 
@@ -15,7 +16,7 @@ the configured release title. Neither command deploys. `tools/build-vulkan-runti
 binaries use the same `vulkan-runtime` name. Historical make targets remain aliases. All previous app Vulkan/Bonsai
 folder aliases now use this runtime. The pinned Bonsai PTQ1_0 preset is included.
 
-Existing GGUF models continue to work. A legacy preset ID can alias its installed GGUF;
+Standard GGUF models use the upstream llama.cpp adapter. A legacy preset ID can alias its installed GGUF;
 the router forwards the actual GGUF ID to llama. Old `.ps5lm` data is preserved but is
 not executed: download the matching GGUF preset before using that legacy ID. Console
 regressions cover Mistral, Qwen 3.5, MiniCPM5 and exact Bonsai 2 27B.

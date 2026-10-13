@@ -136,7 +136,19 @@ void configure_vulkan_tuning_profile()
 
     char profile_text[32]{};
     const char *profile = "ps5";
-    if (std::FILE *file = std::fopen("/app0/vulkan_tuning_profile.txt", "r"))
+    const std::string profile_path = prospero::storage().data_root + "/vulkan_tuning_profile.txt";
+    std::FILE *profile_file = std::fopen(profile_path.c_str(), "r");
+    if (!profile_file)
+    {
+        // Keep a visible, editable persistent default beside the user's models/settings.
+        if (std::FILE *created = std::fopen(profile_path.c_str(), "w"))
+        {
+            std::fputs("ps5\n", created);
+            std::fclose(created);
+        }
+        profile_file = std::fopen(profile_path.c_str(), "r");
+    }
+    if (std::FILE *file = profile_file)
     {
         const std::size_t size = std::fread(profile_text, 1, sizeof(profile_text) - 1, file);
         const bool failed = std::ferror(file) != 0 || size == sizeof(profile_text) - 1;

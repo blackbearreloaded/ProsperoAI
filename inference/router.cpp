@@ -6,6 +6,7 @@
 #include "model_paths.hpp"
 #include "model_presets.hpp"
 #include "model_downloader_ps5.hpp"
+#include "storage.hpp"
 #include <mutex>
 #include <vector>
 #include <string>
@@ -157,7 +158,10 @@ void scan()
         for (std::size_t i = 0; i < preset.count; ++i)
         {
             const std::string path = preset.files[i].path;
-            if (path.compare(0, 9, "licenses/") != 0 && !exists(root + "/" + path))
+            const std::string file_path = path.compare(0, 7, "voices/") == 0
+                ? std::string(prospero::storage().data_root) + "/" + path
+                : root + "/" + path;
+            if (path.compare(0, 9, "licenses/") != 0 && !exists(file_path))
             {
                 complete = false;
                 break;

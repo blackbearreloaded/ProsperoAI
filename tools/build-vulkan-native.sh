@@ -5,14 +5,16 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 ref="$root/.deps/mihawk-vulkan-review"
 sdk="$ref/.deps/native/ps5-payload-sdk"
 archive="$ref/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a"
-# All text and media now share the complete pinned Prism ggml ABI and Vulkan.
+# All text and media now share upstream GGML v0.26.0 and its Vulkan backend.
 # Legacy AGC/private-ggml comparison builds live in earlier commits.
 [[ ${SHARED_SD:-1} == 1 && ${MEDIA_VULKAN:-1} == 1 ]] || {
  echo "AGC inference was removed; this build requires shared Vulkan media" >&2; exit 2;
 }
 work="$root/build/vulkan-runtime"
-llama_source="$root/build/prism-llama-source"
-llama_build="$root/build/vulkan-runtime-ps5/llama"
+llama_source="$root/.deps/llama.cpp"
+runtime_build="$root/build/vulkan-runtime-upstream-ps5"
+llama_build="$runtime_build/llama"
+ggml_build="$runtime_build/ggml"
 [[ -f $llama_build/src/libllama.a ]] || { echo "Run make vulkan-runtime-libs first" >&2; exit 2; }
 title=${PROSPERO_APP_TITLE:?Set PROSPERO_APP_TITLE to the target title ID}
 [[ $title =~ ^PPSA[0-9]{5}$ ]] || { echo "Invalid title ID" >&2; exit 2; }
@@ -45,11 +47,10 @@ sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp 
  inference/adapters/llama/vulkan.cpp vulkan/http_server.cpp vulkan/model_downloader_ps5.cpp
  vulkan/ui/backend.cpp vulkan/ui/program.cpp)
 media_definitions=()
-media_definitions=(-DPROSPERO_PRISM_RUNTIME)
 # Speech is kokoro.cpp on the shared ggml/Vulkan backend (inference/adapters/media/kokoro_ps5.cpp); the
 # prebuilt OpenCL archive it replaces is no longer linked.
-kokoro_archives=("$root/build/vulkan-runtime-ps5/kokoro/libkokoro.a"
- "$root/build/vulkan-runtime-ps5/kokoro/highway/libhwy.a")
+kokoro_archives=("$runtime_build/kokoro/libkokoro.a"
+ "$runtime_build/kokoro/highway/libhwy.a")
 # Not `archive`: that variable already holds RADV's library for radv_link_recipe below.
 for kokoro_input in "${kokoro_archives[@]}"; do
  [[ -f $kokoro_input ]] || { echo "Run make vulkan-runtime-libs first: missing $kokoro_input" >&2; exit 2; }
@@ -79,7 +80,7 @@ for relative in "${sources[@]}"; do
     -I "$root/.deps/pacbrew/v0.40.2/sysroot/user/homebrew/include");;
   inference/adapters/media/kokoro_ps5.cpp)
    media_includes=(-I "$root/.deps/kokoro.cpp/include"
-    -I "$root/build/prism-llama-source/ggml/include");;
+    -I "$root/build/ggml-upstream/include");;
  esac
  object="$work/obj/${relative//\//_}.o"
  ninja_inputs=("$root/$relative" "$root/tooling/prospero-clang18")
@@ -164,9 +165,9 @@ radv_link_flags+=(--wrap=sceKernelDebugOutText)
 cat > "$work/app-compat.map" <<'MAP'
 { local: pthread_once; strtof; strtod; fseek; ftell; strcasestr; gl*; hui_release_splash; __wrap_*; };
 MAP
-sd_archives=("$root/build/vulkan-runtime-ps5/sd/libstable-diffusion.a")
-audio_build="$root/build/audio-cpp-sa3-ps5-repro"
-audio_archives=("$audio_build/bin/libaudiocpp.a" "$audio_build/libengine_runtime.a"
+sd_archives=("$runtime_build/sd/libstable-diffusion.a")
+audio_build="$runtime_build/audio-cpp"
+audio_archives=("$runtime_build/bin/libaudiocpp.a" "$audio_build/libengine_runtime.a"
  "$audio_build/external/sentencepiece/src/libsentencepiece.a" "$audio_build/libcjson_vendor.a"
  "$audio_build/libyaml_vendor.a")
 audio_archives+=("$root/.deps/pacbrew/v0.40.2/sysroot/user/homebrew/lib/libFLAC.a")
@@ -178,11 +179,9 @@ done
  -o "$work/llvm-pie.elf" "$work/obj/app_crt.o" "$work/obj/app_cpp_runtime.o" "${objects[@]}" "$work/obj/llama_compat.o" \
  "$work/stubs/libSceAgc.so" "$work/stubs/libSceAgcDriver.so" "$work/stubs/libSceCommonDialog.so" \
  --start-group "$root/vendor/ps5/sdl/lib/libSDL2.a" "$llama_build/src/libllama.a" \
- "$llama_build/ggml/src/libggml.a" "$llama_build/ggml/src/libggml-base.a" \
- "$llama_build/ggml/src/libggml-cpu.a" "$llama_build/ggml/src/ggml-vulkan/libggml-vulkan.a" \
+ "$ggml_build/src/libggml.a" "$ggml_build/src/libggml-base.a" \
+ "$ggml_build/src/libggml-cpu.a" "$ggml_build/src/ggml-vulkan/libggml-vulkan.a" \
  "${sd_archives[@]}" "${audio_archives[@]}" \
- "$audio_build/ggml/src/libggml.a" "$audio_build/ggml/src/libggml-cpu.a" \
- "$audio_build/ggml/src/ggml-vulkan/libggml-vulkan.a" "$audio_build/ggml/src/libggml-base.a" \
  "${kokoro_archives[@]}" "$root/vendor/lib/libespeak-ng.a" \
  "$root/vendor/lib/libcompat.a" --end-group \
  --defsym=vkGetInstanceProcAddr=radv_GetInstanceProcAddr --defsym=vkGetDeviceProcAddr=vk_common_GetDeviceProcAddr \
@@ -237,7 +236,7 @@ make --no-print-directory -s -C "$root/third_party/self-update-helper" \
 python3 "$root/tools/validate-loader-elf.py" "$work/self-update/self-updater.elf"
 cp "$work/self-update/self-updater.elf" "$app/self-updater.elf"
 cp "$root/third_party/miniz/LICENSE" "$app/licenses/miniz-MIT.txt"
-cp "$llama_source/LICENSE" "$app/licenses/Prism-llama-MIT.txt"
+cp "$llama_source/LICENSE" "$app/licenses/llama.cpp-MIT.txt"
 cp "$root/THIRD_PARTY_NOTICES.md" "$app/licenses/THIRD_PARTY_NOTICES.md"
-printf '%s\n' 'Prism llama e8fd209c975c80aa7fb36a8423571ff3b1b7e955; GGML_MAX_NAME=160' > "$app/licenses/vulkan-runtime-source.txt"
+printf '%s\n' 'llama.cpp cb7934c52ca8710994b2ecc19775ebefcfdb8d01; GGML v0.26.0 d7cb574130e6f01ad25b3289685489200febcd74; GGML_MAX_NAME=160' > "$app/licenses/vulkan-runtime-source.txt"
 echo "Native Vulkan app folder: $app"

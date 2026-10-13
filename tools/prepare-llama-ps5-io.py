@@ -17,7 +17,10 @@ def replace(path, before, after):
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--source', type=Path, default=root / '.deps/llama.cpp')
-source_root = parser.parse_args().source
+parser.add_argument('--ggml-source', type=Path, default=root / 'build/ggml-upstream')
+args = parser.parse_args()
+source_root = args.source
+ggml_source = args.ggml_source
 source = source_root / 'src'
 replace(source / "llama-mmap.cpp", '#include "llama-mmap.h"',
         '#include "llama-mmap.h"\n#ifdef PROSPERO_PS5_MODEL_IO\n#include "ps5-model-io.hpp"\n#endif')
@@ -40,7 +43,7 @@ replace(loader,
 
 # PS5 titles do not expose libc's stderr in klog. Route each timestamp result
 # through ggml's registered log callback so profiling remains observable.
-vulkan = source_root / 'ggml/src/ggml-vulkan/ggml-vulkan.cpp'
+vulkan = ggml_source / 'src/ggml-vulkan/ggml-vulkan.cpp'
 text = vulkan.read_text()
 marker = 'GGML_LOG_INFO("Vulkan Timings:\\n")'
 if marker not in text:

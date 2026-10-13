@@ -375,6 +375,18 @@ void handle_openai_chat(const NetApi &api, int sock, const char *body) {
         const std::string finish = message.contains("tool_calls") ? "tool_calls" : stats.output_limit_reached ? "length" : "stop";
         ApiJson usage = {{"prompt_tokens", stats.prompt_tokens}, {"completion_tokens", stats.generated_tokens},
                          {"total_tokens", stats.prompt_tokens + stats.generated_tokens}};
+        if (stats.elapsed_microseconds != 0) {
+            const bool text_model = std::strcmp(gpt_runtime_model_purpose(selected), "text-to-text") == 0;
+            if (text_model) {
+                const auto decode_us = stats.elapsed_microseconds > stats.prefill_microseconds
+                    ? stats.elapsed_microseconds - stats.prefill_microseconds : stats.elapsed_microseconds;
+                const unsigned tokens = stats.generated_tokens > 1 ? stats.generated_tokens - 1
+                                                                    : stats.generated_tokens;
+                usage["tokens_per_second"] = decode_us != 0
+                    ? static_cast<double>(tokens) * 1000000.0 / static_cast<double>(decode_us) : 0.0;
+            }
+            usage["generation_time_ms"] = static_cast<double>(stats.elapsed_microseconds) / 1000.0;
+        }
         if (request.stream) {
             stream.begin();
             if (message.contains("tool_calls")) {

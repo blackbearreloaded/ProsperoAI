@@ -1,0 +1,383 @@
+{
+  "title_id": "PPSA99023",
+  "method": "greedy arithmetic smoke, repeated full passes over every installed text preset",
+  "passes": 2,
+  "excluded_models": [
+    "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
+  ],
+  "original_settings": {
+    "chatterbox_voice": "alana_jordan",
+    "chatterbox_voices": [
+      {
+        "id": "cemo",
+        "locale": "English",
+        "name": "Cemo"
+      },
+      {
+        "id": "custom",
+        "locale": "Uploaded WAV",
+        "name": "My voice"
+      },
+      {
+        "id": "alana_jordan",
+        "locale": "American Midwest",
+        "name": "Alana Jordan"
+      },
+      {
+        "id": "alan_davis_drake",
+        "locale": "New York English",
+        "name": "Alan Davis Drake"
+      },
+      {
+        "id": "ruth_golding",
+        "locale": "British English",
+        "name": "Ruth Golding"
+      },
+      {
+        "id": "phil_chenevert",
+        "locale": "American English",
+        "name": "Phil Chenevert"
+      },
+      {
+        "id": "demo_1_man",
+        "locale": "Added voice",
+        "name": "demo_1_man"
+      }
+    ],
+    "context": "4k",
+    "idle_unload_minutes": 1,
+    "kokoro_voice": "af_heart",
+    "kokoro_voices": [
+      {
+        "id": "af_heart",
+        "locale": "en-US",
+        "name": "Heart"
+      },
+      {
+        "id": "af_bella",
+        "locale": "en-US",
+        "name": "Bella"
+      },
+      {
+        "id": "af_nicole",
+        "locale": "en-US",
+        "name": "Nicole"
+      },
+      {
+        "id": "af_sarah",
+        "locale": "en-US",
+        "name": "Sarah"
+      },
+      {
+        "id": "am_adam",
+        "locale": "en-US",
+        "name": "Adam"
+      },
+      {
+        "id": "kokoro-voice-af_bella",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_bella"
+      },
+      {
+        "id": "kokoro-voice-af_heart",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_heart"
+      },
+      {
+        "id": "kokoro-voice-af_nicole",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_nicole"
+      },
+      {
+        "id": "kokoro-voice-af_sarah",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_sarah"
+      },
+      {
+        "id": "kokoro-voice-am_adam",
+        "locale": "Added voice",
+        "name": "kokoro-voice-am_adam"
+      }
+    ],
+    "kv": "auto",
+    "output_limit": 0,
+    "thinking": false
+  },
+  "models": [
+    {
+      "pass": 1,
+      "id": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+      "name": "Mistral 7B Instruct v0.3 Q4_0",
+      "http_seconds": 3.0708206659764983,
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:45:39Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 2,
+        "eval_duration": 45160000,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "prompt_eval_count": 19,
+        "prompt_eval_duration": 86212000,
+        "response": " 4"
+      },
+      "passed": true
+    },
+    {
+      "pass": 1,
+      "id": "qwen3.8-9b-distill-q4-k-m.gguf",
+      "name": "Qwen3.8 9B Distill Q4_K_M",
+      "http_seconds": 4.636652507004328,
+      "request": {
+        "model": "qwen3.8-9b-distill-q4-k-m.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:45:43Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 47911000,
+        "model": "qwen3.8-9b-distill-q4-k-m.gguf",
+        "prompt_eval_count": 26,
+        "prompt_eval_duration": 105004000,
+        "response": "4"
+      },
+      "passed": true
+    },
+    {
+      "pass": 1,
+      "id": "minicpm5-2b-q8-0.gguf",
+      "name": "MiniCPM5 2B Q8_0",
+      "http_seconds": 2.2682237660046667,
+      "request": {
+        "model": "minicpm5-2b-q8-0.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:45:46Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 18661000,
+        "model": "minicpm5-2b-q8-0.gguf",
+        "prompt_eval_count": 27,
+        "prompt_eval_duration": 122952000,
+        "response": "4"
+      },
+      "passed": true
+    },
+    {
+      "pass": 1,
+      "id": "granite-4.0-h-tiny-q4-k-m.gguf",
+      "name": "Granite 4.0 H-Tiny Q4_K_M",
+      "http_seconds": 4.238613837980665,
+      "request": {
+        "model": "granite-4.0-h-tiny-q4-k-m.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:45:50Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 14,
+        "eval_duration": 144202000,
+        "model": "granite-4.0-h-tiny-q4-k-m.gguf",
+        "prompt_eval_count": 22,
+        "prompt_eval_duration": 77566000,
+        "response": "2 plus 2 equals 4. The answer is 4."
+      },
+      "passed": true
+    },
+    {
+      "pass": 1,
+      "id": "bohf-12b-moe-3a-q3-k-m.gguf",
+      "name": "BoHF 12B MoE 3A Q3_K_M",
+      "http_seconds": 4.9957131590053905,
+      "request": {
+        "model": "bohf-12b-moe-3a-q3-k-m.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:45:55Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 46776000,
+        "model": "bohf-12b-moe-3a-q3-k-m.gguf",
+        "prompt_eval_count": 24,
+        "prompt_eval_duration": 145878000,
+        "response": "4"
+      },
+      "passed": true
+    },
+    {
+      "pass": 2,
+      "id": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+      "name": "Mistral 7B Instruct v0.3 Q4_0",
+      "http_seconds": 3.2136828219809104,
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:45:58Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 2,
+        "eval_duration": 43341000,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "prompt_eval_count": 19,
+        "prompt_eval_duration": 82047000,
+        "response": " 4"
+      },
+      "passed": true
+    },
+    {
+      "pass": 2,
+      "id": "qwen3.8-9b-distill-q4-k-m.gguf",
+      "name": "Qwen3.8 9B Distill Q4_K_M",
+      "http_seconds": 4.591968682012521,
+      "request": {
+        "model": "qwen3.8-9b-distill-q4-k-m.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:46:03Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 47891000,
+        "model": "qwen3.8-9b-distill-q4-k-m.gguf",
+        "prompt_eval_count": 26,
+        "prompt_eval_duration": 94252000,
+        "response": "4"
+      },
+      "passed": true
+    },
+    {
+      "pass": 2,
+      "id": "minicpm5-2b-q8-0.gguf",
+      "name": "MiniCPM5 2B Q8_0",
+      "http_seconds": 2.190575861983234,
+      "request": {
+        "model": "minicpm5-2b-q8-0.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:46:05Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 18665000,
+        "model": "minicpm5-2b-q8-0.gguf",
+        "prompt_eval_count": 27,
+        "prompt_eval_duration": 34128000,
+        "response": "4"
+      },
+      "passed": true
+    },
+    {
+      "pass": 2,
+      "id": "granite-4.0-h-tiny-q4-k-m.gguf",
+      "name": "Granite 4.0 H-Tiny Q4_K_M",
+      "http_seconds": 4.2891981069988105,
+      "request": {
+        "model": "granite-4.0-h-tiny-q4-k-m.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:46:09Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 14,
+        "eval_duration": 143869000,
+        "model": "granite-4.0-h-tiny-q4-k-m.gguf",
+        "prompt_eval_count": 22,
+        "prompt_eval_duration": 70994000,
+        "response": "2 plus 2 equals 4. The answer is 4."
+      },
+      "passed": true
+    },
+    {
+      "pass": 2,
+      "id": "bohf-12b-moe-3a-q3-k-m.gguf",
+      "name": "BoHF 12B MoE 3A Q3_K_M",
+      "http_seconds": 4.94917209201958,
+      "request": {
+        "model": "bohf-12b-moe-3a-q3-k-m.gguf",
+        "prompt": "What is 2 plus 2? Answer with the number only.",
+        "stream": false,
+        "options": {
+          "num_predict": 32,
+          "temperature": 0
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T14:46:14Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 45199000,
+        "model": "bohf-12b-moe-3a-q3-k-m.gguf",
+        "prompt_eval_count": 24,
+        "prompt_eval_duration": 138988000,
+        "response": "4"
+      },
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "restore_error": {
+    "type": "HTTPError",
+    "message": "HTTP Error 400: Bad Request"
+  }
+}

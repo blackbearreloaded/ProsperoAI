@@ -14,12 +14,12 @@ previous model/backend before a switch, and preserves the public API while the i
 | `inference/runtime_adapter.hpp` | Typed modality, shared model descriptor, generation request and adapter contract. |
 | `inference/router.cpp` | Model catalog aggregation, one-model-at-a-time lifecycle and API compatibility facade. |
 | `inference/adapters/registry.cpp` | Adapter registry and request translation for text, image, audio and speech. |
-| `inference/adapters/llama/` | Text generation adapter implementation using llama.cpp on Vulkan. |
-| `inference/adapters/media/` | PS5 wrappers for Stable Diffusion, Stable Audio and Kokoro. Each wraps its model-specific API and output format. |
+| `inference/adapters/llama/` | Text generation adapter implementation using upstream llama.cpp on the shared upstream GGML Vulkan backend. |
+| `inference/adapters/media/` | PS5 wrappers for Stable Diffusion, Stable Audio, ACE-Step, Chatterbox and Kokoro. Each wraps its model-specific API and output format. |
 | `inference/backends/vulkan/` | Low-level shared ggml/Vulkan bridge used by media kernels; not a model adapter. |
 | `vulkan/http_server.cpp`, `vulkan/openai_api.inc` | HTTP/OpenAI protocol and transport. These do not own model-specific inference. |
 | `vulkan/storage*`, `vulkan/elevation/`, `vulkan/ui/` | PS5 storage/platform services, privilege boundary and Vulkan UI. |
-| `tools/vulkan-runtime/` | CMake composition of llama.cpp/ggml, Stable Diffusion, Kokoro and shared ABI tests. |
+| `tools/vulkan-runtime/` | CMake composition of upstream GGML, llama.cpp, Stable Diffusion, Kokoro and shared ABI checks. |
 | `tools/prepare-*-ps5.py` | Guarded, repeatable PS5-only dependency adjustments applied at build time. |
 | `include/model_presets.hpp`, `tools/generate-model-presets.py` | Generated model catalog and its source generator. |
 
@@ -66,10 +66,15 @@ preparation now uses process-static cache objects; all audio.cpp calls/model loa
 by the app inference mutex. See the successful cycle reports and the earlier crash record in
 [`docs/performance/2026-10-12/`](performance/2026-10-12/).
 
-The PS5 production link uses the app's RADV link recipe and one shared llama/SD/Kokoro ggml
-stack plus the pinned audio.cpp SA3 runtime built by `tools/build-audio-cpp-sa3-ps5.sh`.
+The PS5 production link uses the app's RADV link recipe and one shared upstream GGML target
+for text, SD, Kokoro and audio.cpp. All four projects are subdirectories of
+`tools/vulkan-runtime/CMakeLists.txt` and compile in `build/vulkan-runtime-upstream-ps5/`.
+The final app links the shared GGML archives once; audio.cpp does not build a second GGML or
+Vulkan backend. `tools/build-audio-cpp-sa3-ps5.sh` remains a compatibility wrapper that builds
+the `audiocpp` target from this common tree.
 Build-time source adjustments are repeatable and confined to `build/` by
-`tools/prepare-audio-cpp-sa3.py` and `tools/prepare-ggml-graph-setter.py`.
+`tools/prepare-audio-cpp-sa3.py` and `tools/prepare-ggml-graph-setter.py`. Prism-private
+PTQ1_0/PQ2_0 tensors remain gated until their compatibility adapter is ported to upstream.
 
 ## Realistic Vision v5.1 image preset
 

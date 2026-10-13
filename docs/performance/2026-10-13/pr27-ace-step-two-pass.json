@@ -1,0 +1,236 @@
+{
+  "label": "pr27-ace-step-retry",
+  "test_title": "PPSA99023",
+  "original_settings": {
+    "chatterbox_voice": "cemo",
+    "chatterbox_voices": [
+      {
+        "id": "cemo",
+        "locale": "English",
+        "name": "Cemo"
+      },
+      {
+        "id": "custom",
+        "locale": "Uploaded WAV",
+        "name": "My voice"
+      },
+      {
+        "id": "alana_jordan",
+        "locale": "American Midwest",
+        "name": "Alana Jordan"
+      },
+      {
+        "id": "alan_davis_drake",
+        "locale": "New York English",
+        "name": "Alan Davis Drake"
+      },
+      {
+        "id": "ruth_golding",
+        "locale": "British English",
+        "name": "Ruth Golding"
+      },
+      {
+        "id": "phil_chenevert",
+        "locale": "American English",
+        "name": "Phil Chenevert"
+      },
+      {
+        "id": "demo_1_man",
+        "locale": "Added voice",
+        "name": "demo_1_man"
+      }
+    ],
+    "context": "4k",
+    "idle_unload_minutes": 1,
+    "kokoro_voice": "af_heart",
+    "kokoro_voices": [
+      {
+        "id": "af_heart",
+        "locale": "en-US",
+        "name": "Heart"
+      },
+      {
+        "id": "af_bella",
+        "locale": "en-US",
+        "name": "Bella"
+      },
+      {
+        "id": "af_nicole",
+        "locale": "en-US",
+        "name": "Nicole"
+      },
+      {
+        "id": "af_sarah",
+        "locale": "en-US",
+        "name": "Sarah"
+      },
+      {
+        "id": "am_adam",
+        "locale": "en-US",
+        "name": "Adam"
+      },
+      {
+        "id": "kokoro-voice-af_bella",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_bella"
+      },
+      {
+        "id": "kokoro-voice-af_heart",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_heart"
+      },
+      {
+        "id": "kokoro-voice-af_nicole",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_nicole"
+      },
+      {
+        "id": "kokoro-voice-af_sarah",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_sarah"
+      },
+      {
+        "id": "kokoro-voice-am_adam",
+        "locale": "Added voice",
+        "name": "kokoro-voice-am_adam"
+      }
+    ],
+    "kv": "auto",
+    "output_limit": 0,
+    "thinking": false
+  },
+  "method": "one initial request per model then 1 repeated requests; elapsed HTTP includes actual runtime loading; no console transfers during generation",
+  "fixtures": {
+    "sd": {
+      "width": 512,
+      "height": 512,
+      "steps": 1,
+      "seed": 42,
+      "cfg": 1
+    },
+    "audio": {
+      "latent_length": 256,
+      "expected_rate": 44100
+    },
+    "tts": {
+      "expected_rate": 24000
+    }
+  },
+  "runs": [
+    {
+      "model": "ace-step-1.5-turbo-q8-0",
+      "phase": "initial",
+      "request": {
+        "model": "ace-step-1.5-turbo-q8-0",
+        "prompt": "A short instrumental track with warm piano, soft strings, and a gentle steady rhythm.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T12:56:03Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 112978301000,
+        "model": "ace-step-1.5-turbo-q8-0",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": "Music generated locally at /download0/ProsperoAI/work/audio/ace-step-1.5-1791896050923032-0.wav"
+      },
+      "http_seconds": 112.98758077400271,
+      "output": {
+        "sandbox_path": "/download0/ProsperoAI/work/audio/ace-step-1.5-1791896050923032-0.wav",
+        "mapped_path": "/data/prosperoai/work/audio/ace-step-1.5-1791896050923032-0.wav",
+        "artifact": "docs/performance/2026-10-13/pr27-ace-step-artifacts/ace-step-1.5-turbo-q8-0-initial.wav",
+        "bytes": 1536044,
+        "sha256": "9bd5c140d14603dfcb3ada7a9b5c926395f536d8d256e19fe471cb068e7685cb",
+        "channels": 2,
+        "rate": 48000,
+        "width": 2,
+        "frames": 384000,
+        "peak": 13435,
+        "rms": 821.915027969329,
+        "clipped_fraction": 0.0,
+        "seconds": 8.0
+      }
+    },
+    {
+      "model": "ace-step-1.5-turbo-q8-0",
+      "phase": "repeat-1",
+      "request": {
+        "model": "ace-step-1.5-turbo-q8-0",
+        "prompt": "A short instrumental track with warm piano, soft strings, and a gentle steady rhythm.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T12:56:14Z",
+        "done": true,
+        "done_reason": "stop",
+        "error": "generation failed",
+        "eval_count": 0,
+        "eval_duration": 10345223000,
+        "model": "ace-step-1.5-turbo-q8-0",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": ""
+      },
+      "http_seconds": 10.349040119006531
+    }
+  ],
+  "switch_checks": [
+    {
+      "name": "before-media",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 32,
+        "context_tokens": 4096
+      },
+      "response": {
+        "id": "chatcmpl-1791896047-1",
+        "object": "chat.completion",
+        "created": 1791896047,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 14,
+          "completion_tokens": 2,
+          "total_tokens": 16
+        }
+      }
+    }
+  ],
+  "passed": false,
+  "failure": {
+    "type": "AssertionError",
+    "message": "{'created_at': '2026-10-13T12:56:14Z', 'done': True, 'done_reason': 'stop', 'error': 'generation failed', 'eval_count': 0, 'eval_duration': 10345223000, 'model': 'ace-step-1.5-turbo-q8-0', 'prompt_eval_count': 0, 'prompt_eval_duration': 0, 'response': ''}"
+  },
+  "console_diagnostics": [
+    "Klog for the repeat reported: ggml_gallocr_reserve_n_impl failed to allocate a Vulkan buffer of 1376258048 bytes.",
+    "The ACE-Step adapter reported that its VAE backend buffer allocation failed."
+  ],
+  "restore_error": {
+    "type": "HTTPError",
+    "message": "HTTP Error 400: Bad Request"
+  }
+}

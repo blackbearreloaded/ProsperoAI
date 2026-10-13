@@ -186,8 +186,10 @@ extern "C" int ps5_ace_step_generate(const char *root, const char *prompt,
     } while (false);
     audiocpp_result_free(result);
     audiocpp_request_free(request);
-    if (result_code != 0)
-        release_engine();
+    // The VAE graph may retain a very large Vulkan reservation after decoding.
+    // Drop the result and session before another request so the allocator cannot
+    // strand the 1+ GiB workspace needed by a subsequent decode on the PS5 heap.
+    release_engine();
     if (elapsed_microseconds)
         *elapsed_microseconds = sceKernelGetProcessTime() - start;
     return result_code;

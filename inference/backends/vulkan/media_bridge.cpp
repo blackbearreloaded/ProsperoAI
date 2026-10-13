@@ -79,11 +79,7 @@ int matmul(const float *a, const float *b, float *out, std::size_t m,
         auto *left = ggml_new_tensor_2d(ctx.get(), GGML_TYPE_F32, k, n);
         auto *right = ggml_new_tensor_2d(ctx.get(), GGML_TYPE_F32, k, m);
         auto *result = ggml_mul_mat(ctx.get(), left, right);
-#ifdef PROSPERO_PRISM_RUNTIME
-        ggml_mul_mat_set_prec(result, GGML_PREC_F32);
-#else
         ggml_prec_set_acc(result, GGML_PREC_F32);
-#endif
         ggml_set_input(left); ggml_set_input(right); ggml_set_output(result);
         auto *graph = ggml_new_graph_custom(ctx.get(), 16, false);
         ggml_build_forward_expand(graph, result);

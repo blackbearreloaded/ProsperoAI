@@ -18,10 +18,14 @@ for preset in media:
                                         repository='simonfxr/kokoro.cpp-GGUF',
                                         revision=kokoro_revision))
 models = []
-for name in ['qwen3.8-9b-distill-q4-k-m']:
-    recipe = json.loads((root / 'model-tools/catalog' / (name + '.json')).read_text())
+for name in ['mistral-7b-instruct-v0.3-q4-0', 'qwen3.8-9b-distill-q4-k-m']:
+    recipe_dir = 'recipes' if name == 'mistral-7b-instruct-v0.3-q4-0' else 'catalog'
+    recipe = json.loads((root / 'model-tools' / recipe_dir / (name + '.json')).read_text())
     source = recipe['source']
-    models.append(dict(id=name+'.gguf', name=recipe['model']['name'], kind=0,
+    # Mistral remains installed under its upstream GGUF filename on current consoles;
+    # using that ID lets the preset recognize and reuse the existing file.
+    preset_id = source['file'] if name == 'mistral-7b-instruct-v0.3-q4-0' else name + '.gguf'
+    models.append(dict(id=preset_id, name=recipe['model']['name'], kind=0,
                        repository=source['repository'], revision=source['revision'],
                        files=[dict(source=source['file'], path='', size=source['bytes'], sha256=source['sha256'])]))
 models += media

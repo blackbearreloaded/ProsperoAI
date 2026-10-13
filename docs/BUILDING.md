@@ -68,9 +68,9 @@ Set `PROSPERO_TEST_TITLE=<TEST-TITLE-ID>` before using the test-app targets. For
 `PROSPERO_TEST_TITLE=<TEST-TITLE-ID> make vulkan-runtime` builds the test folder
 `build/vulkan-runtime/<TEST-TITLE-ID>` without uploading or launching it. `make app`
 packages the same runtime for the configured
-release title. The app links one complete Prism llama/ggml pin
-`e8fd209c975c80aa7fb36a8423571ff3b1b7e955`, `GGML_MAX_NAME=160`, source-built SD and
-the Vulkan media bridge. AGC inference and private SD/TTS ggml archives are removed;
+release title. The app links upstream llama.cpp `cb7934c` and one shared GGML v0.26.0
+`d7cb574`, `GGML_MAX_NAME=160`, source-built SD, audio and Kokoro adapters on Vulkan.
+AGC inference and private SD/TTS ggml archives are removed;
 RADV still requires the console's AGC platform driver. Only one modality runtime stays
 resident at a time; after two minutes without inference activity by default, the active
 runtime is released and prepared again when the next request arrives. The timeout is
@@ -297,10 +297,9 @@ See [MINICPM5.md](MINICPM5.md) for its pinned model and template tests.
 
 ## Bonsai 2 and existing text models
 
-`make app-bonsai-folder` builds/signs `build/prospero-prism-native/<TEST-TITLE-ID>`
-against pinned Prism llama.cpp with ternary/Hadamard Vulkan kernels and a pinned
-Ternary Bonsai 2 27B PTQ1_0 preset. It retains GGUF text, legacy AGC bundles and
-media paths, using the Vulkan bridge for audio/TTS. This is an experimental folder
-build; it does not deploy or change the production title. Stock/shared builds omit
-this preset because their runtime cannot interpret Prism's private quantization.
+`make app-bonsai-folder` is the legacy isolated Prism build for the Ternary Bonsai 2
+27B PTQ1_0 preset. The shared upstream runtime does not yet support Prism's private
+PTQ1_0/PQ2_0 quant types; keep Bonsai disabled there until its compatibility adapter
+is ported and validated. This experimental folder build does not deploy or change the
+production title.
 See [BONSAI2_PS5.md](BONSAI2_PS5.md) for inputs, console measurements and limitations.
