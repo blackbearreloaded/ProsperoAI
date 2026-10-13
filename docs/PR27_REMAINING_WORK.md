@@ -77,6 +77,9 @@ belong under ignored `build/`; generated user media remains under the console's 
   Stable Diffusion builds plus `mtmd`, Pocket TTS, UCD and vendor-hash. The production link now
   takes GGML, llama.cpp and Stable Diffusion from the shared build; `mtmd`, Pocket TTS, UCD and
   vendor-hash had no remaining source, Makefile, CI or documentation references.
+- [x] Route the `llama-ps5` smoke-title link through `build/vulkan-runtime-upstream-ps5/` and
+  make `make llama-ps5` an alias for the shared runtime build. Remove the duplicate
+  `tools/build-llama-ps5.sh`; keep the smoke test and its generated model separate from production.
 - [x] Keep `tools/build-audio-cpp-sa3-ps5.sh` as a compatibility entry point; it delegates to
   the shared runtime build.
 - [ ] After the ONNX integration, search tracked sources, Makefile targets, CI and docs again;

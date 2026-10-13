@@ -132,12 +132,15 @@ deleting files alone does not remove a registered title.
 
 The Vulkan folder title and network API have been verified on PS5 FW 12.70. Mistral 7B Q4_0 reaches a median 69.72 decode tokens/s versus 47.96 for the official upstream AGC release. The optimized isolated loader prepares a raw folder GGUF in a median 2.84 seconds across three fresh process launches; AGC was rechecked at 1.53 seconds. Compressed ffpfsc model reads remain much slower. See [loading measurements](VK_LOAD_BENCHMARK_2026-10-09.md). See [current status](VK_ACTIVE.md) and the [benchmark report](VK_BENCHMARK_2026-10-08.md) for protocol and limitations.
 
-## PS5 llama.cpp Vulkan test build
+## PS5 llama.cpp Vulkan smoke tests
 
-The WIP console build uses the reviewed RADV archive and SDK under `.deps/mihawk-vulkan-review/`. Build the host tools and host shader generator first, then:
+The smoke title links llama.cpp and GGML from the shared runtime build; it no longer compiles a
+second llama/GGML tree. `make llama-ps5` remains a compatibility alias for the common runtime
+library build. The WIP console build uses the reviewed RADV archive and SDK under
+`.deps/mihawk-vulkan-review/`. Build the host tools and host shader generator first, then:
 
 ```bash
-make llama-ps5           # static llama.cpp CPU/Vulkan libraries
+make llama-ps5           # compatibility alias for shared GGML/llama/SD/audio/Kokoro libraries
 PROSPERO_TEST_TITLE=<TEST-TITLE-ID> make vulkan-smoke       # instance and device discovery
 PROSPERO_TEST_TITLE=<TEST-TITLE-ID> make llama-vulkan-title # tiny GGUF Vulkan/CPU validation
 PROSPERO_TEST_TITLE=<TEST-TITLE-ID> make app-vulkan         # complete UI/HTTP test app
@@ -145,7 +148,7 @@ PROSPERO_TEST_TITLE=<TEST-TITLE-ID> make app-vulkan         # complete UI/HTTP t
 
 Model tests expect `build/vulkan-models/stories260K.gguf`. Set `MODEL_GGUF=/absolute/path/model.gguf` to package another model. Production Vulkan and AGC runtimes use the `/data/prosperoai/models` directory: Vulkan discovers GGUF files and AGC discovers prepared model folders. The isolated loading benchmark still packages its fixture inside `/app0/models`. The Vulkan Models screen can browse public Hugging Face repositories and download verified GGUF files to the shared directory. Downloads use file-size memory estimates: below 8 GiB is marked fits, up to about 10.7 GiB is tight, and larger files are excluded. These estimates do not guarantee every model/context combination fits. Context length is selectable or Auto; KV precision is automatic (f16 up to 8K, q8_0 above). These new runtime choices await console verification. The app reaches that directory with the filesystem access Lapy gives it at launch (`vulkan/storage.cpp`); the test title <TEST-TITLE-ID> gets a Lapy helper built for its own title ID. Outputs are in `build/prospero-vulkan/`, `build/llama-vulkan-title/`, or `build/vulkan-smoke/`. These targets do not deploy. Never overwrite PPSA99004 for testing.
 
-Build jobs default to available CPUs (four on this host). Compiler cache defaults to `build/ccache`, including host tools. Incremental PS5 llama library build measured about 1.6 seconds with no changes; model copies and multi-gigabyte image compression still take time. Host iGPU is not used for compilation.
+Build jobs default to available CPUs (four on this host). Compiler cache defaults to `build/ccache`, including host tools. Model copies and multi-gigabyte image compression still take time. Host iGPU is not used for compilation.
 
 For development, `make app-vulkan-folder` skips image compression. Upload the folder with `python3 tools/ps5ctl.py ftp put-dir build/prospero-vulkan/<TEST-TITLE-ID> /data/homebrew/<TEST-TITLE-ID>`, then rescan with ShadowMount. The FTP helper sets executable permissions on eboot.bin and PRX modules. An earlier folder launch refusal (0x80aa001a, errno 13) was fixed by SITE CHMOD 755 on these files. Once registered and stopped, update only changed files; immutable model files need not be uploaded again. Keep the same title metadata and do not replace an image while its mount is still live.
 
@@ -154,7 +157,7 @@ For development, `make app-vulkan-folder` skips image compression. Upload the fo
 To build the isolated model-loading benchmark in a dedicated test slot:
 
 ```bash
-make llama-ps5
+make llama-ps5           # compatibility alias for the shared PS5 runtime build
 PROSPERO_TEST_TITLE=<TEST-TITLE-ID> PROSPERO_LOAD_TEST_TITLE=<LOAD-TEST-TITLE-ID> \
   LLAMA_SMOKE=1 LOAD_BENCHMARK=1 MODEL_GGUF=/absolute/path/model.gguf \
   bash tools/build-vulkan-smoke.sh

@@ -89,8 +89,7 @@ llama-vulkan: deps ## Host llama-cli with the Vulkan backend, plus a PS5 syntax 
 	@bash tools/build-llama-vulkan.sh
 
 .PHONY: llama-ps5 vulkan-smoke llama-vulkan-title app-vulkan app-vulkan-folder
-llama-ps5: deps ## Cross-build static llama.cpp and Vulkan libraries for PS5
-	@bash tools/build-llama-ps5.sh
+llama-ps5: vulkan-runtime-libs ## Compatibility alias; use the shared PS5 GGML/llama build
 
 vulkan-smoke: ## Build PS5 Vulkan startup/device-discovery test folder
 	@bash tools/build-vulkan-smoke.sh

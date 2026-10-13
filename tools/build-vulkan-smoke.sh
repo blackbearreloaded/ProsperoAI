@@ -5,6 +5,7 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 ref="$root/.deps/mihawk-vulkan-review"
 sdk="$ref/.deps/native/ps5-payload-sdk"
 archive="$ref/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a"
+runtime_build="$root/build/vulkan-runtime-upstream-ps5"
 work="$root/build/vulkan-smoke"
 model_test=${LLAMA_SMOKE:-0}
 app_test=${PROSPERO_VULKAN_APP:-0}
@@ -68,9 +69,9 @@ else
         sed -i "s/{{PROSPERO_AI_VERSION}}/$version/g" "$app/assets/ui/main.rml"
     fi
     cc -std=c11 -O2 -c "$root/tooling/native/llama_ps5_compat.c" -o "$work/obj/llama_compat.o"
-    llama_inputs=("$work/obj/llama_compat.o" --start-group "$root/build/llama-ps5/src/libllama.a"
-        "$root/build/llama-ps5/ggml/src/libggml.a" "$root/build/llama-ps5/ggml/src/libggml-base.a"
-        "$root/build/llama-ps5/ggml/src/libggml-cpu.a" "$root/build/llama-ps5/ggml/src/ggml-vulkan/libggml-vulkan.a" --end-group
+    llama_inputs=("$work/obj/llama_compat.o" --start-group "$runtime_build/llama/src/libllama.a"
+        "$runtime_build/ggml/src/libggml.a" "$runtime_build/ggml/src/libggml-base.a"
+        "$runtime_build/ggml/src/libggml-cpu.a" "$runtime_build/ggml/src/ggml-vulkan/libggml-vulkan.a" --end-group
         --defsym=vkGetInstanceProcAddr=radv_GetInstanceProcAddr --defsym=vkGetDeviceProcAddr=vk_common_GetDeviceProcAddr
         --defsym=vkCmdCopyBuffer=vk_common_CmdCopyBuffer --defsym=vkGetPhysicalDeviceFeatures2=vk_common_GetPhysicalDeviceFeatures2
     --defsym=execlp=prospero_execlp --defsym=posix_madvise=prospero_posix_madvise)
