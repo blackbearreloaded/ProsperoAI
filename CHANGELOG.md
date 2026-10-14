@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 01.006.000
 
 - Text and media inference now share the pinned upstream GGML/Vulkan runtime, with
   PS5-specific Bonsai compatibility kept in guarded preparation scripts.

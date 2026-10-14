@@ -125,7 +125,8 @@ void input_event(const gpt_input_event_t &event, hui::InputFrame &input, prosper
 #ifdef PS5_LLAMA_VULKAN
 void configure_vulkan_tuning_profile()
 {
-    const auto clear_profile_knobs = [] {
+    const auto clear_profile_knobs = []
+    {
         unsetenv("GGML_VK_PS5_DMMV_WG");
         unsetenv("GGML_VK_PS5_DMMV_SUBGROUP");
         unsetenv("GGML_VK_PS5_RM_STDQ");
@@ -153,15 +154,15 @@ void configure_vulkan_tuning_profile()
         const std::size_t size = std::fread(profile_text, 1, sizeof(profile_text) - 1, file);
         const bool failed = std::ferror(file) != 0 || size == sizeof(profile_text) - 1;
         std::fclose(file);
-        while (profile_text[0] == ' ' || profile_text[0] == '\t' ||
-               profile_text[0] == '\r' || profile_text[0] == '\n')
+        while (profile_text[0] == ' ' || profile_text[0] == '\t' || profile_text[0] == '\r' ||
+               profile_text[0] == '\n')
             std::memmove(profile_text, profile_text + 1, std::strlen(profile_text));
         std::size_t length = std::strlen(profile_text);
         while (length && (profile_text[length - 1] == ' ' || profile_text[length - 1] == '\t' ||
                           profile_text[length - 1] == '\r' || profile_text[length - 1] == '\n'))
             profile_text[--length] = '\0';
-        if (!failed && (std::strcmp(profile_text, "ps5") == 0 ||
-                        std::strcmp(profile_text, "ps5pro") == 0))
+        if (!failed &&
+            (std::strcmp(profile_text, "ps5") == 0 || std::strcmp(profile_text, "ps5pro") == 0))
             profile = profile_text;
         else if (size != 0)
             prospero::debug::line("app", "invalid Vulkan tuning profile; using ps5");
@@ -184,14 +185,15 @@ void configure_vulkan_tuning_profile()
             while (*start == ' ' || *start == '\t')
                 ++start;
             char *end = start + std::strlen(start);
-            while (end > start && (end[-1] == '\n' || end[-1] == '\r' ||
-                                   end[-1] == ' ' || end[-1] == '\t'))
+            while (end > start &&
+                   (end[-1] == '\n' || end[-1] == '\r' || end[-1] == ' ' || end[-1] == '\t'))
                 *--end = '\0';
             char *equals = std::strchr(start, '=');
             if (*start == '#' || equals == nullptr || equals == start || equals[1] == '\0')
                 continue;
             *equals = '\0';
-            const auto valid_name_char = [](char c, bool first) {
+            const auto valid_name_char = [](char c, bool first)
+            {
                 return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' ||
                        (!first && c >= '0' && c <= '9');
             };

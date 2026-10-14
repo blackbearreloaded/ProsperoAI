@@ -48,7 +48,8 @@ std::uint64_t gpt_runtime_vulkan_heap_bytes()
 }
 bool gpt_runtime_select_model(unsigned i)
 {
-    if(text_selected != i) prospero_runtime::set_model_resident(false);
+    if (text_selected != i)
+        prospero_runtime::set_model_resident(false);
     text_selected = i;
     return i < 2;
 }
@@ -86,7 +87,8 @@ namespace prospero
 {
 const Storage &storage()
 {
-    static const Storage state = [] {
+    static const Storage state = []
+    {
         Storage value;
         value.data_root = model_root();
         value.model_root = model_root();
@@ -132,7 +134,9 @@ extern "C"
     void ps5_ace_step_release()
     {
     }
-    void ps5_chatterbox_release() {}
+    void ps5_chatterbox_release()
+    {
+    }
     int ps5_ace_step_generate(const char *root, const char *prompt, char *out, std::size_t n,
                               std::uint64_t *elapsed, gpt_runtime_progress_fn)
     {
@@ -153,9 +157,8 @@ extern "C"
     {
         return 1;
     }
-    int ps5_kokoro_tts_generate(const char *root, const char *voice, const char *prompt,
-                                char *out, std::size_t n, std::uint64_t *elapsed,
-                                gpt_runtime_progress_fn)
+    int ps5_kokoro_tts_generate(const char *root, const char *voice, const char *prompt, char *out,
+                                std::size_t n, std::uint64_t *elapsed, gpt_runtime_progress_fn)
     {
         assert(std::string(root) == std::string(prospero::model_root()) + "/kokoro-82m-vulkan");
         assert(std::strcmp(voice, "af_heart") == 0);
@@ -171,8 +174,8 @@ extern "C"
         std::snprintf(out, n, "voice.wav");
         return 0;
     }
-    int ps5_chatterbox_tts_generate(const char *, const char *, const char *, const char *, char *, std::size_t,
-                                    std::uint64_t *, gpt_runtime_progress_fn)
+    int ps5_chatterbox_tts_generate(const char *, const char *, const char *, const char *, char *,
+                                    std::size_t, std::uint64_t *, gpt_runtime_progress_fn)
     {
         return 1;
     }
@@ -211,8 +214,8 @@ int main()
         if (relative.compare(0, 9, "licenses/") == 0)
             continue;
         const auto path = relative.compare(0, 7, "voices/") == 0
-            ? std::filesystem::path(prospero::storage().data_root) / relative
-            : std::filesystem::path(prospero::model_root()) / voice.id / relative;
+                              ? std::filesystem::path(prospero::storage().data_root) / relative
+                              : std::filesystem::path(prospero::model_root()) / voice.id / relative;
         std::filesystem::create_directories(path.parent_path());
         std::ofstream(path) << "fixture";
     }
@@ -265,9 +268,10 @@ int main()
     assert(gpt_runtime_select_model(2));
     assert(std::strcmp(gpt_runtime_backend(), "Vulkan") == 0);
     assert(gpt_runtime_prepare() == 0);
-    char loaded_id[256]{},loaded_name[256]{};
-    assert(gpt_runtime_loaded_model(loaded_id,sizeof(loaded_id),loaded_name,sizeof(loaded_name)));
-    assert(std::strcmp(loaded_id,gpt_runtime_model_id(gpt_runtime_selected_model()))==0);
+    char loaded_id[256]{}, loaded_name[256]{};
+    assert(
+        gpt_runtime_loaded_model(loaded_id, sizeof(loaded_id), loaded_name, sizeof(loaded_name)));
+    assert(std::strcmp(loaded_id, gpt_runtime_model_id(gpt_runtime_selected_model())) == 0);
     assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
     assert(std::strcmp(out, "text0") == 0);
     assert(std::filesystem::file_size(legacy) > 0);

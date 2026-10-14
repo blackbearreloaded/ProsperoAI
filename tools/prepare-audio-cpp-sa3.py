@@ -13,8 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def replace_once(path: Path, old: str, new: str) -> None:
     source = path.read_text()
-    if (new and new in source) or (not new and old not in source):
-        return
+    if old not in source:
+        if not new or new in source:
+            return
     if source.count(old) != 1:
         raise SystemExit(f"{path}: expected one known patch site; inspect source changes")
     path.write_text(source.replace(old, new, 1))

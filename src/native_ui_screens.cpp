@@ -281,9 +281,9 @@ void NativeUI::Impl::draw_conversation(ui::Canvas &canvas) const
                 const auto glyphs = palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
                 ui::draw_button(list, fonts_, glyphs, ui::Button::triangle, card.x + 26, card.cy(),
                                 34);
-                text(list, selected ? "Selected audio · press △" : "Play saved audio",
-                     card.x + 78, card.cy() + 9, selected ? 23 : 26,
-                     selected ? palette_.accent : palette_.ink, true);
+                text(list, selected ? "Selected audio · press △" : "Play saved audio", card.x + 78,
+                     card.cy() + 9, selected ? 23 : 26, selected ? palette_.accent : palette_.ink,
+                     true);
                 list.push_clip(card.inset(1));
                 draw_model_art(list, 2, card.x + card.w - 110, card.cy(), 34,
                                kind_color(capability), static_cast<float>(index), 0);
@@ -675,9 +675,10 @@ void NativeUI::Impl::draw_settings(ui::Canvas &canvas) const
                                "Models run on this console's own hardware. No account or cloud "
                                "uploads.",
                                card.x + 30, card.y + 420, 22, card.w - 60, 32, palette_.muted, 4);
-                 label(list, "MADE BY", card.cx(), card.y + 520, palette_.accent, gfx::Align::center);
-                 ui::text(list, fonts_.semibold, "BlackBearReloaded and Quatrixone", card.cx(), card.y + 545,
-                          18, palette_.accent, gfx::Align::center);
+                 label(list, "MADE BY", card.cx(), card.y + 520, palette_.accent,
+                       gfx::Align::center);
+                 ui::text(list, fonts_.semibold, "BlackBearReloaded and Quatrixone", card.cx(),
+                          card.y + 545, 18, palette_.accent, gfx::Align::center);
              }
              else
              {

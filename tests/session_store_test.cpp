@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <initializer_list>
 #include <string>
 #include <fcntl.h>

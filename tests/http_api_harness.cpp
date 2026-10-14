@@ -158,15 +158,23 @@ const char *gpt_runtime_model_purpose(unsigned)
 {
     return "text-to-text";
 }
-bool gpt_runtime_loaded_model(char *id, std::size_t ic, char *name, std::size_t nc) {
-    if(id && ic) id[0]=0; if(name && nc) name[0]=0; return false;
+bool gpt_runtime_loaded_model(char *id, std::size_t ic, char *name, std::size_t nc)
+{
+    if (id && ic)
+        id[0] = 0;
+    if (name && nc)
+        name[0] = 0;
+    return false;
 }
 bool gpt_runtime_select_model(unsigned i)
 {
     current_model = i;
     return i < 2;
 }
-int gpt_runtime_prepare() { return 0; }
+int gpt_runtime_prepare()
+{
+    return 0;
+}
 bool gpt_runtime_delete_model(const char *id)
 {
     return id && std::strcmp(id, "second.gguf") == 0 && current_model == 0;
