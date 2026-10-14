@@ -7,7 +7,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 class VulkanRuntimeTests(unittest.TestCase):
     def test_runtime_abi_and_vulkan_media(self):
-        directory = ROOT / 'build/vulkan-runtime-host'
+        directory = ROOT / 'build/vulkan-runtime-upstream-host'
         binaries = [directory / name for name in ('vulkan-runtime-abi-test', 'vulkan-runtime-media-test')]
         if not all(path.exists() for path in binaries):
             if os.environ.get('PROSPERO_REQUIRE_VULKAN_RUNTIME') == '1':
