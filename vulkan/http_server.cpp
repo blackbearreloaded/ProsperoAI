@@ -15,6 +15,7 @@
 
 #include "gpt_runtime.hpp"
 #include "runtime_settings.hpp"
+#include "chatterbox_languages.hpp"
 #include "generated_voice_catalog.hpp"
 #include "runtime_voice_catalog.hpp"
 #include "voice_recorder.hpp"
@@ -979,6 +980,12 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                 const int index = prospero_voice::runtime_voice_index(true, voice);
                 if (index >= 0 && index < 128) { p.chatterbox_voice = static_cast<unsigned>(index); valid = true; }
             }
+            else if (it.key() == "chatterbox_language" && it.value().is_string())
+            {
+                const auto code = it.value().get<std::string>();
+                const int index = prospero_language::chatterbox_language_index(code.c_str());
+                if (index >= 0) { p.chatterbox_language = static_cast<unsigned>(index); valid = true; }
+            }
             else if (it.key() == "idle_unload_minutes" && it.value().is_number_integer())
             {
                 const auto minutes = it.value().get<unsigned>();
@@ -1012,6 +1019,8 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                        {"idle_unload_minutes", p.idle_unload_minutes},
                        {"kokoro_voice", prospero_voice::runtime_voice(false, p.kokoro_voice)->id},
                        {"chatterbox_voice", prospero_voice::runtime_voice(true, p.chatterbox_voice)->id},
+                       {"chatterbox_language", prospero_language::chatterbox_language(p.chatterbox_language).code},
+                       {"chatterbox_languages", [&] { nlohmann::json a=nlohmann::json::array(); for (unsigned i=0;i<prospero_language::chatterbox_count;++i) a.push_back({{"id",prospero_language::chatterbox[i].code},{"name",prospero_language::chatterbox[i].name}}); return a; }()},
                        {"kokoro_voices", [&] { nlohmann::json a=nlohmann::json::array(); for (const auto &v : prospero_voice::runtime_voices(false)) a.push_back({{"id",v.id},{"name",v.name},{"locale",v.locale}}); return a; }()},
                        {"chatterbox_voices", [&] { nlohmann::json a=nlohmann::json::array(); for (const auto &v : prospero_voice::runtime_voices(true)) a.push_back({{"id",v.id},{"name",v.name},{"locale",v.locale}}); return a; }()}}
             .dump();

@@ -267,7 +267,7 @@ document.addEventListener('click',e=>{if(e.target.closest('button'))sound();});
 for(const button of document.querySelectorAll('[data-category]'))button.onclick=()=>{for(const b of document.querySelectorAll('[data-category]')){const chosen=b===button;b.classList.toggle('selected',chosen);b.setAttribute('aria-selected',String(chosen));$('setting-'+b.dataset.category).hidden=!chosen;}};
 $('preview-send').onclick=()=>{newConversation();$('prompt').value='Tell me a story.';$('prompt').focus();};
 
-let savedKokoroVoice='af_heart',savedChatterboxVoice='cemo',customChatterboxVoiceAvailable=false;
+let savedKokoroVoice='af_heart',savedChatterboxVoice='cemo',savedChatterboxLanguage='en',customChatterboxVoiceAvailable=false;
 let runtimeSettingsQueue=Promise.resolve();
 function runtimeSettings(change){const result=runtimeSettingsQueue.then(()=>applyRuntimeSettings(change));runtimeSettingsQueue=result.catch(()=>{});return result;}
 async function applyRuntimeSettings(change) {
@@ -283,6 +283,8 @@ async function applyRuntimeSettings(change) {
     $('runtime-idle-unload').value = String(settings.idle_unload_minutes);
     savedKokoroVoice = settings.kokoro_voice || 'af_heart';
     savedChatterboxVoice = settings.chatterbox_voice || 'cemo';
+    savedChatterboxLanguage = settings.chatterbox_language || 'en';
+    if(settings.chatterbox_languages)window.prosperoChatterboxLanguages=settings.chatterbox_languages;
     window.prosperoRuntimeVoiceCatalog={kokoro:settings.kokoro_voices||[],chatterbox:settings.chatterbox_voices||[]};
     if($('kokoro-voice')){const select=$('kokoro-voice'),voices=window.prosperoRuntimeVoiceCatalog.kokoro;select.replaceChildren(...voices.map(voice=>{const option=document.createElement('option');option.value=voice.id;option.textContent=`${voice.name} · ${voice.locale}`;return option;}));}
     if($('kokoro-voice'))$('kokoro-voice').value=savedKokoroVoice;
@@ -291,7 +293,7 @@ async function applyRuntimeSettings(change) {
     if($('workspace-voice-feedback'))$('workspace-voice-feedback').textContent = '';
   } catch (error) {
     if(change?.kokoro_voice && $('kokoro-voice'))$('kokoro-voice').value=savedKokoroVoice;
-    if(change?.chatterbox_voice)populateWorkspaceVoicePicker(current?.model || selectedModel);
+    if(change?.chatterbox_voice||change?.chatterbox_language)populateWorkspaceVoicePicker(current?.model || selectedModel);
     $('runtime-feedback').textContent = error.message;
     if($('workspace-voice-feedback'))$('workspace-voice-feedback').textContent = error.message;
   }
@@ -314,27 +316,23 @@ function populateWorkspaceVoicePicker(modelId){
   select.replaceChildren();
   for(const [value,label] of entries){const option=document.createElement('option');option.value=value;option.textContent=label;if(value==='custom'&&!customChatterboxVoiceAvailable){option.textContent='My voice · upload a sample';option.disabled=true;}select.append(option);}
   $('workspace-voice-label').textContent=chatterbox?'Chatterbox voice':'Kokoro voice';
-  $('chatterbox-upload-label').hidden=!chatterbox;
+  $('workspace-language-label').hidden=!chatterbox;$('workspace-language').hidden=!chatterbox;
+  if(chatterbox)populateWorkspaceLanguagePicker();
   $('chatterbox-record-controls').hidden=!chatterbox;
   select.value=chatterbox?savedChatterboxVoice:savedKokoroVoice;
   if(![...select.options].some(option=>option.value===select.value))select.selectedIndex=0;
   select.onchange=()=>runtimeSettings(chatterbox?{chatterbox_voice:select.value}:{kokoro_voice:select.value});
 }
+function populateWorkspaceLanguagePicker(){
+  const select=$('workspace-language'),list=window.prosperoChatterboxLanguages||[];
+  const entries=list.length?list.map(language=>[language.id,language.name]):[['en','English']];
+  select.replaceChildren();
+  for(const [value,label] of entries){const option=document.createElement('option');option.value=value;option.textContent=label;select.append(option);}
+  select.value=savedChatterboxLanguage;
+  if(![...select.options].some(option=>option.value===select.value))select.selectedIndex=0;
+  select.onchange=()=>runtimeSettings({chatterbox_language:select.value});
+}
 async function refreshCustomChatterboxVoice(){try{const response=await api('/api/voices/chatterbox/custom');customChatterboxVoiceAvailable=Boolean((await response.json()).available);populateWorkspaceVoicePicker(current?.model||selectedModel);if(!customChatterboxVoiceAvailable&&savedChatterboxVoice==='custom')$('workspace-voice-feedback').textContent='Upload a voice sample to use My voice.';}catch(error){$('workspace-voice-feedback').textContent=error.message;}}
-$('chatterbox-voice-upload').onchange=async()=>{
-  const file=$('chatterbox-voice-upload').files?.[0];if(!file)return;
-  $('workspace-voice-feedback').textContent='Preparing a five-second voice sample…';
-  try{
-    if(file.size>20*1024*1024)throw Error('Choose an audio sample smaller than 20 MB.');
-    const pcm=await window.prosperoVoiceRecording.convertVoiceSample(await file.arrayBuffer());
-    if(pcm.byteLength>200000)throw Error('That voice sample is too large after conversion.');
-    const response=await api('/api/voices/chatterbox/custom',{method:'POST',headers:{'Content-Type':'audio/wav'},body:pcm});
-    if(!response.ok)throw Error('The console could not save this voice sample.');
-    customChatterboxVoiceAvailable=true;$('workspace-voice-feedback').textContent='Voice saved on this console.';
-    populateWorkspaceVoicePicker(current?.model||selectedModel);await runtimeSettings({chatterbox_voice:'custom'});
-  }catch(error){$('workspace-voice-feedback').textContent=error.message||'Could not add this voice.';}
-  finally{$('chatterbox-voice-upload').value='';}
-};
 document.querySelector('[data-page="settings"]').addEventListener('click', () => runtimeSettings());
 void runtimeSettings();
 

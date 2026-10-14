@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "runtime_adapter.hpp"
 #include "runtime_settings.hpp"
+#include "chatterbox_languages.hpp"
 
 #include "runtime_vulkan.hpp"
 #include <string>
@@ -13,7 +14,7 @@ int ps5_stable_audio_generate(const char *, const char *, char *, std::size_t, s
                               gpt_runtime_progress_fn);
 int ps5_kokoro_tts_generate(const char *, const char *, const char *, char *, std::size_t, std::uint64_t *,
                             gpt_runtime_progress_fn);
-int ps5_chatterbox_tts_generate(const char *, const char *, const char *, char *, std::size_t,
+int ps5_chatterbox_tts_generate(const char *, const char *, const char *, const char *, char *, std::size_t,
                                 std::uint64_t *, gpt_runtime_progress_fn);
 int ps5_ace_step_generate(const char *, const char *, char *, std::size_t, std::uint64_t *,
                           gpt_runtime_progress_fn);
@@ -81,7 +82,9 @@ int generate_media(const GenerationRequest &request)
         {
             const auto selected = prospero_voice::runtime_voice(true, runtime.chatterbox_voice);
             const char *voice = selected ? selected->id.c_str() : "cemo";
-            result = ps5_chatterbox_tts_generate(request.model.root.c_str(), voice, prompt,
+            const char *language =
+                prospero_language::chatterbox_language(runtime.chatterbox_language).code;
+            result = ps5_chatterbox_tts_generate(request.model.root.c_str(), voice, language, prompt,
                 request.output, request.output_capacity, &elapsed, request.progress);
             break;
         }

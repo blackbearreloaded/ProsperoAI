@@ -1,8 +1,0 @@
-{
-  "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
-  "revision": "b072e1d3b35a0a630cece372c2127528e0994386",
-  "size": 5946648928,
-  "sha256": "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3",
-  "console_full_readback_verified": true,
-  "verification_seconds": 272.23788370302645
-}

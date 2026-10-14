@@ -1,6 +1,8 @@
 // ProsperoAI native application controller.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "native_app.hpp"
+#include "chatterbox_languages.hpp"
+#include "generated_media.hpp"
 #include "runtime_settings.hpp"
 #include "generation_limits.hpp"
 
@@ -75,6 +77,8 @@ void validate(Preferences &p)
         p.idle_unload_minutes = 2;
     p.kokoro_voice = std::min(p.kokoro_voice, 127U);
     p.chatterbox_voice = std::min(p.chatterbox_voice, 127U);
+    if (!prospero_language::valid_chatterbox_language(p.chatterbox_language))
+        p.chatterbox_language = 0;
     if (!prospero_generation::valid_output_limit(p.output_limit))
         p.output_limit = 0;
     p.theme = std::min(p.theme, 1U);
@@ -132,6 +136,8 @@ void load_preferences(Preferences &p, const std::vector<Model> &models)
                 p.kokoro_voice = number;
             else if (std::strcmp(key, "chatterbox_voice") == 0)
                 p.chatterbox_voice = number;
+            else if (std::strcmp(key, "chatterbox_language") == 0)
+                p.chatterbox_language = number;
             else if (std::strcmp(key, "theme") == 0)
                 p.theme = number;
             else if (std::strcmp(key, "accent") == 0)
@@ -162,11 +168,11 @@ bool save_preferences(const Preferences &p)
         file,
         "version=2\nmodel=%s\nstyle=%u\ntokens=%u\ntheme=%u\naccent=%u\nvolume=%"
         "u\ntext_size=%u\nreduced_motion=%u\nhigh_contrast=%u\ncontext=%u\nkv=%u\nthinking=%"
-        "u\nidle_unload_minutes=%u\nkokoro_voice=%u\nchatterbox_voice=%u\n",
+        "u\nidle_unload_minutes=%u\nkokoro_voice=%u\nchatterbox_voice=%u\nchatterbox_language=%u\n",
         p.model_id.c_str(), p.style, runtime.output_limit, p.theme, p.accent, p.volume, p.text_size,
         p.reduced_motion ? 1U : 0U, p.high_contrast ? 1U : 0U, runtime.context, runtime.kv,
         runtime.thinking ? 1U : 0U, runtime.idle_unload_minutes, runtime.kokoro_voice,
-        runtime.chatterbox_voice);
+        runtime.chatterbox_voice, runtime.chatterbox_language);
     const int closed = std::fclose(file);
     if (bytes < 0 || closed != 0 || std::rename(temporary, PROSPERO_SETTINGS_PATH) != 0)
     {
@@ -478,7 +484,8 @@ void App::set_preferences(Preferences preferences)
     if (!prospero_settings::set({preferences.context_length, preferences.output_limit,
                                  preferences.kv_cache,
                                  preferences.thinking, preferences.idle_unload_minutes,
-                                 preferences.kokoro_voice, preferences.chatterbox_voice}))
+                                 preferences.kokoro_voice, preferences.chatterbox_voice,
+                                 preferences.chatterbox_language}))
     {
         state_.status = "Could not save runtime settings.";
         return;
@@ -500,8 +507,7 @@ bool App::play_audio()
 
 bool App::play_audio(const std::string &path)
 {
-    if (running_ || path.rfind("/download0/ProsperoAI/work/voice/", 0) != 0 || path.size() < 4 ||
-        path.compare(path.size() - 4, 4, ".wav") != 0)
+    if (running_ || !prospero_media::playable_audio_path(path))
         return false;
     audio_path_ = path;
     if (start(Job::Play))

@@ -4,6 +4,7 @@
 #include "audiocpp.h"
 #include "generated_voice_catalog.hpp"
 #include "runtime_voice_catalog.hpp"
+#include "chatterbox_languages.hpp"
 #include "generated_output_path.hpp"
 #include "storage.hpp"
 #include <FLAC/stream_decoder.h>
@@ -187,7 +188,7 @@ struct MemoryLog {
 extern "C" void ps5_chatterbox_release() { release_engine(); }
 
 extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_id,
-                                             const char *prompt, char *response,
+                                             const char *language, const char *prompt, char *response,
                                              std::size_t response_capacity,
                                              std::uint64_t *elapsed_microseconds,
                                              void (*progress)(const char *)) {
@@ -272,10 +273,11 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
     if (!raw_request) { std::snprintf(response, response_capacity, "Could not allocate a speech request."); return 6; }
     const auto request = std::unique_ptr<audiocpp_request, decltype(&audiocpp_request_free)>(raw_request,
                                                                                             audiocpp_request_free);
-    // All bundled and uploaded reference voices are English. Keep the model request
-    // language aligned with the selected library instead of inferring Mandarin voices.
-    const char *language = "en";
-    if (audiocpp_request_set_text(raw_request, prompt, language) != AUDIOCPP_OK ||
+    // The spoken language is the user's choice; audio.cpp takes its multilingual tokenizer
+    // path for anything other than "en". An unknown code would change the encoding silently,
+    // so fall back to English rather than passing it through.
+    const char *spoken = prospero_language::chatterbox_language_index(language) >= 0 ? language : "en";
+    if (audiocpp_request_set_text(raw_request, prompt, spoken) != AUDIOCPP_OK ||
         audiocpp_request_set_voice_audio(raw_request, reference.samples.data(),
                                          reference.samples.size() / static_cast<std::size_t>(reference.channels),
                                          reference.rate, reference.channels) != AUDIOCPP_OK) {

@@ -68,6 +68,30 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn('401 Unauthorized', self.request('/api/settings/runtime', key='secret')[0])
         self.request('/api/settings/runtime', body={'context':'auto','kv':'auto','thinking':False,'idle_unload_minutes':2})
 
+    def test_chatterbox_language_is_selectable_and_validated(self):
+        config = Path(self.scratch.name) / 'runtime.cfg'
+        config.write_text('version=2\n')
+        header, body = self.request('/api/settings/runtime')
+        self.assertIn('200 OK', header)
+        settings = json.loads(body)
+        self.assertEqual(settings['chatterbox_language'], 'en')
+        codes = [language['id'] for language in settings['chatterbox_languages']]
+        self.assertEqual(codes[0], 'en')
+        for code in ('de', 'ko', 'tr'):
+            self.assertIn(code, codes)
+        self.assertTrue(all(language['name'] for language in settings['chatterbox_languages']))
+        header, body = self.request('/api/settings/runtime', body={'chatterbox_language': 'de'})
+        self.assertIn('200 OK', header)
+        self.assertEqual(json.loads(body)['chatterbox_language'], 'de')
+        self.assertIn('chatterbox_language=3', config.read_text().splitlines())
+        self.assertEqual(json.loads(self.request('/api/settings/runtime')[1])['chatterbox_language'], 'de')
+        # A code this build cannot encode must be refused, not silently taken as English.
+        for invalid in ({'chatterbox_language': 'zh'}, {'chatterbox_language': 'EN'},
+                        {'chatterbox_language': ''}, {'chatterbox_language': 3}):
+            self.assertIn('400 Bad Request', self.request('/api/settings/runtime', body=invalid)[0])
+            self.assertEqual(json.loads(self.request('/api/settings/runtime')[1])['chatterbox_language'], 'de')
+        self.request('/api/settings/runtime', body={'chatterbox_language': 'en'})
+
     def test_conversations_share_the_native_session_store(self):
         conversation = {'id':'web-sync-fixture','title':'Shared from web', 'model':'tiny.gguf',
                         'modelName':'Tiny model','purpose':'text-to-text',

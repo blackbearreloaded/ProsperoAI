@@ -7,6 +7,8 @@ import { test } from 'node:test';
 const source = readFileSync(new URL('../assets/web/app.js', import.meta.url), 'utf8');
 const code = source.slice(source.indexOf('function voiceStatus('),
                           source.indexOf('const voiceRecorder=window'));
+const languageCode = source.slice(source.indexOf('function populateWorkspaceLanguagePicker(){'),
+                                  source.indexOf('async function refreshCustomChatterboxVoice('));
 
 function fixture({ secureContext = false, mediaDevices = {}, mediaRecorder = true, sample = false } = {}) {
     const elements = {
@@ -64,4 +66,44 @@ test('a prepared sample keeps the Record again label, and errors are marked', ()
     assert.ok(elements['voice-record-status'].classList.names.has('error'));
     voiceStatus('Ready to record.');
     assert.ok(!elements['voice-record-status'].classList.names.has('error'));
+});
+
+function languageFixture(settings = {}) {
+    const select = { value: '', options: [], children: [],
+        replaceChildren() { this.children = []; this.options = []; },
+        append(option) { this.children.push(option); this.options.push(option); },
+        set selectedIndex(index) { this.value = this.options[index].value; } };
+    const scope = {
+        window: { prosperoChatterboxLanguages: settings.languages },
+        document: { createElement: () => ({ value: '', textContent: '' }) },
+        $: () => select,
+        savedChatterboxLanguage: settings.saved ?? 'en',
+        runtimeSettings: change => { scope.sent = change; },
+    };
+    runInNewContext(languageCode + '\nthis.populate=populateWorkspaceLanguagePicker;', scope);
+    scope.populate();
+    return { select, scope };
+}
+
+test('the language picker lists what the console reports and keeps the saved choice', () => {
+    const { select, scope } = languageFixture({
+        languages: [{ id: 'en', name: 'English' }, { id: 'de', name: 'German' }, { id: 'ko', name: 'Korean' }],
+        saved: 'de' });
+    assert.deepEqual(select.options.map(option => option.value), ['en', 'de', 'ko']);
+    assert.deepEqual(select.options.map(option => option.textContent), ['English', 'German', 'Korean']);
+    assert.equal(select.value, 'de');
+    select.value = 'ko';
+    select.onchange();
+    assert.deepEqual(Object.keys(scope.sent), ['chatterbox_language']);
+    assert.equal(scope.sent.chatterbox_language, 'ko');
+});
+
+test('a saved language the console no longer offers falls back to the first one', () => {
+    const { select } = languageFixture({ languages: [{ id: 'en', name: 'English' }], saved: 'zh' });
+    assert.equal(select.value, 'en');
+});
+
+test('without a catalog the picker still offers English', () => {
+    const { select } = languageFixture({ languages: undefined, saved: 'en' });
+    assert.deepEqual(select.options.map(option => option.value), ['en']);
 });

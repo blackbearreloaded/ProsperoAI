@@ -169,6 +169,9 @@ struct NativeUI::Impl
     int mobile_qr_size_ = 0;
     std::string mobile_url_;
     int workspace_voice_row_ = -1;
+    int workspace_language_row_ = -1;
+    int workspace_new_conversation_row_ = -1;
+    int workspace_sessions_row_ = 3;
     unsigned session_category_ = 0;
     std::string session_query_;
     ui::Keyboard keyboard_;
@@ -218,6 +221,8 @@ struct NativeUI::Impl
     bool kokoro_voice_picker_open_ = false;
     int kokoro_voice_picker_focus_ = 0;
     bool voice_picker_chatterbox_ = false;
+    bool language_picker_open_ = false;
+    int language_picker_focus_ = 0;
     bool voice_recording_open_ = false;
     VoiceRecorder &voice_recorder_ = voice_recorder();
     bool voice_recording_remote_ = false;

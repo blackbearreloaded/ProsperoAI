@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "native_ui_impl.hpp"
+#include "chatterbox_languages.hpp"
 #include "runtime_settings.hpp"
 #include "http_server.hpp"
 #include "../third_party/qrcodegen/qrcodegen.hpp"
@@ -536,6 +537,30 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
             feedback.play(audio::Cue::select);
         }
     }
+    else if (language_picker_open_)
+    {
+        if (input.nav == Direction::up || input.nav == Direction::down)
+        {
+            const int count = static_cast<int>(prospero_language::chatterbox_count);
+            language_picker_focus_ =
+                (language_picker_focus_ + (input.nav == Direction::down ? 1 : count - 1)) % count;
+            feedback.play(audio::Cue::focus);
+        }
+        else if (input.is_pressed(Action::back))
+        {
+            language_picker_open_ = false;
+            feedback.play(audio::Cue::modal_close);
+        }
+        else if (input.is_pressed(Action::confirm))
+        {
+            auto preferences = app_.state().preferences;
+            preferences.chatterbox_language = static_cast<unsigned>(language_picker_focus_);
+            app_.set_preferences(std::move(preferences));
+            language_picker_open_ = false;
+            refresh_sessions();
+            feedback.play(audio::Cue::select);
+        }
+    }
     else if (chat_keyboard_open_)
     {
         const auto event = keyboard_.handle(input, feedback);
@@ -982,9 +1007,8 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
             feedback.play(audio::Cue::open);
         }
         else if (input.is_pressed(Action::l3) && !selecting_model_ &&
-                 sessions_.focus() >= 3 + (workspace_voice_row_ >= 0 ? 1 : 0) &&
-                 static_cast<std::size_t>(sessions_.focus() - 3 -
-                                          (workspace_voice_row_ >= 0 ? 1 : 0)) <
+                 sessions_.focus() >= workspace_sessions_row_ &&
+                 static_cast<std::size_t>(sessions_.focus() - workspace_sessions_row_) <
                      visible_sessions_.size())
         {
             if (app_.busy())
@@ -992,7 +1016,7 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
             else
                 open_dialog(kDeleteConversation,
                             visible_sessions_[static_cast<std::size_t>(
-                                sessions_.focus() - (workspace_voice_row_ >= 0 ? 1 : 0) - 3)],
+                                sessions_.focus() - workspace_sessions_row_)],
                             "Delete this conversation?",
                             "The conversation will be removed. Generated image, audio, and "
                             "voice files will remain on this console.",
@@ -1024,12 +1048,20 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
                 form_.enter();
                 feedback.play(audio::Cue::open);
             }
-            else if (sessions_.focus() == 2)
+            else if (sessions_.focus() == workspace_new_conversation_row_ &&
+                     workspace_new_conversation_row_ >= 0)
             {
                 if (app_.new_session())
                     begin_model_selection();
                 else
                     feedback.play(audio::Cue::error, 1.0f, 0.0f, 0.7f);
+            }
+            else if (sessions_.focus() == workspace_language_row_ && workspace_language_row_ >= 0)
+            {
+                language_picker_focus_ =
+                    static_cast<int>(app_.state().preferences.chatterbox_language);
+                language_picker_open_ = true;
+                feedback.play(audio::Cue::modal_open);
             }
             else if (sessions_.focus() == workspace_voice_row_ && workspace_voice_row_ >= 0)
             {
@@ -1045,7 +1077,7 @@ void NativeUI::Impl::handle_workspace(const InputFrame &input, ui::Feedback &fee
             {
                 selecting_model_ = false;
                 const int session_index =
-                    sessions_.focus() - (workspace_voice_row_ >= 0 ? 1 : 0) - 3;
+                    sessions_.focus() - workspace_sessions_row_;
                 if (session_index >= 0 &&
                     static_cast<std::size_t>(session_index) < visible_sessions_.size() &&
                     app_.open_session(visible_sessions_[static_cast<std::size_t>(session_index)]))
@@ -1190,6 +1222,8 @@ void NativeUI::Impl::refresh_sessions()
     }
     workspace_model_indices_.clear();
     workspace_voice_row_ = -1;
+    workspace_language_row_ = -1;
+    workspace_new_conversation_row_ = -1;
     ui::ListItem first;
     char loaded_id[256]{},loaded_name[256]{};
     const bool model_loaded=gpt_runtime_loaded_model(loaded_id,sizeof(loaded_id),loaded_name,sizeof(loaded_name));
@@ -1203,10 +1237,6 @@ void NativeUI::Impl::refresh_sessions()
     second.title = "Generation settings";
     second.subtitle = "Response · context · thinking";
     rows.push_back(std::move(second));
-    ui::ListItem third;
-    third.title = "New conversation";
-    third.subtitle = "Start fresh";
-    rows.push_back(std::move(third));
     if (state.selected_model >= 0 &&
         state.models[static_cast<std::size_t>(state.selected_model)].capability ==
             Capability::Voice)
@@ -1222,7 +1252,24 @@ void NativeUI::Impl::refresh_sessions()
         voice.subtitle = selected_voice.name + " · " + selected_voice.locale +
                          " · Select to change";
         rows.push_back(std::move(voice));
+        if (chatterbox)
+        {
+            // The voice is the timbre; this is the language the model speaks it in.
+            workspace_language_row_ = static_cast<int>(rows.size());
+            ui::ListItem language;
+            language.title = "Chatterbox language";
+            const auto &spoken =
+                prospero_language::chatterbox_language(state.preferences.chatterbox_language);
+            language.subtitle = std::string(spoken.name) + " · Select to change";
+            rows.push_back(std::move(language));
+        }
     }
+    workspace_new_conversation_row_ = static_cast<int>(rows.size());
+    ui::ListItem new_conversation;
+    new_conversation.title = "New conversation";
+    new_conversation.subtitle = "Start fresh";
+    rows.push_back(std::move(new_conversation));
+    workspace_sessions_row_ = static_cast<int>(rows.size());
     visible_sessions_.clear();
     for (unsigned i = 0; i < state.sessions.size(); ++i)
     {
@@ -1783,6 +1830,47 @@ void NativeUI::Impl::draw(UiFrame &frame) const
         const float width = ui::measure_hints(fonts_,hints,count,layout);
         ui::draw_hints(popup,fonts_,glyphs,hints,count,panel.cx()-width/2,false,layout);
     }
+    if (language_picker_open_)
+    {
+        frame.glass = true;
+        auto &popup = frame.overlay;
+        popup.rounded_rect({0, 0, gfx::kVirtualWidth, gfx::kVirtualHeight}, 0,
+                           Color::rgb(0x000000, palette_.day ? 0.45f : 0.72f));
+        const Rect panel{490, 220, 940, 640};
+        popup.shadow({panel.x, panel.y + 14, panel.w, panel.h}, 24, 50, Color::rgb(0x000000, 0.4f));
+        popup.bordered_rect(panel, 24, palette_.panel.with_alpha(1.0f / palette_.panel.a), 1,
+                            palette_.line);
+        label(popup, "CHATTERBOX LANGUAGE", panel.x + 42, panel.y + 52, palette_.accent);
+        text(popup, "Choose a language", panel.x + 42, panel.y + 101, 34, palette_.ink, true);
+        const int language_count = static_cast<int>(prospero_language::chatterbox_count);
+        const int first_language =
+            std::min(std::max(0, language_picker_focus_ - 2), std::max(0, language_count - 5));
+        for (int i = first_language; i < std::min(language_count, first_language + 5); ++i)
+        {
+            const float y = panel.y + 140 + static_cast<float>(i - first_language) * 70;
+            const Rect row{panel.x + 28, y, panel.w - 56, 60};
+            if (i == language_picker_focus_)
+                popup.rounded_rect(row, 12, palette_.accent.with_alpha(0.22f));
+            const auto &language =
+                prospero_language::chatterbox_language(static_cast<unsigned>(i));
+            text(popup, language.name, row.x + 20, row.y + 22, 24,
+                 i == language_picker_focus_ ? palette_.ink : palette_.muted,
+                 i == language_picker_focus_);
+            text(popup, language.code, row.x + row.w - 20, row.y + 22, 21, palette_.muted, false,
+                 gfx::Align::right);
+        }
+        popup.line(panel.x + 28, panel.y + panel.h - 88, panel.x + panel.w - 28,
+                   panel.y + panel.h - 88, 1, palette_.line);
+        ui::Hint hints[3]{{ui::Button::dpad, "Select"},
+                          {ui::Button::cross, "Use language"},
+                          {ui::Button::circle, "Back"}};
+        auto glyphs = palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
+        glyphs.label = palette_.ink;
+        ui::HintLayout layout;
+        layout.size = 30; layout.text_size = 21; layout.cy = panel.y + panel.h - 43; layout.item_gap = 26;
+        const float width = ui::measure_hints(fonts_, hints, 3, layout);
+        ui::draw_hints(popup, fonts_, glyphs, hints, 3, panel.cx() - width / 2, false, layout);
+    }
     if (voice_recording_open_)
     {
         frame.glass = true;
@@ -1872,7 +1960,7 @@ void NativeUI::Impl::draw_header(ui::Canvas &canvas) const
 void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
 {
     list.line(kLeft, kFooterRule, kRight, kFooterRule, 1, palette_.line);
-    if (kokoro_voice_picker_open_ || voice_recording_open_) return;
+    if (kokoro_voice_picker_open_ || language_picker_open_ || voice_recording_open_) return;
     const auto &state = app_.state();
     ui::Hint hints[8];
     int count = 0;
@@ -1987,9 +2075,8 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
                  app_.state().selected_model >= 0)
             hints[count++] = {ui::Button::left_stick, "L3  Delete model"};
         else if (conversation_ && rail_ && !selecting_model_ &&
-                 sessions_.focus() >= 3 + (workspace_voice_row_ >= 0 ? 1 : 0) &&
-                 static_cast<std::size_t>(sessions_.focus() - 3 -
-                                          (workspace_voice_row_ >= 0 ? 1 : 0)) <
+                 sessions_.focus() >= workspace_sessions_row_ &&
+                 static_cast<std::size_t>(sessions_.focus() - workspace_sessions_row_) <
                      visible_sessions_.size())
             hints[count++] = {ui::Button::left_stick, "L3  Delete conversation"};
     }
