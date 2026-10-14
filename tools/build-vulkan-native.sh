@@ -40,7 +40,9 @@ source "$root/tools/ninja-build.sh"
 ninja_begin "$work/app.ninja"
 objects=()
 sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens.cpp src/native_ui_style.cpp third_party/qrcodegen/qrcodegen.cpp
- src/font_set.cpp src/media_preview.cpp src/librey_search.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
+ src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
+ search-engine/src/query.cpp search-engine/src/providers.cpp search-engine/src/scan.cpp
+ search-engine/src/cache.cpp search-engine/src/search.cpp search-engine/src/transport.cpp
  src/media_output_ps5.cpp src/voice_recorder.cpp src/session_store.cpp src/runtime_support.cpp
  src/agc_lifecycle.cpp inference/router.cpp inference/adapters/registry.cpp
  inference/adapters/media/stable_diffusion_ps5.cpp inference/adapters/media/stable_audio_ps5.cpp
@@ -104,7 +106,8 @@ for relative in "${sources[@]}"; do
   "${media_definitions[@]}" "${abi_definitions[@]}" "${media_includes[@]}" -I "$root/include" -I "$root/vulkan" -I "$root/vulkan/ui" -I "$kit_stage/src" -I "$work/generated" \
   -I "$root/vendor/ps5/sdl/include" -I "$root/vendor/ps5/sdl/include/SDL2" -I "$root/inference" \
   -I "$llama_source/vendor" -I "$llama_source/include" -I "$llama_source/ggml/include" \
-  -I "$root/vendor/include" -I "$root/src" -I "$root/third_party/update-check" "${update_definitions[@]}" -I "$root/.deps/Vulkan-Headers/include" -I "$root/.deps/ps5-opengl/current/include" \
+  -I "$root/vendor/include" -I "$root/src" -I "$root/search-engine/include" -I "$root/search-engine/src" \
+  -I "$root/third_party/update-check" "${update_definitions[@]}" -I "$root/.deps/Vulkan-Headers/include" -I "$root/.deps/ps5-opengl/current/include" \
   -MD -MF "$object.d" -c "$root/$relative" -o "$object"
  objects+=("$object")
 done

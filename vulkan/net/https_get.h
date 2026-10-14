@@ -20,8 +20,36 @@ extern "C"
 
     typedef struct prospero_https prospero_https;
 
-    /* One connection pool for a series of requests; NULL when libcurl could not start. */
+    /* One connection pool for a series of requests; NULL when libcurl could not start.
+     * The session owns a receive buffer of 4 MB, which suits a model download. */
     prospero_https *prospero_https_open(void);
+
+    /* The same with a receive buffer of `bytes` (clamped to 16 KB ... 8 MB). Search
+     * providers answer in kilobytes and are read as they arrive, so they open a
+     * small session instead of borrowing megabytes from a loaded model. */
+    prospero_https *prospero_https_open_sized(size_t bytes);
+
+    /* Request headers for the next and following requests on this session.
+     * `prospero_https_add_header` takes one "Name: value" line; an empty value
+     * ("Name:") removes a header libcurl would send by default. Some search
+     * engines answer differently, or only, when asked like a browser. */
+    int prospero_https_add_header(prospero_https *session, const char *line);
+    void prospero_https_clear_headers(prospero_https *session);
+
+    /* Overrides the user agent for this session. NULL restores ProsperoAI/1.0. */
+    void prospero_https_set_user_agent(prospero_https *session, const char *user_agent);
+
+    /* Keeps cookies for the lifetime of the session, in memory and nowhere else.
+     * An engine that hands out a token before it answers needs this. */
+    void prospero_https_enable_cookies(prospero_https *session);
+
+    /* Asks for compressed transfers (identity when libcurl has no codec). This
+     * cuts what a text answer costs on the wire and in the buffer. */
+    void prospero_https_set_compression(prospero_https *session, int enabled);
+
+    /* A POST with a body, for the engines that take one. Same reading API. */
+    int prospero_https_post(prospero_https *session, const char *url, const char *body,
+                            const char *content_type, long *status);
     void prospero_https_close(prospero_https *session);
 
     /* Starts a GET and waits for the answer's first bytes (or its end). 0 and the

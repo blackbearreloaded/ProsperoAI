@@ -22,10 +22,15 @@ class ProsperoSearchMcpTests(unittest.TestCase):
             {"jsonrpc": "2.0", "method": "notifications/initialized"},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
         ])
-        self.assertEqual(replies[0]["result"]["serverInfo"]["name"], "prosperoai-librey-search")
-        tool = replies[1]["result"]["tools"][0]
-        self.assertEqual(tool["name"], "web_search")
-        self.assertEqual(tool["inputSchema"]["properties"]["limit"]["maximum"], 5)
+        self.assertEqual(replies[0]["result"]["serverInfo"]["name"], "prosperoai-search")
+        tools = replies[1]["result"]["tools"]
+        self.assertEqual([tool["name"] for tool in tools], ["web_search", "fetch_page"])
+        search = tools[0]["inputSchema"]["properties"]
+        self.assertEqual(search["limit"]["maximum"], 25)
+        # Scopes are what makes one query reach many sites, so the schema must offer them.
+        self.assertIn("web", search["scopes"]["items"]["enum"])
+        self.assertIn("code", search["scopes"]["items"]["enum"])
+        self.assertEqual(tools[1]["inputSchema"]["required"], ["url"])
 
     def test_rejects_bad_arguments_without_contacting_ps5(self):
         replies = self.run_bridge([{

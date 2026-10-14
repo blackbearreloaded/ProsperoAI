@@ -23,9 +23,15 @@ class HttpApiTests(unittest.TestCase):
                         "-DPROSPERO_SESSION_TEST",
                         '-DPROSPERO_WEB_ASSET_ROOT="'+str(ROOT / 'assets/web')+'/"',
                         '-DPROSPERO_SETTINGS_PATH="'+str(tmp / "runtime.cfg")+'"', "-Wl,--gc-sections", "-I"+str(ROOT / "vulkan"), "-I"+str(ROOT / "include"),
+                        "-I"+str(ROOT / "search-engine/include"), "-I"+str(ROOT / "search-engine/src"),
                         "-I"+str(ROOT / ".deps/llama.cpp/vendor"),
                         str(ROOT / "tests/http_api_harness.cpp"), str(ROOT / "src/session_store.cpp"),
-                        str(ROOT / "src/librey_search.cpp"),
+                        str(ROOT / "search-engine/src/query.cpp"),
+                        str(ROOT / "search-engine/src/providers.cpp"),
+                        str(ROOT / "search-engine/src/scan.cpp"),
+                        str(ROOT / "search-engine/src/cache.cpp"),
+                        str(ROOT / "search-engine/src/search.cpp"),
+                        str(ROOT / "search-engine/src/transport.cpp"),
                         "-DPROSPERO_HOST", str(ROOT / "src/voice_recorder.cpp"),
                         "-o", str(cls.binary)], check=True)
 
@@ -69,7 +75,7 @@ class HttpApiTests(unittest.TestCase):
         self.assertIn('401 Unauthorized', self.request('/api/settings/runtime', key='secret')[0])
         self.request('/api/settings/runtime', body={'context':'auto','kv':'auto','thinking':False,'idle_unload_minutes':2})
 
-    def test_librey_search_settings_and_route_require_enabled_configuration(self):
+    def test_search_settings_and_route_require_enabled_configuration(self):
         header, body = self.request('/api/settings/runtime')
         self.assertIn('200 OK', header)
         self.assertFalse(json.loads(body)['web_search'])

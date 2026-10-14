@@ -24,13 +24,21 @@ struct prospero_https
     CURLM *multi;
     CURL *easy;
     char *data;
+    size_t capacity;
     size_t have, taken;
     int done, paused;
     CURLcode result;
     prospero_https_stop stop;
     void *stop_user;
+    struct curl_slist *headers;      /* set by the owner, kept for the session */
+    struct curl_slist *request_headers; /* headers owned by the request in flight */
+    char *user_agent;
+    int cookies, compression;
     char error[CURL_ERROR_SIZE];
 };
+
+#define HTTPS_BUFFER_MINIMUM (16u * 1024u)
+#define HTTPS_BUFFER_MAXIMUM (8u * 1024u * 1024u)
 
 static pthread_once_t global_once = PTHREAD_ONCE_INIT;
 static CURLcode global_result;
@@ -79,7 +87,7 @@ static size_t on_data(char *bytes, size_t size, size_t count, void *user)
     const size_t length = size * count;
     if (session->taken == session->have)
         session->have = session->taken = 0;
-    if (session->have + length > HTTPS_BUFFER_BYTES)
+    if (session->have + length > session->capacity)
     {
         if (session->taken != 0)
         {
@@ -87,7 +95,7 @@ static size_t on_data(char *bytes, size_t size, size_t count, void *user)
             session->have -= session->taken;
             session->taken = 0;
         }
-        if (session->have + length > HTTPS_BUFFER_BYTES)
+        if (session->have + length > session->capacity)
         {
             session->paused = 1;
             return CURL_WRITEFUNC_PAUSE;
@@ -152,20 +160,76 @@ static void pump(prospero_https *session)
 
 prospero_https *prospero_https_open(void)
 {
+    return prospero_https_open_sized(HTTPS_BUFFER_BYTES);
+}
+
+prospero_https *prospero_https_open_sized(size_t bytes)
+{
     pthread_once(&global_once, global_start);
     if (global_result != CURLE_OK)
         return NULL;
+    if (bytes < HTTPS_BUFFER_MINIMUM)
+        bytes = HTTPS_BUFFER_MINIMUM;
+    if (bytes > HTTPS_BUFFER_MAXIMUM)
+        bytes = HTTPS_BUFFER_MAXIMUM;
     prospero_https *session = calloc(1, sizeof(*session));
     if (!session)
         return NULL;
     session->multi = curl_multi_init();
-    session->data = malloc(HTTPS_BUFFER_BYTES);
+    session->capacity = bytes;
+    session->data = malloc(bytes);
     if (!session->multi || !session->data)
     {
         prospero_https_close(session);
         return NULL;
     }
     return session;
+}
+
+int prospero_https_add_header(prospero_https *session, const char *line)
+{
+    if (!session || !line || !*line)
+        return 1;
+    struct curl_slist *grown = curl_slist_append(session->headers, line);
+    if (!grown)
+        return 1;
+    session->headers = grown;
+    return 0;
+}
+
+void prospero_https_clear_headers(prospero_https *session)
+{
+    if (!session || !session->headers)
+        return;
+    curl_slist_free_all(session->headers);
+    session->headers = NULL;
+}
+
+void prospero_https_set_user_agent(prospero_https *session, const char *user_agent)
+{
+    if (!session)
+        return;
+    free(session->user_agent);
+    session->user_agent = NULL;
+    if (user_agent && *user_agent)
+    {
+        const size_t length = strlen(user_agent) + 1;
+        session->user_agent = malloc(length);
+        if (session->user_agent)
+            memcpy(session->user_agent, user_agent, length);
+    }
+}
+
+void prospero_https_enable_cookies(prospero_https *session)
+{
+    if (session)
+        session->cookies = 1;
+}
+
+void prospero_https_set_compression(prospero_https *session, int enabled)
+{
+    if (session)
+        session->compression = enabled ? 1 : 0;
 }
 
 void prospero_https_set_stop(prospero_https *session, prospero_https_stop stop, void *user)
@@ -181,6 +245,10 @@ void prospero_https_close(prospero_https *session)
     drop_request(session);
     if (session->multi)
         curl_multi_cleanup(session->multi);
+    prospero_https_clear_headers(session);
+    if (session->request_headers)
+        curl_slist_free_all(session->request_headers);
+    free(session->user_agent);
     free(session->data);
     free(session);
 }
@@ -191,7 +259,19 @@ int prospero_https_get(prospero_https *session, const char *url, long *status)
 }
 
 static int get_request(prospero_https *session, const char *url, const char *range,
-                       long *status)
+                       const char *body, const char *content_type, long *status);
+
+int prospero_https_post(prospero_https *session, const char *url, const char *body,
+                        const char *content_type, long *status)
+{
+    if (!session || !url || !body)
+        return 1;
+    return get_request(session, url, NULL, body,
+                       content_type ? content_type : "Content-Type: application/json", status);
+}
+
+static int get_request(prospero_https *session, const char *url, const char *range,
+                       const char *body, const char *content_type, long *status)
 {
     drop_request(session);
     session->have = session->taken = 0;
@@ -209,7 +289,36 @@ static int get_request(prospero_https *session, const char *url, const char *ran
     curl_easy_setopt(easy, CURLOPT_SOCKOPTFUNCTION, on_socket);
     curl_easy_setopt(easy, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
     curl_easy_setopt(easy, CURLOPT_URL, url);
-    curl_easy_setopt(easy, CURLOPT_USERAGENT, "ProsperoAI/1.0");
+    curl_easy_setopt(easy, CURLOPT_USERAGENT,
+                     session->user_agent ? session->user_agent : "ProsperoAI/1.0");
+    if (session->headers)
+        curl_easy_setopt(easy, CURLOPT_HTTPHEADER, session->headers);
+    if (session->cookies)
+        curl_easy_setopt(easy, CURLOPT_COOKIEFILE, ""); /* in memory, for this session only */
+    if (session->compression)
+        curl_easy_setopt(easy, CURLOPT_ACCEPT_ENCODING, "");
+    if (body)
+    {
+        curl_easy_setopt(easy, CURLOPT_POSTFIELDS, body);
+        if (content_type)
+        {
+            /* The body's type belongs to this request, not to the session. */
+            struct curl_slist *typed = curl_slist_append(NULL, content_type);
+            if (typed)
+            {
+                for (struct curl_slist *at = session->headers; at; at = at->next)
+                {
+                    struct curl_slist *grown = curl_slist_append(typed, at->data);
+                    if (!grown)
+                        break;
+                    typed = grown;
+                }
+                curl_slist_free_all(session->request_headers);
+                session->request_headers = typed;
+                curl_easy_setopt(easy, CURLOPT_HTTPHEADER, typed);
+            }
+        }
+    }
     curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "https");
     curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(easy, CURLOPT_REDIR_PROTOCOLS_STR, "https");
@@ -249,9 +358,9 @@ int prospero_https_get_from(prospero_https *session, const char *url, unsigned l
 {
     char range[32];
     if (!offset)
-        return get_request(session, url, NULL, status);
+        return get_request(session, url, NULL, NULL, NULL, status);
     snprintf(range, sizeof(range), "%llu-", offset);
-    return get_request(session, url, range, status);
+    return get_request(session, url, range, NULL, NULL, status);
 }
 
 int prospero_https_get_range(prospero_https *session, const char *url,
@@ -261,7 +370,7 @@ int prospero_https_get_range(prospero_https *session, const char *url,
         return 1;
     char range[64];
     snprintf(range, sizeof(range), "%llu-%llu", first, last);
-    return get_request(session, url, range, status);
+    return get_request(session, url, range, NULL, NULL, status);
 }
 
 int prospero_https_read(prospero_https *session, void *buffer, size_t size)

@@ -1,0 +1,87 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/s5LoYxHTYewXRWqFqbhhT8EWkBM</id>
+  <title>arXiv Query: search_query=all:quantization&amp;id_list=&amp;start=0&amp;max_results=3</title>
+  <updated>2026-10-14T21:43:13Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:quantization&amp;start=0&amp;max_results=3&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>3</opensearch:itemsPerPage>
+  <opensearch:totalResults>40628</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2407.15508v3</id>
+    <title>Compensate Quantization Errors+: Quantized Models Are Inquisitive Learners</title>
+    <updated>2025-05-15T05:34:45Z</updated>
+    <link href="https://arxiv.org/abs/2407.15508v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2407.15508v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The quantization of large language models (LLMs) has been a prominent research area aimed at enabling their lightweight deployment in practice. Existing research about LLM's quantization has mainly explored the interplay between weights and activations, or employing auxiliary components while neglecting the necessity of adjusting weights during quantization. Consequently, original weight distributions frequently fail to yield desired results after round-to-nearest (RTN) quantization. Even though incorporating techniques such as mixed precision and low-rank error approximation in LLM's quantization can yield improved results, they inevitably introduce additional computational overhead. On the other hand, traditional techniques for weight quantization, such as Generative Post-Training Quantization, rely on manually tweaking weight distributions to minimize local errors, but they fall short of achieving globally optimal outcomes. Although the recently proposed Learnable Singular-value Increment improves global weight quantization by modifying weight distributions, it disrupts the original distribution considerably. This introduces pronounced bias toward the training data and can degrade downstream task performance. In this paper, we introduce Singular-value Diagonal Expansion, a more nuanced approach to refining weight distributions to achieve better quantization alignment. Furthermore, we introduce Cross-layer Learning that improves overall quantization outcomes by distributing errors more evenly across layers. Our plug-and-play weight-quantization methods demonstrate substantial performance improvements over state-of-the-art approaches, including OmniQuant, DuQuant, and PrefixQuant.</summary>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-07-22T09:45:16Z</published>
+    <arxiv:comment>Effecient Quantization Methods for LLMs</arxiv:comment>
+    <arxiv:primary_category term="cs.CL"/>
+    <author>
+      <name>Yifei Gao</name>
+    </author>
+    <author>
+      <name>Jie Ou</name>
+    </author>
+    <author>
+      <name>Lei Wang</name>
+    </author>
+    <author>
+      <name>Jun Cheng</name>
+    </author>
+    <author>
+      <name>Mengchu Zhou</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1912.08047v1</id>
+    <title>The Benefits of Affine Quantization</title>
+    <updated>2019-12-01T22:06:44Z</updated>
+    <link href="https://arxiv.org/abs/1912.08047v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1912.08047v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Canonical quantization has served wonderfully for the quantization of a vast number of classical systems. That includes single classical variables, such as $p$ and $q$, and numerous classical Hamiltonians $H(p,q)$, as well as field theories, such as $π(x)$ and $ φ(x)$, and many classical Hamiltonians $H(π,φ)$. However, in all such systems there are situations for which canonical quantization fails. This includes certain particle and field theory problems. Affine quantization involves a simple recombination of classical variables that lead to a new chapter in the process of quantization, and which is able to solve a vast variety of normally insoluble systems, such as quartic interactions in scalar field theory in spacetime dimensions 4 and higher, as well as the quantization of Einstein's gravity in 4 spacetime dimensions.</summary>
+    <category term="physics.gen-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-12-01T22:06:44Z</published>
+    <arxiv:comment>13 pages, an introduction to affine quantization</arxiv:comment>
+    <arxiv:primary_category term="physics.gen-ph"/>
+    <author>
+      <name>John R. Klauder</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2406.16299v1</id>
+    <title>Compensate Quantization Errors: Make Weights Hierarchical to Compensate Each Other</title>
+    <updated>2024-06-24T03:52:52Z</updated>
+    <link href="https://arxiv.org/abs/2406.16299v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2406.16299v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Emergent Large Language Models (LLMs) use their extraordinary performance and powerful deduction capacity to discern from traditional language models. However, the expenses of computational resources and storage for these LLMs are stunning, quantization then arises as a trending conversation. To address accuracy decay caused by quantization, two streams of works in post-training quantization methods stand out. One uses other weights to compensate existing quantization error, while the other transfers the quantization difficulty to other parts in the model. Combining both merits, we introduce Learnable Singular value Increment (LSI) as an advanced solution. LSI uses Singular Value Decomposition to extract singular values of the weights and make them learnable to help weights compensate each other conditioned on activation. Incorporating LSI with existing techniques, we achieve state-of-the-art performance in diverse quantization settings, no matter in weight-only, weight-activation or extremely low bit scenarios. By unleashing the potential of LSI, efficient finetuning on quantized model is no longer a prohibitive problem.</summary>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-06-24T03:52:52Z</published>
+    <arxiv:comment>Efficient quantization method</arxiv:comment>
+    <arxiv:primary_category term="cs.CL"/>
+    <author>
+      <name>Yifei Gao</name>
+    </author>
+    <author>
+      <name>Jie Ou</name>
+    </author>
+    <author>
+      <name>Lei Wang</name>
+    </author>
+    <author>
+      <name>Yuting Xiao</name>
+    </author>
+    <author>
+      <name>Zhiyuan Xiang</name>
+    </author>
+    <author>
+      <name>Ruiting Dai</name>
+    </author>
+    <author>
+      <name>Jun Cheng</name>
+    </author>
+  </entry>
+</feed>

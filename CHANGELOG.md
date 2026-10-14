@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- Search now reaches 41 providers in nine selectable groups from the console itself: the
+  general web, code hosting, question sites, reference works, package registries, papers,
+  video, music and images. One query asked every provider in about eight seconds on the test
+  title, results carry their source and a score that ranks pages several providers agree on
+  first, and each provider's outcome is reported so throttling is distinguishable from an
+  empty index.
+- Added `/fetch <url>` and `POST /api/fetch`, which read one page as bounded plain text so a
+  model can follow a result. The MCP bridge for OpenCode gained the same tool and accepts
+  search scopes.
+- Search results are cached on the console for a day and the cache survives a restart of the
+  app, so repeating a query answers in milliseconds and does not ask the sites again.
+- Search no longer allocates the model downloader's 4 MB receive buffer: it borrows about
+  64 KB per provider and releases it with the request. Resident memory was unchanged across
+  328 provider requests. The HTTP client gained request headers, a per-session user agent,
+  cookies, compressed transfers, POST and a caller-chosen buffer size.
+- Replaced the single DuckDuckGo HTML route, which answers HTTP 202 with a throttle page
+  after a few queries; that page is now recognised and reported as rate limiting.
+
 ## 01.006.000
 
 - Text, image, sound and speech generation now use one pinned upstream llama.cpp/GGML Vulkan

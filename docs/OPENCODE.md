@@ -1,7 +1,7 @@
 # Use the PS5 Vulkan model in OpenCode
 
 For the planned coding-agent workflow and shared PS5/web UI search through
-LibreY, with an optional OpenCode websearch route, see the
+the built-in search engine, with an optional OpenCode websearch route, see the
 [coding-agent integration plan](OPENCODE_CODING_AGENT_PLAN.md).
 
 The Vulkan build exposes `GET /v1/models` and `POST /v1/chat/completions` at
@@ -54,16 +54,22 @@ and reported the result. Mistral 7B was a weaker control: with automatic tool
 choice it invented file contents instead of calling `read`. These are small
 controlled tasks, not broad coding-quality benchmarks.
 
-### Use LibreY search
+### Use the built-in search
 
-Enable built-in LibreY search in web UI Settings and use **Test search**. The PS5
-app can then search from its built-in conversation with `/search your query`; the
-same command works in the web UI.
-The app sends the search from the console and passes up to five titles, snippets
-and source URLs to the model. Search results are treated as untrusted input.
-The search adapter runs inside ProsperoAI and uses LibreY's DuckDuckGo HTML
-engine. It caps each response at 128 KiB; the shared HTTPS transport reserves a
-4 MiB receive buffer only during a request and frees it when the request closes.
+Enable **Web search** in web UI Settings and use **Test search**. The PS5 app can
+then search from its built-in conversation with `/search your query` and read one
+result with `/fetch <url>`; the same commands work in the web UI.
+The app sends the search from the console and passes titles, snippets and source
+URLs to the model, each marked with the provider that found it. Search results
+are treated as untrusted input.
+
+The engine lives in `search-engine/` and asks 41 providers in nine selectable
+groups: the general web, code hosting, question sites, reference works, package
+registries, papers, video, music and images. Each provider answers a plain GET,
+is parsed as it arrives and is cut off once it has enough results, so a request
+borrows about 64 KB and gives it back when it ends; at most six providers are in
+flight. Results are cached on the console for a day, and the cache survives a
+restart of the app.
 
 OpenCode can call the same PS5 search endpoint through the included MCP bridge.
 Configure the bridge in `opencode.json` and set the console origin in the local
@@ -86,13 +92,14 @@ environment:
 ```
 
 Use the MCP `web_search` tool when you want OpenCode to search through the
-embedded LibreY engine in ProsperoAI. Instruct the model to call
-`prosperoai-search_web_search` before answering; a vague search prompt once
+engine in ProsperoAI, optionally passing `scopes` to limit which groups are
+asked, and `fetch_page` to read one result as plain text. Instruct the model to
+call `prosperoai-search_web_search` before answering; a vague search prompt once
 produced a fabricated result, while an explicit call returned a Vane result
 with its source URL. OpenCode also has its own optional
 `websearch`/`webfetch` tools. Their provider selection lives in OpenCode; those
-hosted search providers are separate from the open-source LibreY route. Disable
-OpenCode's built-in `websearch` if you want only the LibreY MCP tool. OpenCode
+hosted search providers are separate from the PS5's own search engine. Disable
+OpenCode's built-in `websearch` if you want only the PS5 MCP tools. OpenCode
 documents the built-in provider selection and permission settings in its
 [websearch guide](https://opencode.ai/docs/websearch/).
 

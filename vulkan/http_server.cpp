@@ -21,7 +21,7 @@
 #include "voice_recorder.hpp"
 #include "session_store.hpp"
 #include "generation_limits.hpp"
-#include "librey_search.hpp"
+#include "prospero_search.hpp"
 #if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
 #include "model_downloader_ps5.hpp"
 #endif
@@ -1001,6 +1001,15 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                 p.web_search = it.value().get<bool>();
                 valid = true;
             }
+            else if (it.key() == "search_scopes" && it.value().is_number_integer())
+            {
+                const auto scopes = it.value().get<long long>();
+                if (scopes > 0 && scopes <= prospero_settings::kAllSearchScopes)
+                {
+                    p.search_scopes = static_cast<unsigned>(scopes);
+                    valid = true;
+                }
+            }
             else if (it.key() == "web_search_timeout" && it.value().is_number_integer())
             {
                 const auto timeout = it.value().get<long long>();
@@ -1034,6 +1043,7 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                        {"idle_unload_minutes", p.idle_unload_minutes},
                        {"web_search", p.web_search},
                        {"web_search_timeout", p.web_search_timeout_seconds},
+                       {"search_scopes", p.search_scopes},
                        {"kokoro_voice", prospero_voice::runtime_voice(false, p.kokoro_voice)->id},
                        {"chatterbox_voice", prospero_voice::runtime_voice(true, p.chatterbox_voice)->id},
                        {"chatterbox_language", prospero_language::chatterbox_language(p.chatterbox_language).code},
@@ -1044,7 +1054,58 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
     send_json(api, sock, response.c_str());
 }
 
-void handle_librey_search(const NetApi &api, int sock, const char *body)
+const char *outcome_name(prospero_search::Outcome outcome)
+{
+    switch (outcome)
+    {
+    case prospero_search::Outcome::Ok: return "ok";
+    case prospero_search::Outcome::Throttled: return "throttled";
+    case prospero_search::Outcome::HttpStatus: return "http_status";
+    case prospero_search::Outcome::Transport: return "transport";
+    case prospero_search::Outcome::Unusable: return "unusable";
+    case prospero_search::Outcome::Skipped: break;
+    }
+    return "skipped";
+}
+
+/* Turns the scopes a caller asked for into the list to query, honouring the
+ * scopes switched off in Settings. An empty request means every enabled scope. */
+bool resolve_scopes(const nlohmann::json &request, unsigned enabled,
+                    std::vector<prospero_search::Scope> *scopes, std::string *error)
+{
+    const auto add = [&](prospero_search::Scope scope) {
+        if (enabled & (1u << static_cast<unsigned>(scope))) scopes->push_back(scope);
+    };
+    if (!request.contains("scopes"))
+    {
+        for (unsigned i = 0; i < static_cast<unsigned>(prospero_search::Scope::Count); ++i)
+            add(static_cast<prospero_search::Scope>(i));
+        return true;
+    }
+    if (!request["scopes"].is_array())
+    {
+        *error = "scopes must be an array of scope names.";
+        return false;
+    }
+    for (const auto &entry : request["scopes"])
+    {
+        prospero_search::Scope scope{};
+        if (!entry.is_string() || !prospero_search::scope_from_name(entry.get<std::string>(), &scope))
+        {
+            *error = "Unknown search scope.";
+            return false;
+        }
+        add(scope);
+    }
+    if (scopes->empty())
+    {
+        *error = "Every scope asked for is switched off in Settings.";
+        return false;
+    }
+    return true;
+}
+
+void handle_search(const NetApi &api, int sock, const char *body)
 {
     const auto request = nlohmann::json::parse(body ? body : "", nullptr, false);
     if (!request.is_object() || !request.contains("query") || !request["query"].is_string())
@@ -1056,40 +1117,109 @@ void handle_librey_search(const NetApi &api, int sock, const char *body)
     if (!settings.web_search)
     {
         openai_error(api, sock, "409 Conflict", "web_search_disabled",
-                     "Enable built-in LibreY search in Settings first.");
+                     "Enable search in Settings first.");
         return;
     }
-    unsigned maximum = 5;
+    prospero_search::Request search;
+    search.query = request["query"].get<std::string>();
+    search.timeout_seconds = settings.web_search_timeout_seconds;
     if (request.contains("limit"))
     {
-        if (!request["limit"].is_number_integer() || request["limit"].get<int>() < 3 ||
-            request["limit"].get<int>() > 5)
+        if (!request["limit"].is_number_integer() || request["limit"].get<int>() < 1 ||
+            request["limit"].get<int>() > static_cast<int>(prospero_search::kMaxResults))
         {
             openai_error(api, sock, "400 Bad Request", "invalid_search_limit",
-                         "Search result limit must be between 3 and 5.");
+                         "Search result limit must be between 1 and 25.");
             return;
         }
-        maximum = request["limit"].get<unsigned>();
+        search.maximum = request["limit"].get<unsigned>();
     }
-    std::vector<prospero_librey::Result> results;
-    std::string error;
-    const auto query = request["query"].get<std::string>();
-    if (!prospero_librey::valid_query(query))
+    if (request.contains("fresh") && request["fresh"].is_boolean())
+        search.use_cache = !request["fresh"].get<bool>();
+    if (!prospero_search::valid_query(search.query))
     {
         openai_error(api, sock, "400 Bad Request", "invalid_search_query",
-                     "Search queries must be 2–256 characters without control characters.");
+                     "Search queries must be 2\u2013256 characters without control characters.");
         return;
     }
-    if (!prospero_librey::search(query, settings.web_search_timeout_seconds,
-                                 maximum, &results, &error))
+    std::string scope_error;
+    if (!resolve_scopes(request, settings.search_scopes, &search.scopes, &scope_error))
     {
-        openai_error(api, sock, "502 Bad Gateway", "librey_search_failed", error.c_str());
+        openai_error(api, sock, "400 Bad Request", "invalid_search_scope", scope_error.c_str());
+        return;
+    }
+    prospero_search::Response found;
+    const bool ok = prospero_search::search(search, &found);
+    nlohmann::json providers = nlohmann::json::array();
+    for (const auto &report : found.reports)
+        providers.push_back({{"id", report.id},
+                             {"outcome", outcome_name(report.outcome)},
+                             {"http_status", report.http_status},
+                             {"results", report.results},
+                             {"detail", report.detail}});
+    if (!ok)
+    {
+        /* The provider reports say which sites were asked and how each answered,
+         * so a caller can tell throttling from an empty index. */
+        const auto failure = nlohmann::json{{"error",
+                                             {{"message", found.error}, {"type", "search_failed"}}},
+                                            {"providers", providers}}
+                                 .dump();
+        send_status(api, sock, "502 Bad Gateway", "application/json", failure.c_str());
         return;
     }
     nlohmann::json data = nlohmann::json::array();
-    for (const auto &item : results)
-        data.push_back({{"title", item.title}, {"url", item.url}, {"snippet", item.snippet}});
-    const auto response = nlohmann::json{{"query", query}, {"data", data}}.dump();
+    for (const auto &item : found.results)
+        data.push_back({{"title", item.title},
+                        {"url", item.url},
+                        {"snippet", item.snippet},
+                        {"source", item.source},
+                        {"score", item.score}});
+    const auto response = nlohmann::json{{"query", search.query},
+                                         {"data", data},
+                                         {"cached", found.from_cache},
+                                         {"providers", providers}}
+                              .dump();
+    send_json(api, sock, response.c_str());
+}
+
+/* Reads one page as plain text, so a model can follow a result it just found. */
+void handle_fetch(const NetApi &api, int sock, const char *body)
+{
+    const auto request = nlohmann::json::parse(body ? body : "", nullptr, false);
+    if (!request.is_object() || !request.contains("url") || !request["url"].is_string())
+    {
+        openai_error(api, sock, "400 Bad Request", "invalid_fetch", "Expected a page address.");
+        return;
+    }
+    const auto settings = prospero_settings::get();
+    if (!settings.web_search)
+    {
+        openai_error(api, sock, "409 Conflict", "web_search_disabled",
+                     "Enable search in Settings first.");
+        return;
+    }
+    std::size_t limit = 16u * 1024u;
+    if (request.contains("limit"))
+    {
+        if (!request["limit"].is_number_integer() || request["limit"].get<long long>() < 256 ||
+            request["limit"].get<long long>() > 131072)
+        {
+            openai_error(api, sock, "400 Bad Request", "invalid_fetch_limit",
+                         "Text limit must be between 256 and 131072 bytes.");
+            return;
+        }
+        limit = static_cast<std::size_t>(request["limit"].get<long long>());
+    }
+    std::string text, error;
+    const auto url = request["url"].get<std::string>();
+    if (!prospero_search::fetch_page(url, settings.web_search_timeout_seconds, limit, &text, &error))
+    {
+        openai_error(api, sock, "502 Bad Gateway", "fetch_failed", error.c_str());
+        return;
+    }
+    const auto response =
+        nlohmann::json{{"url", url}, {"text", text}, {"bytes", text.size()}}.dump();
     send_json(api, sock, response.c_str());
 }
 
@@ -1586,7 +1716,9 @@ void handle_connection(const NetApi &api, int sock)
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/settings/runtime") == 0)
         handle_runtime_settings(api, sock, body);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/search") == 0)
-        handle_librey_search(api, sock, body);
+        handle_search(api, sock, body);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/fetch") == 0)
+        handle_fetch(api, sock, body);
     else if (std::strcmp(path, "/api/voices/chatterbox/custom") == 0 &&
              (std::strcmp(method, "GET") == 0 || std::strcmp(method, "POST") == 0))
         handle_chatterbox_custom_voice(api, sock, method, body, request_body_size);
