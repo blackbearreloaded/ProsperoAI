@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# The app compiles against PacBrew headers and links its static archives directly. `make deps`
+# only validates selected PacBrew packages, so ensure the pinned sysroot exists for clean CI
+# runners where the dependency cache has not been populated yet.
+bash "$root/tools/setup-pacbrew-dependencies.sh" --all >/dev/null
 ref="$root/.deps/mihawk-vulkan-review"
 sdk="$ref/.deps/native/ps5-payload-sdk"
 archive="$ref/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a"
