@@ -19,11 +19,9 @@
 #include <dirent.h>
 #include <cctype>
 #include <sys/stat.h>
+#include "direct_memory.hpp"
 extern "C"
 {
-    std::int64_t sceKernelGetDirectMemorySize();
-    int sceKernelAvailableDirectMemorySize(std::int64_t, std::int64_t, std::size_t, std::int64_t *,
-                                           std::size_t *);
     int sceKernelDebugOutText(int, const char *);
 }
 namespace
@@ -210,18 +208,16 @@ void scan()
     }
 }
 // Written at every change of model, after the one in memory was let go: with one
-// model in memory at a time, the largest free block comes back to what it was.
+// model in memory at a time, the total free memory comes back to what it was.
 void log_change(const Model &from, const Model &to)
 {
-    std::int64_t start = 0;
-    std::size_t free_bytes = 0;
-    sceKernelAvailableDirectMemorySize(0, sceKernelGetDirectMemorySize(), 0x4000, &start,
-                                       &free_bytes);
     char line[256];
     std::snprintf(line, sizeof(line),
-                  "[prosperoai] model change: %s -> %s, largest free block %zu MiB, "
-                  "vulkan heap %llu MiB\n",
-                  from.id.c_str(), to.id.c_str(), free_bytes >> 20,
+                  "[prosperoai] model change: %s -> %s, largest free block %llu MiB, "
+                  "total free %llu MiB, vulkan heap %llu MiB\n",
+                  from.id.c_str(), to.id.c_str(),
+                  static_cast<unsigned long long>(prospero_memory::largest_free_block() >> 20),
+                  static_cast<unsigned long long>(prospero_memory::free_total() >> 20),
                   static_cast<unsigned long long>(
                       prospero_vulkan::gpt_runtime_vulkan_heap_bytes() >> 20));
     sceKernelDebugOutText(0, line);

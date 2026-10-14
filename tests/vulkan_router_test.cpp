@@ -107,6 +107,14 @@ extern "C"
         *free_bytes = 0;
         return 0;
     }
+    int sceKernelDirectMemoryQuery(std::int64_t, int, void *, std::size_t)
+    {
+        return -1;
+    }
+    int sceKernelAvailableFlexibleMemorySize(std::size_t *)
+    {
+        return -1;
+    }
     int sceKernelDebugOutText(int, const char *)
     {
         return 0;

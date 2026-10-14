@@ -3,6 +3,7 @@
 // ACE-Step 1.5 music generation through audio.cpp and the PS5 Vulkan backend.
 #include "audiocpp.h"
 #include "../../../include/generated_output_path.hpp"
+#include "../../../include/direct_memory.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -94,6 +95,16 @@ void log_error(const char *stage)
     sceKernelDebugOutText(0, line);
 }
 
+void log_memory(const char *stage)
+{
+    char line[160];
+    std::snprintf(line, sizeof(line), "[prosperoai:ace-step] %s: largest free block %llu MiB, total free %llu MiB, flexible free %llu MiB\n",
+                  stage, static_cast<unsigned long long>(prospero_memory::largest_free_block() >> 20),
+                  static_cast<unsigned long long>(prospero_memory::free_total() >> 20),
+                  static_cast<unsigned long long>(prospero_memory::flexible_free() >> 20));
+    sceKernelDebugOutText(0, line);
+}
+
 bool ensure_engine(const std::string &root, void (*progress)(const char *))
 {
     if (g_model && g_session && g_model_root == root)
@@ -149,6 +160,7 @@ extern "C" int ps5_ace_step_generate(const char *root, const char *prompt,
     audiocpp_request *request = nullptr;
     audiocpp_result *result = nullptr;
     const std::uint64_t start = sceKernelGetProcessTime();
+    log_memory("before request");
     int result_code = 0;
     do
     {
@@ -193,6 +205,7 @@ extern "C" int ps5_ace_step_generate(const char *root, const char *prompt,
     // Drop the result and session before another request so the allocator cannot
     // strand the 1+ GiB workspace needed by a subsequent decode on the PS5 heap.
     release_engine();
+    log_memory("after release");
     if (elapsed_microseconds)
         *elapsed_microseconds = sceKernelGetProcessTime() - start;
     return result_code;

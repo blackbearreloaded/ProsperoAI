@@ -12,6 +12,7 @@
 #include "model_paths.hpp"
 #include "model_presets.hpp"
 #include "kv_budget.hpp"
+#include "direct_memory.hpp"
 #include "prefix_reuse.hpp"
 #include "runtime_settings.hpp"
 #include "generation_limits.hpp"
@@ -61,12 +62,19 @@ std::vector<llama_token> previous_tokens; // the last turn's token sequence, for
 // accessor for that subset count; using the full layer count here overstates KV need, which
 // only makes Auto pick a smaller context than necessary - safe, not console-verified.
 unsigned model_kv_layers(const llama_model *m) { return static_cast<unsigned>(llama_model_n_layer(m)); }
-unsigned model_kv_heads(const llama_model *m) { return static_cast<unsigned>(llama_model_n_head_kv(m)); }
 unsigned model_head_dim(const llama_model *m) {
     const int heads = llama_model_n_head(m);
     return heads > 0 ? static_cast<unsigned>(llama_model_n_embd(m) / heads) : 0;
 }
 bool model_is_hybrid(const llama_model *m) { return llama_model_is_hybrid(m) || llama_model_is_recurrent(m); }
+// llama_model_n_head_kv reports layer 0. In a hybrid model such as Granite 4.0 H that
+// layer can be recurrent with no KV heads, which made the estimate 0 MiB and rejected the
+// model. Use every attention head instead: an overestimate, like the layer count above.
+unsigned model_kv_heads(const llama_model *m) {
+    const int heads = llama_model_n_head_kv(m);
+    if (heads > 0) return static_cast<unsigned>(heads);
+    return model_is_hybrid(m) ? static_cast<unsigned>(std::max(0, llama_model_n_head(m))) : 0;
+}
 enum ggml_type parse_kv_type_setting(const std::string &value) {
     if (value == "q8_0") return GGML_TYPE_Q8_0;
     if (value == "q4_0") return GGML_TYPE_Q4_0;
@@ -274,6 +282,14 @@ bool prepare() {
                       static_cast<unsigned long long>(model_bytes / (1024 * 1024)));
         log_message(GGML_LOG_LEVEL_WARN, estimate, nullptr);
     }
+    // free_bytes is the largest contiguous block. Vulkan buffers here are at most the
+    // 128 MiB suballocation block (KV is per-layer tensors), so budget the total instead.
+    const std::uint64_t largest_block = free_bytes;
+    if (const auto total_free = prospero_memory::free_total(); total_free > free_bytes) free_bytes = total_free;
+    char free_line[160];
+    std::snprintf(free_line, sizeof(free_line), "Vulkan memory after weights: largest block=%llu MiB, total free=%llu MiB\n",
+                  static_cast<unsigned long long>(largest_block >> 20), static_cast<unsigned long long>(free_bytes >> 20));
+    log_message(GGML_LOG_LEVEL_INFO, free_line, nullptr);
     const auto fixed_type = requested_kv_setting == "q8_0" ? prospero_kv::KvType::Q8_0
                           : requested_kv_setting == "q4_0" ? prospero_kv::KvType::Q4_0 : prospero_kv::KvType::F16;
     // The Vulkan heap is queried after model weights have loaded. Keep 512 MiB for
@@ -412,7 +428,9 @@ int gpt_runtime_prepare() {
     try {
         const auto settings = prospero_settings::get();
         configure_context(settings.context, "auto");
-        return prepare() ? 0 : 1;
+        if (prepare()) return 0;
+        release_model(); // a refused model must not keep its weights resident
+        return 1;
     }
     catch (const std::exception &e) { log_message(GGML_LOG_LEVEL_ERROR, e.what(), nullptr); release_model(); return 1; }
 }
@@ -449,7 +467,11 @@ int gpt_runtime_generate(const gpt_runtime_message_t *messages, unsigned count,
         }
         configure_context(settings.context_tokens ? settings.context_tokens : settings.context_length,
                           settings.kv_cache, settings.batch_length, settings.ubatch_length);
-        if (!prepare()) { std::snprintf(output, capacity, "Unable to load a GGUF model on Vulkan."); return 1; }
+        if (!prepare()) {
+            release_model(); // a refused model must not keep its weights resident
+            std::snprintf(output, capacity, "Unable to load a GGUF model on Vulkan.");
+            return 1;
+        }
         std::string prompt;
         const char *tmpl = llama_model_chat_template(model, nullptr);
         char tokenizer_pre[32] = {};

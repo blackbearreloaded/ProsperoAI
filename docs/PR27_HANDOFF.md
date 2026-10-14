@@ -26,24 +26,25 @@ reconstruct them. The host runtime and PS5 runtime/app built successfully during
 
 ## Chatterbox and recording — current result
 
-The Vulkan adapter now reuses an engine session and releases it on model switches.
-Pinned audio.cpp preparation bounds graph/weight metadata arenas; S3 and HiFT allocation
-failures no longer occur in the latest runs. The voice catalog returns values rather than
-thread-local vector pointers, removing the observed HTTP-worker teardown crash.
-The original 20–40 ms failure occurs with Cemo, Alana and the valid custom reference.
-T3 decode imported only the used KV prefix, leaving the masked tail uninitialized.
-Zeroing the whole cache capacity before import changes Cemo to 15.34/12.66-second
-non-clipped WAVs and fixes the observed all-invalid decode logits. The custom cold run
-still failed, while its repeat generated 15.36 seconds. These short fixtures should not
-normally produce so much audio: the user confirmed the Cemo speech is unintelligible; EOS correctness remains unverified.
-Do not claim complete Chatterbox quality success. The adapter now rejects outputs under
-250 ms. See zero-kv-tail reports and token trace. Official reference reviewed:
-https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py and
-https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/models/t3/t3.py.
-No documented setting change alone resolved the failure. An explicit F32 decode attention
-variant matching reference math compiled, but is not yet console verified.
-A saved console conversation `test-chatterbox-cemo-20261014-kv` contains both Cemo
-artifacts; live browser verification confirms two audio players.
+Chatterbox works on PPSA99023, also after other models. Three PS5 changes in
+`tools/prepare-audio-cpp-sa3.py`: the T3 decode cache zeroes its full capacity on import;
+both T3 runner buffers are cleared after allocation, because the prefix pass reads masked,
+never-written cache slots and reused PS5 direct memory holds stale data after llama.cpp
+(0 × NaN made every decode logit NaN); and T3 decode attention uses explicit F32
+QK^T/softmax/V, which is about 1.4× faster than `ggml_flash_attn_ext` here. The host
+reference gives 1.74–1.78 s for "Hello from Prospero AI."; the console gives 2.06–2.46 s and
+stops on EOS. The user listened in conversation `test-chatterbox-fixed-20261014` and
+confirmed it works. Evidence: `pr27-chatterbox-t3-explicit-attention-clean.json` and the
+2026-10-14 VK_LOG entries.
+
+## Model switching — current result
+
+Granite 4.0 H loads (hybrid KV estimate fixed). BoHF and Bonsai load after other models:
+the llama adapter budgets total free direct memory instead of the largest contiguous block
+(`include/direct_memory.hpp`). ACE-Step loads its stages on demand and drops each one after
+use (Vulkan peak 7.39 → 4.53 GiB), so repeated runs and runs after large text models pass.
+`tools/benchmark-all-models-ps5.py` runs every installed model for N rounds with a model
+switch on every request; results are in `docs/performance/2026-10-14/`.
 
 Native DualSense capture and web capture/save are implemented. The user confirmed PS5
 recording works. The native voice picker has visible glyph explanations and L3 delete
@@ -68,25 +69,14 @@ optional. See updated AGENTS.md and BUILDING.md.
 
 ## Remaining failures and limitations
 
-- The full Bonsai benchmark's subsequent model-switch phase crashed the title. The
-  report proves Bonsai output/performance, not complete application regression coverage.
-- Qwen3.8 9B answered 4 on a fresh launch; after repeated switches it was safely refused
-  with insufficient VRAM. Investigate retained buffers/allocation lifetime across unloads.
-- Granite returned generation failed with zero prompt tokens. Its KV estimate was zero;
-  inspect the adapter's zero-KV rejection for recurrent models before judging compatibility.
-- BoHF was refused after Granite with only about 306 MiB free. It has older successful
-  console evidence; retry cold and then verify switching.
-- ACE-Step previously generated one valid 8-second WAV; repeat generation failed allocating
-  the VAE workspace. LM KV caching does not fix VAE allocation. Investigate VAE chunking
-  and buffer lifetime in upstream audio.cpp.
-- Mistral and MiniCPM passed several short GPU checks, but a cumulative switch crash remains.
-- Run the media matrix for SD-Turbo, Realistic Vision, Stable Audio, ACE-Step, Kokoro and
-  Chatterbox before claiming that every catalog model works. The smoke reports include
-  failures; do not treat all JSON files as passing evidence.
+- About 300 MB of direct memory per ACE-Step request is not returned after the engine is
+  released (not ggml-vulkan buffers). It no longer blocks ACE-Step but limits long sessions.
+- The host UI preview aborts after the About screen; this predates the PR27 changes.
+- Host tests that use AddressSanitizer cannot link on this host (missing LLVM 14 runtimes).
 
 ## Console state
 
 Connectivity was restored after the user's reboot. FTP/control/klog/shell are available.
 The authorized folder-backed slot is PPSA99023. The latest app build label is
-`pr27-memory-zero-kv`; main PPSA99004 was not changed and no reboot was requested.
-No commits or pushes were made. Recheck process/mount state before subsequent deployment.
+`pr27-ace-staged`; main PPSA99004 was not changed and no reboot was requested.
+Recheck process/mount state before subsequent deployment.

@@ -195,6 +195,17 @@ as a model result. Backend generation/media checks use this direct HTTP API; Rem
 is needed only for visual UI verification. Read a screenshot before every automated Cross
 press. Never reboot the console or overwrite the production title without separate approval.
 
+To measure every installed model with a model switch on each request (the path the UI
+uses), run against the deployed test title:
+
+```bash
+python3 tools/benchmark-all-models-ps5.py --rounds 3 \
+    --output docs/performance/<date>/all-models.json --artifacts build/benchmarks/all-models
+```
+
+Text models get a correctness check and a 128-token decode measurement; media outputs are
+downloaded and validated. A title crash is recorded and the title is relaunched.
+
 ## Status
 
 The Vulkan folder title and network API have been verified on PS5 FW 12.70. Mistral 7B Q4_0 reaches a median 69.72 decode tokens/s versus 47.96 for the official upstream AGC release. The optimized isolated loader prepares a raw folder GGUF in a median 2.84 seconds across three fresh process launches; AGC was rechecked at 1.53 seconds. Compressed ffpfsc model reads remain much slower. See [loading measurements](VK_LOAD_BENCHMARK_2026-10-09.md). See [current status](VK_ACTIVE.md) and the [benchmark report](VK_BENCHMARK_2026-10-08.md) for protocol and limitations.

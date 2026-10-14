@@ -1146,3 +1146,71 @@ Saved Cemo tests to shared conversation `test-chatterbox-cemo-20261014-kv`; live
 verified two playable audio references. The user confirmed speech is unintelligible.
 Chatterbox remains a failed quality gate despite longer non-clipped WAVs. Explicit F32
 decode attention compiled as a diagnostic; console verification remains pending.
+
+### 2026-10-14 — Chatterbox T3 fixed on PS5 (explicit F32 decode attention)
+
+Host reference with the same pinned GGUF and prepared audio.cpp: "Hello from Prospero AI."
+gives 1.78 s on CPU and 1.74 s on host Vulkan (Intel HD 630). The console produced 12–15 s
+unintelligible audio with flash attention, so the fault was PS5-specific. The earlier
+`pr27-explicit-attention` run (all-NaN decode logits) used a stale eboot built before the
+final source preparation. ggml-vulkan environment switches (fusion, MMVQ/integer dot) did
+not change that build. `GGML_VULKAN_CHECK_RESULTS` crashed in `ggml_vk_compute_forward`
+(null subcontext) and, once guarded, was too slow to reach T3; it was reverted.
+
+A clean rebuild with explicit F32 QK^T/softmax/V attention (`pr27-t3-clean`) on PPSA99023:
+demo_1_man 2.14 s (EOS at step 54), Cemo 2.06 s (step 52), Cemo 19-word sentence 5.58 s
+(step 140); warm generation 1.4–3.1 s, no clipping. The user listened in conversation
+`test-chatterbox-fixed-20261014` and confirmed it works. Report:
+`performance/2026-10-14/pr27-chatterbox-t3-explicit-attention-clean.json`. A same-build A/B
+against flash attention was not repeated. Added `ps5ctl.py trace` for the app debug trace;
+`build-vulkan-native.sh` no longer needs `rg` and its symbol checks survive `pipefail`.
+Main title unchanged, no reboot.
+
+### 2026-10-14 — model switching: Granite, BoHF, Chatterbox and ACE-Step
+
+Correction to the entry above: the failing `pr27-explicit-attention` run was not a stale
+build. Chatterbox failed whenever llama.cpp had used the Vulkan device earlier in the process
+(fresh → Chatterbox passes; after MiniCPM/Mistral/BoHF it returns NaN decode logits). A T3
+node probe showed the prefix-cache K/V input to the first prefill CONCAT was entirely NaN:
+the decode runner imports an empty cache for the prefix pass and attention reads masked,
+never-written slots; reused PS5 direct memory is not zeroed, and 0 × NaN propagates.
+`RADV_DEBUG=zerovram` did not change it. Fix: clear both T3 runner buffers after allocation
+(`prepare-audio-cpp-sa3.py`). Flash attention is then correct too, but explicit F32 attention
+decodes a 19-word sentence in 3.15–3.5 s versus 4.4–5.2 s, so it stays.
+
+Granite 4.0 H was refused because `llama_model_n_head_kv()` reports layer 0, a recurrent
+layer with 0 KV heads, giving a 0 MiB KV estimate. Hybrid models now estimate with all
+attention heads. BoHF and Bonsai were refused after other models because the KV budget used
+`sceKernelAvailableDirectMemorySize`, the largest contiguous block: after the first load it
+stayed near 7 GB (later 5 GB, even 304 MiB) while about 11 GB was free in total. Vulkan
+buffers are at most 128 MiB (`suballocation_block_size`), so the adapter now budgets total
+free direct memory (`include/direct_memory.hpp`, `sceKernelDirectMemoryQuery`). A refused
+model is released immediately. Ten consecutive text switches across all six text models
+passed; the router log now reports largest block and total free memory.
+
+ACE-Step passed once per process, then failed allocating 76–133 MB with
+`ErrorOutOfDeviceMemory` (a 128 MiB direct allocation probe still succeeded afterwards) or
+crashed the title. `prepare()` loaded the planner LM, pre-DiT/text encoder, DiT and VAE
+together: ggml-vulkan peaked at 7.39 GiB. With `mem_saver`, stages now load on demand and
+the planner, pre-DiT and DiT are dropped after use (`adapt_ace_step_staged_memory`); the
+peak is 4.53 GiB. Two consecutive ACE-Step runs and ACE-Step after Bonsai 27B and Qwen 9B
+pass; a request takes about 132 s instead of 114 s. About 300 MB of direct memory per
+ACE-Step request is still not returned after release (not ggml buffers).
+
+First 3-round all-model benchmark before the Chatterbox/ACE fixes:
+`performance/2026-10-14/pr27-all-models-3x.json` (10 of 12 models 3/3). Native About card
+now credits BlackBearReloaded and Quatrixone. PPSA99023 only; main title unchanged; no reboot.
+
+### 2026-10-14 — all models, 3 rounds, and PS5 Pro memory bit on a base PS5
+
+`pr27-ace-staged` on PPSA99023: `tools/benchmark-all-models-ps5.py --rounds 3` passed 36/36
+requests, each one a model switch, title alive throughout. Medians (HTTP time includes
+loading): Mistral 7B 72.5 tok/s, Qwen3.8 9B 53.2, MiniCPM5 109.1, Bonsai 27B 13.2, Granite
+105.0, BoHF 68.9; SD-Turbo 30.6 s, Realistic Vision 36.0 s, Stable Audio 19.2 s, ACE-Step
+114.3 s, Kokoro 0.4 s, Chatterbox 14.4 s. Report:
+`performance/2026-10-14/pr27-all-models-3x-final.json`.
+
+ProsperoEden PR #139 sets `attribute3` bit 22 (PS5 Pro memory mode; +1,216 MiB direct memory
+measured on a PS5 Pro). On this base PS5 the test title launched with `attribute3`
+`0x500000` and still reported a 11,712 MiB pool, the same as with `0x100000`. The original
+`param.json` was restored. Not tested on a PS5 Pro with ProsperoAI.

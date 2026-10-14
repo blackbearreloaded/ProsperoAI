@@ -196,11 +196,11 @@ done
  --defsym=vkCmdCopyBuffer=vk_common_CmdCopyBuffer --defsym=vkGetPhysicalDeviceFeatures2=vk_common_GetPhysicalDeviceFeatures2 \
  --defsym=execlp=prospero_execlp --defsym=posix_madvise=prospero_posix_madvise \
  "${radv_link_inputs[@]}" --as-needed "$sdk"/target/lib/*.so
-if readelf -d "$work/llvm-pie.elf" | rg -q 'libonnxruntime'; then
+if readelf -d "$work/llvm-pie.elf" | grep 'libonnxruntime' >/dev/null; then
  echo "ONNX Runtime must be statically linked into eboot, not listed as a dependency" >&2
  exit 1
 fi
-nm "$work/llvm-pie.elf" | rg -q ' OrtGetApiBase$' || {
+nm "$work/llvm-pie.elf" | grep ' OrtGetApiBase$' >/dev/null || {
  echo "Embedded ONNX Runtime entry point is missing from the linked eboot" >&2; exit 1;
 }
 "$root/build/host/ps5-native-tool" link --in "$work/llvm-pie.elf" --out "$work/eboot.elf" --stub-dir "$sdk/target/lib" \

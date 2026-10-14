@@ -1,0 +1,672 @@
+{
+  "label": "pr27-all-models-3x-final",
+  "test_title": "PPSA99023",
+  "rounds": 3,
+  "order": [
+    "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+    "sd-turbo-fp16",
+    "qwen3.8-9b-distill-q4-k-m.gguf",
+    "realistic-vision-v51-fp16",
+    "minicpm5-2b-q8-0.gguf",
+    "stable-audio-3-small-sfx-vulkan",
+    "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+    "ace-step-1.5-turbo-q8-0",
+    "granite-4.0-h-tiny-q4-k-m.gguf",
+    "kokoro-82m-vulkan",
+    "bohf-12b-moe-3a-q3-k-m.gguf",
+    "chatterbox-500m-q8-0"
+  ],
+  "method": "each round visits every installed model in interleaved text/media order; every request is a model switch; HTTP time includes model loading",
+  "runs": [
+    {
+      "round": 1,
+      "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 86,
+      "tokens_per_second": 72.4889198553974,
+      "generation_ms": 1262.077,
+      "decode_text": "The sky appears blue due to a process called Rayleigh scattering. When sunlight, which is made up of different wavelengths of light, travels through the atmosph",
+      "passed": true,
+      "http_seconds": 4.297,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "sd-turbo-fp16",
+      "kind": 1,
+      "prompt": "A red apple on a wooden table, natural window light, photographic detail.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/image/prosperoai-image-1791977500779928-3.png",
+        "bytes": 601452,
+        "sha256": "6eb9ee6fd315b4fdafcb2421b7a484f3084a48e74100c62452bdd635959b6f95",
+        "width": 512,
+        "height": 512
+      },
+      "passed": true,
+      "http_seconds": 30.849,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "qwen3.8-9b-distill-q4-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 122,
+      "tokens_per_second": 53.14840616275536,
+      "generation_ms": 2400.123,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight reaches Earth's atmosphere, it collides with gas molecules like nitrogen and ",
+      "passed": true,
+      "http_seconds": 7.21,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "realistic-vision-v51-fp16",
+      "kind": 1,
+      "prompt": "A portrait of a woman in a garden, natural light, realistic photography.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/image/prosperoai-image-1791977539261225-5.png",
+        "bytes": 621504,
+        "sha256": "0dc3e441865278dd06ed20a7ee85f26c351fac10bbc2a9a88e85cd07ff37e78d",
+        "width": 512,
+        "height": 512
+      },
+      "passed": true,
+      "http_seconds": 35.938,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "minicpm5-2b-q8-0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 115,
+      "tokens_per_second": 109.0820363893846,
+      "generation_ms": 1086.353,
+      "decode_text": "The sky appears blue because of a phenomenon called Rayleigh scattering. When sunlight enters our atmosphere, it interacts with tiny molecules of gas like nitro",
+      "passed": true,
+      "http_seconds": 3.338,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "stable-audio-3-small-sfx-vulkan",
+      "kind": 2,
+      "prompt": "A short, clear bell chime with a soft resonant decay.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/audio/stable-audio-3-1791977578827876-6.wav",
+        "bytes": 705644,
+        "sha256": "bf6c60a513a948805a1b1e8ea9bc32ee6be6ce8533fd0f52915ec1aed4b55e31",
+        "rate": 44100,
+        "channels": 2,
+        "seconds": 4.0,
+        "peak": 0.294677734375,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 19.172,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 103,
+      "tokens_per_second": 13.173957720378356,
+      "generation_ms": 8408.844,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it collides with gas molecules like nitrogen and o",
+      "passed": true,
+      "http_seconds": 13.937,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "ace-step-1.5-turbo-q8-0",
+      "kind": 2,
+      "prompt": "A short instrumental track with warm piano, soft strings, and a gentle steady rhythm.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/audio/ace-step-1.5-1791977612326998-7.wav",
+        "bytes": 1536044,
+        "sha256": "9bd5c140d14603dfcb3ada7a9b5c926395f536d8d256e19fe471cb068e7685cb",
+        "rate": 48000,
+        "channels": 2,
+        "seconds": 8.0,
+        "peak": 0.410003662109375,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 114.431,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "granite-4.0-h-tiny-q4-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 112,
+      "tokens_per_second": 105.46378411658404,
+      "generation_ms": 1136.749,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. As sunlight enters Earth's atmosphere, it collides with gas molecules, which are much small",
+      "passed": true,
+      "http_seconds": 5.2,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "kokoro-82m-vulkan",
+      "kind": 3,
+      "prompt": "Hello from Prospero AI. This is a short speech test.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/voice/kokoro-speech-1791977732243511-8.wav",
+        "bytes": 187244,
+        "sha256": "96bb2095c0a1c93b32512ac1863a24adabf772932e4a731504c4d4a9a83475d2",
+        "rate": 24000,
+        "channels": 1,
+        "seconds": 3.9,
+        "peak": 0.333160400390625,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 4.019,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "bohf-12b-moe-3a-q3-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 119,
+      "tokens_per_second": 68.89143177412952,
+      "generation_ms": 1871.023,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters the Earth's atmosphere, it encounters tiny molecules of gases such as ",
+      "passed": true,
+      "http_seconds": 6.728,
+      "title_alive": true
+    },
+    {
+      "round": 1,
+      "model": "chatterbox-500m-q8-0",
+      "kind": 3,
+      "prompt": "Hello from Prospero AI. This is a short speech test.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/voice/chatterbox-speech-1791977757526823-9.wav",
+        "bytes": 200684,
+        "sha256": "71f02e860e3620d42989890d41eb210684cec7695fe2f5d309e4929e0ded0a64",
+        "rate": 24000,
+        "channels": 1,
+        "seconds": 4.18,
+        "peak": 0.989959716796875,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 14.34,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 86,
+      "tokens_per_second": 72.18524261884663,
+      "generation_ms": 1264.703,
+      "decode_text": "The sky appears blue due to a process called Rayleigh scattering. When sunlight, which is made up of different wavelengths of light, travels through the atmosph",
+      "passed": true,
+      "http_seconds": 4.239,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "sd-turbo-fp16",
+      "kind": 1,
+      "prompt": "A red apple on a wooden table, natural window light, photographic detail.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/image/prosperoai-image-1791977762228302-11.png",
+        "bytes": 601452,
+        "sha256": "6eb9ee6fd315b4fdafcb2421b7a484f3084a48e74100c62452bdd635959b6f95",
+        "width": 512,
+        "height": 512
+      },
+      "passed": true,
+      "http_seconds": 30.628,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "qwen3.8-9b-distill-q4-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 122,
+      "tokens_per_second": 53.26194178953962,
+      "generation_ms": 2396.875,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight reaches Earth's atmosphere, it collides with gas molecules like nitrogen and ",
+      "passed": true,
+      "http_seconds": 7.263,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "realistic-vision-v51-fp16",
+      "kind": 1,
+      "prompt": "A portrait of a woman in a garden, natural light, realistic photography.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/image/prosperoai-image-1791977800532773-13.png",
+        "bytes": 621504,
+        "sha256": "0dc3e441865278dd06ed20a7ee85f26c351fac10bbc2a9a88e85cd07ff37e78d",
+        "width": 512,
+        "height": 512
+      },
+      "passed": true,
+      "http_seconds": 36.054,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "minicpm5-2b-q8-0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 115,
+      "tokens_per_second": 109.40299553079167,
+      "generation_ms": 1081.71,
+      "decode_text": "The sky appears blue because of a phenomenon called Rayleigh scattering. When sunlight enters our atmosphere, it interacts with tiny molecules of gas like nitro",
+      "passed": true,
+      "http_seconds": 3.262,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "stable-audio-3-small-sfx-vulkan",
+      "kind": 2,
+      "prompt": "A short, clear bell chime with a soft resonant decay.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/audio/stable-audio-3-1791977840146323-14.wav",
+        "bytes": 705644,
+        "sha256": "bf6c60a513a948805a1b1e8ea9bc32ee6be6ce8533fd0f52915ec1aed4b55e31",
+        "rate": 44100,
+        "channels": 2,
+        "seconds": 4.0,
+        "peak": 0.294677734375,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 19.206,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 103,
+      "tokens_per_second": 13.16972234351852,
+      "generation_ms": 8404.642,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it collides with gas molecules like nitrogen and o",
+      "passed": true,
+      "http_seconds": 14.002,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "ace-step-1.5-turbo-q8-0",
+      "kind": 2,
+      "prompt": "A short instrumental track with warm piano, soft strings, and a gentle steady rhythm.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/audio/ace-step-1.5-1791977873741044-15.wav",
+        "bytes": 1536044,
+        "sha256": "9bd5c140d14603dfcb3ada7a9b5c926395f536d8d256e19fe471cb068e7685cb",
+        "rate": 48000,
+        "channels": 2,
+        "seconds": 8.0,
+        "peak": 0.410003662109375,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 114.263,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "granite-4.0-h-tiny-q4-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 112,
+      "tokens_per_second": 104.52469513630585,
+      "generation_ms": 1144.639,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. As sunlight enters Earth's atmosphere, it collides with gas molecules, which are much small",
+      "passed": true,
+      "http_seconds": 5.247,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "kokoro-82m-vulkan",
+      "kind": 3,
+      "prompt": "Hello from Prospero AI. This is a short speech test.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/voice/kokoro-speech-1791977993534570-16.wav",
+        "bytes": 187244,
+        "sha256": "96bb2095c0a1c93b32512ac1863a24adabf772932e4a731504c4d4a9a83475d2",
+        "rate": 24000,
+        "channels": 1,
+        "seconds": 3.9,
+        "peak": 0.333160400390625,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 0.44,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "bohf-12b-moe-3a-q3-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 119,
+      "tokens_per_second": 68.92173119707118,
+      "generation_ms": 1871.179,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters the Earth's atmosphere, it encounters tiny molecules of gases such as ",
+      "passed": true,
+      "http_seconds": 6.871,
+      "title_alive": true
+    },
+    {
+      "round": 2,
+      "model": "chatterbox-500m-q8-0",
+      "kind": 3,
+      "prompt": "Hello from Prospero AI. This is a short speech test.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/voice/chatterbox-speech-1791978015403820-17.wav",
+        "bytes": 210284,
+        "sha256": "af24ec733ce9db8cda742e0b4ca4e268473cfdf64335d1979574453948534310",
+        "rate": 24000,
+        "channels": 1,
+        "seconds": 4.38,
+        "peak": 0.975372314453125,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 14.352,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 86,
+      "tokens_per_second": 72.46568323630036,
+      "generation_ms": 1262.503,
+      "decode_text": "The sky appears blue due to a process called Rayleigh scattering. When sunlight, which is made up of different wavelengths of light, travels through the atmosph",
+      "passed": true,
+      "http_seconds": 4.377,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "sd-turbo-fp16",
+      "kind": 1,
+      "prompt": "A red apple on a wooden table, natural window light, photographic detail.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/image/prosperoai-image-1791978020239525-19.png",
+        "bytes": 601452,
+        "sha256": "6eb9ee6fd315b4fdafcb2421b7a484f3084a48e74100c62452bdd635959b6f95",
+        "width": 512,
+        "height": 512
+      },
+      "passed": true,
+      "http_seconds": 30.629,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "qwen3.8-9b-distill-q4-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 122,
+      "tokens_per_second": 51.51369370213165,
+      "generation_ms": 2472.694,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight reaches Earth's atmosphere, it collides with gas molecules like nitrogen and ",
+      "passed": true,
+      "http_seconds": 7.226,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "realistic-vision-v51-fp16",
+      "kind": 1,
+      "prompt": "A portrait of a woman in a garden, natural light, realistic photography.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/image/prosperoai-image-1791978058514337-21.png",
+        "bytes": 621504,
+        "sha256": "0dc3e441865278dd06ed20a7ee85f26c351fac10bbc2a9a88e85cd07ff37e78d",
+        "width": 512,
+        "height": 512
+      },
+      "passed": true,
+      "http_seconds": 35.979,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "minicpm5-2b-q8-0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 115,
+      "tokens_per_second": 100.66811840690053,
+      "generation_ms": 1173.461,
+      "decode_text": "The sky appears blue because of a phenomenon called Rayleigh scattering. When sunlight enters our atmosphere, it interacts with tiny molecules of gas like nitro",
+      "passed": true,
+      "http_seconds": 3.348,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "stable-audio-3-small-sfx-vulkan",
+      "kind": 2,
+      "prompt": "A short, clear bell chime with a soft resonant decay.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/audio/stable-audio-3-1791978098130120-22.wav",
+        "bytes": 705644,
+        "sha256": "bf6c60a513a948805a1b1e8ea9bc32ee6be6ce8533fd0f52915ec1aed4b55e31",
+        "rate": 44100,
+        "channels": 2,
+        "seconds": 4.0,
+        "peak": 0.294677734375,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 19.306,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 103,
+      "tokens_per_second": 13.179123802750897,
+      "generation_ms": 8403.878,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters Earth's atmosphere, it collides with gas molecules like nitrogen and o",
+      "passed": true,
+      "http_seconds": 14.085,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "ace-step-1.5-turbo-q8-0",
+      "kind": 2,
+      "prompt": "A short instrumental track with warm piano, soft strings, and a gentle steady rhythm.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/audio/ace-step-1.5-1791978131903705-23.wav",
+        "bytes": 1536044,
+        "sha256": "9bd5c140d14603dfcb3ada7a9b5c926395f536d8d256e19fe471cb068e7685cb",
+        "rate": 48000,
+        "channels": 2,
+        "seconds": 8.0,
+        "peak": 0.410003662109375,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 114.339,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "granite-4.0-h-tiny-q4-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 112,
+      "tokens_per_second": 104.96860871201626,
+      "generation_ms": 1141.142,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. As sunlight enters Earth's atmosphere, it collides with gas molecules, which are much small",
+      "passed": true,
+      "http_seconds": 5.352,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "kokoro-82m-vulkan",
+      "kind": 3,
+      "prompt": "Hello from Prospero AI. This is a short speech test.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/voice/kokoro-speech-1791978251877367-24.wav",
+        "bytes": 187244,
+        "sha256": "96bb2095c0a1c93b32512ac1863a24adabf772932e4a731504c4d4a9a83475d2",
+        "rate": 24000,
+        "channels": 1,
+        "seconds": 3.9,
+        "peak": 0.333160400390625,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 0.44,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "bohf-12b-moe-3a-q3-k-m.gguf",
+      "kind": 0,
+      "answer": "51",
+      "correct": true,
+      "decode_tokens": 119,
+      "tokens_per_second": 68.8484627830299,
+      "generation_ms": 1869.908,
+      "decode_text": "The sky appears blue due to a phenomenon called Rayleigh scattering. When sunlight enters the Earth's atmosphere, it encounters tiny molecules of gases such as ",
+      "passed": true,
+      "http_seconds": 6.793,
+      "title_alive": true
+    },
+    {
+      "round": 3,
+      "model": "chatterbox-500m-q8-0",
+      "kind": 3,
+      "prompt": "Hello from Prospero AI. This is a short speech test.",
+      "output": {
+        "path": "/download0/ProsperoAI/work/voice/chatterbox-speech-1791978273694417-25.wav",
+        "bytes": 216044,
+        "sha256": "f523bbc2cee73519443158aeef6478b62f6cbddfa6c7e57ec36ff6c59fc70f57",
+        "rate": 24000,
+        "channels": 1,
+        "seconds": 4.5,
+        "peak": 0.989959716796875,
+        "clipped_fraction": 0.0
+      },
+      "passed": true,
+      "http_seconds": 14.387,
+      "title_alive": true
+    }
+  ],
+  "summary": {
+    "Mistral-7B-Instruct-v0.3.Q4_0.gguf": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 4.297,
+      "median_tokens_per_second": 72.47
+    },
+    "sd-turbo-fp16": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 30.629
+    },
+    "qwen3.8-9b-distill-q4-k-m.gguf": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 7.226,
+      "median_tokens_per_second": 53.15
+    },
+    "realistic-vision-v51-fp16": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 35.979
+    },
+    "minicpm5-2b-q8-0.gguf": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 3.338,
+      "median_tokens_per_second": 109.08
+    },
+    "stable-audio-3-small-sfx-vulkan": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 19.206
+    },
+    "Ternary-Bonsai-2-27B-PTQ1_0.gguf": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 14.002,
+      "median_tokens_per_second": 13.17
+    },
+    "ace-step-1.5-turbo-q8-0": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 114.339
+    },
+    "granite-4.0-h-tiny-q4-k-m.gguf": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 5.247,
+      "median_tokens_per_second": 104.97
+    },
+    "kokoro-82m-vulkan": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 0.44
+    },
+    "bohf-12b-moe-3a-q3-k-m.gguf": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 6.793,
+      "median_tokens_per_second": 68.89
+    },
+    "chatterbox-500m-q8-0": {
+      "passed": 3,
+      "runs": 3,
+      "median_http_seconds": 14.352
+    }
+  },
+  "passed": true,
+  "restored_settings": {
+    "context": "4k",
+    "thinking": false,
+    "kv": "auto"
+  }
+}

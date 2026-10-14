@@ -143,6 +143,38 @@ def adapt_ace_step_ggml_round(source: Path) -> None:
     )
 
 
+def adapt_ace_step_staged_memory(source: Path) -> None:
+    """Load ACE-Step stages on demand and drop each one when it is done (mem_saver).
+
+    Upstream prepare() loads the planner LM, pre-DiT/text encoder, DiT and VAE together,
+    a 7.4 GiB Vulkan peak that, with the CPU side, filled the PS5 pool: the second request
+    or one after another model failed to allocate. The adapter rebuilds the session for
+    every request anyway, so each stage is loaded by run() and released after use.
+    """
+    session = source / "src/models/ace_step/session.cpp"
+    replace_once(session,
+        "void AceStepSession::prepare(const runtime::SessionPreparationRequest &request) {\n    ensure_planner();",
+        "void AceStepSession::prepare(const runtime::SessionPreparationRequest &request) {\n"
+        "    if (mem_saver_) { // PS5: run() loads each stage on demand\n        mark_prepared();\n        return;\n    }\n"
+        "    ensure_planner();")
+    # Both planner paths (caption rewrite and generation) drop the planner, as on Metal.
+    planner_old = "        planner_->release_graph_workspace();\n        if (execution_context().backend_type() == core::BackendType::Metal) {"
+    planner_new = "        planner_->release_graph_workspace();\n        if (mem_saver_ || execution_context().backend_type() == core::BackendType::Metal) {"
+    text = session.read_text()
+    if text.count(planner_new) != 2:
+        if text.count(planner_old) != 2:
+            raise SystemExit(f"{session}: expected two ACE-Step planner release sites")
+        session.write_text(text.replace(planner_old, planner_new))
+    replace_once(session,
+        "        pre_dit_->release_runtime_graphs();\n",
+        "        pre_dit_->release_runtime_graphs();\n        pre_dit_.reset(); // PS5: free the text encoder before diffusion\n")
+    replace_once(session,
+        "    diffusion_->release_graph_workspace();\n",
+        "    diffusion_->release_graph_workspace();\n"
+        "    if (mem_saver_) { // PS5: free the DiT before the VAE decoder loads\n"
+        "        diffusion_.reset();\n        dit_weights_runtime_.reset();\n    }\n")
+
+
 def ggml_has_api(ggml_source: Path, *names: str) -> bool:
     headers = list((ggml_source / "include").glob("ggml*.h"))
     text = "\n".join(header.read_text(errors="replace") for header in headers)
@@ -185,6 +217,10 @@ def adapt_chatterbox_s3_tokenizer_arena(source: Path) -> None:
         "        params.mem_size = 768ull * 1024ull * 1024ull;",
         "        params.mem_size = 32ull * 1024ull * 1024ull; // PS5: prefill graph metadata only",
     )
+    # T3 decode attention: explicit F32 QK^T/softmax/V instead of upstream's
+    # ggml_flash_attn_ext. Both are correct once the runner buffers are cleared
+    # (below); on the PS5 the explicit form decoded a 19-word sentence in about
+    # 3.1 s versus 4.4-5.2 s with flash attention (2026-10-14).
     replace_once(t3_runner,
         '    auto * flash = ggml_flash_attn_ext(\n        ctx.ggml,\n        q_heads.tensor,\n        all_k_heads.tensor,\n        all_v_heads.tensor,\n        attention_mask.tensor,\n        1.0f / std::sqrt(static_cast<float>(head_dim)),\n        0.0f,\n        0.0f);\n    ggml_flash_attn_ext_set_prec(flash, GGML_PREC_F32);\n    auto context = core::wrap_tensor(\n        flash,\n        core::TensorShape::from_dims({q_heads.shape.dims[0], q_heads.shape.dims[2], q_heads.shape.dims[1], head_dim}),\n        GGML_TYPE_F32);\n    context = contiguous(ctx, context);',
         '    // PS5: match the reference attention with explicit F32 scores/softmax.\n    auto k_transposed = modules::TransposeModule({{0, 1, 3, 2}, 4}).build(ctx, all_k_heads);\n    auto scores = modules::MatMulModule().build(ctx, q_heads, k_transposed);\n    scores = core::wrap_tensor(ggml_scale(ctx.ggml,scores.tensor,1.0f / std::sqrt(static_cast<float>(head_dim))),scores.shape,GGML_TYPE_F32);\n    auto mask = core::wrap_tensor(ggml_cast(ctx.ggml,attention_mask.tensor,GGML_TYPE_F32),attention_mask.shape,GGML_TYPE_F32);\n    scores = add_contiguous(ctx,scores,mask);\n    auto attn = core::wrap_tensor(ggml_soft_max(ctx.ggml,contiguous(ctx,scores).tensor),scores.shape,GGML_TYPE_F32);\n    auto context = modules::MatMulModule().build(ctx,attn,all_v_heads);\n    context = modules::TransposeModule({{0, 2, 1, 3}, 4}).build(ctx,context);\n    context = contiguous(ctx, context);')
@@ -228,6 +264,18 @@ def adapt_chatterbox_s3_tokenizer_arena(source: Path) -> None:
                 throw std::runtime_error("failed to allocate backend tensors for T3 decode runner (" +
                     std::to_string(requested_bytes / (1024 * 1024)) + " MiB)");''',
     )
+    # The T3 runners read KV cache slots that are masked but never written (the prefix
+    # pass imports an empty cache). PS5 direct memory is not zeroed when reused, so after
+    # another runtime (llama.cpp) ran in the process those slots held stale data, and
+    # 0 * NaN from masked attention made every decode logit NaN. Clear new runner buffers.
+    plan = "            engine::core::prepare_host_graph_plan(owner_->execution_context(), graph_, cpu_plan_);\n"
+    cleared = ("            ggml_backend_buffer_clear(buffer_, 0); // PS5: reused direct memory is not zeroed\n"
+               + plan)
+    text = t3_runner.read_text()
+    if text.count(cleared) != 2:
+        if text.count(plan) != 2:
+            raise SystemExit(f"{t3_runner}: expected two T3 runner buffer allocations")
+        t3_runner.write_text(text.replace(plan, cleared))
     # S3 retains attention and feed-forward runners for every encoder layer.
     # Their no_alloc contexts contain metadata only, but upstream reserves
     # 128/192 MiB per runner, exhausting the host heap before audio decoding.
@@ -369,6 +417,7 @@ def main() -> None:
     reuse_parent_ggml(cmake)
     if not ggml_has_api(ggml_source, "ggml_round_bf16"):
         adapt_ace_step_ggml_round(source)
+    adapt_ace_step_staged_memory(source)
     adapt_chatterbox_s3_tokenizer_arena(source)
     replace_once(
         cmake,

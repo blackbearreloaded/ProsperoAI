@@ -675,8 +675,9 @@ void NativeUI::Impl::draw_settings(ui::Canvas &canvas) const
                                "Models run on this console's own hardware. No account or cloud "
                                "uploads.",
                                card.x + 30, card.y + 420, 22, card.w - 60, 32, palette_.muted, 4);
-                 label(list, "MADE BY QUATRIXONE", card.cx(), card.y + 530, palette_.accent,
-                       gfx::Align::center);
+                 label(list, "MADE BY", card.cx(), card.y + 520, palette_.accent, gfx::Align::center);
+                 ui::text(list, fonts_.semibold, "BlackBearReloaded and Quatrixone", card.cx(), card.y + 545,
+                          18, palette_.accent, gfx::Align::center);
              }
              else
              {

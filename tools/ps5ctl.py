@@ -12,6 +12,7 @@
   ps5ctl.py ftp rm REMOTE [--yes]       delete a file (or an empty directory with --dir)
   ps5ctl.py title rm TITLE_ID [--yes]   delete /data/homebrew/TITLE_ID* entries
   ps5ctl.py klog [--seconds N]          read the klog stream (port 3232) into stdout
+  ps5ctl.py trace [--prev] [--lines N] [--grep RE]  print the app debug trace (Settings > Debug log)
   ps5ctl.py shot OUT.jpg                save one frame from an active Remote Play session
   ps5ctl.py shell CMD [--yes]           run one command in shsrv (port 2323); needs shsrv running
   ps5ctl.py ps                          list processes through shsrv
@@ -38,6 +39,9 @@ import socket
 import sys
 import time
 import urllib.request
+
+# Also importable by path (tests), not only as a script run from tools/.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from ps5_config import load_console_env
 
 load_console_env()
@@ -394,6 +398,26 @@ def cmd_cat(args):
     return 0
 
 
+def cmd_trace(args):
+    """Print ProsperoAI's debug trace (app log plus the runtimes' stdout/stderr)."""
+    import re
+    name = "debug-trace.prev.txt" if args.prev else "debug-trace.txt"
+    ftp = ftp_connect()
+    try:
+        out = []
+        ftp.retrbinary(f"RETR {args.root.rstrip('/')}/logs/{name}", out.append)
+    finally:
+        ftp.quit()
+    lines = b"".join(out).decode(errors="replace").splitlines()
+    if args.grep:
+        pattern = re.compile(args.grep)
+        lines = [line for line in lines if pattern.search(line)]
+    if args.lines:
+        lines = lines[-args.lines:]
+    sys.stdout.write("\n".join(lines) + ("\n" if lines else ""))
+    return 0
+
+
 def shadow_api(method, route, body=None):
     """ShadowMountPlus HTTP API (api_bind_address/api_port in /data/shadowmount/config.ini)."""
     import json
@@ -489,12 +513,17 @@ def main(argv=None):
     ct = sub.add_parser("cat", help="print a file from the console (FTP)")
     ct.add_argument("remote")
     ct.add_argument("--tail", type=int, default=0, help="only the last N characters")
+    tr = sub.add_parser("trace", help="print the app debug trace (enable Debug log in Settings)")
+    tr.add_argument("--prev", action="store_true", help="the previous trace, rotated at app start")
+    tr.add_argument("--lines", type=int, default=0, help="only the last N lines")
+    tr.add_argument("--grep", default="", help="only lines matching this regular expression")
+    tr.add_argument("--root", default="/data/prosperoai", help="app data root on the console")
     sh2 = sub.add_parser("shadow", help="ShadowMountPlus API: info, mount, version, delete (needs --yes)")
     sh2.add_argument("action", choices=["info", "mount", "version", "delete"])
     sh2.add_argument("title_id", nargs="?", default="")
     sh2.add_argument("--yes", action="store_true")
     args = parser.parse_args(argv)
-    handlers = {"doctor": cmd_doctor, "service": cmd_service, "agent": cmd_agent, "cat": cmd_cat, "shadow": cmd_shadow, "status": cmd_status, "payload": cmd_payload, "ftp": cmd_ftp,
+    handlers = {"doctor": cmd_doctor, "service": cmd_service, "agent": cmd_agent, "cat": cmd_cat, "trace": cmd_trace, "shadow": cmd_shadow, "status": cmd_status, "payload": cmd_payload, "ftp": cmd_ftp,
                 "title": cmd_title, "klog": cmd_klog, "shot": cmd_shot,
                 "shell": cmd_shell, "ps": cmd_ps, "launch": cmd_launch}
     return handlers[args.command](args)

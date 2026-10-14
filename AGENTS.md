@@ -73,6 +73,13 @@ disagree about what to do next.
 Use `tools/ps5ctl.py`. It covers status, payloads, FTP, title removal, klog, shell (shsrv on
 port 2323), process list, launch and screenshots.
 
+- App debug trace: `python3 tools/ps5ctl.py trace [--prev] [--lines N] [--grep RE]` prints
+  `/data/prosperoai/logs/debug-trace.txt`. It exists only while Settings > Debug log is on.
+  The app redirects stdout/stderr of all runtimes (llama.cpp, ggml, audio.cpp) into it, so
+  backend messages that never reach klog are here. The file is rotated to
+  `debug-trace.prev.txt` at every app start and when the log is toggled in Settings;
+  read `--prev` after a crash or relaunch. `[sys]` lines are copies of klog `[prosperoai]` lines.
+
 - Console environment: copy `.env.ps5.example` to ignored `.env.ps5.local`, set `PS5_HOST`
   and `PROSPERO_TEST_TITLE`, then `source tools/ps5-env.sh` before builds or benchmarks.
   `ps5ctl.py` also loads the local file automatically; explicit environment variables win.
@@ -149,6 +156,7 @@ Read-only checks first, in this order:
 3. `cat /data/ps5vkctl.log --tail 2000` (payload log, one line per call) and `cat /data/shadowmount/debug.log --tail 2000` (install log).
 4. `cat /download0/<marker>.txt` for markers the title writes itself. Use `/download0`, not `/data`: a title did not write to `/data`.
 5. klog (`klog --seconds 60`, port 3232) lines with `[PS5VK]` prefix, as Mihawk's title writes them. An empty or banner-only capture means klog is not streaming.
+6. `trace --prev` / `trace` (app debug trace, see above) for runtime stderr, ggml/audio.cpp errors and the app's own steps. A crash backtrace is in klog (`signal: 11`); map its addresses to symbols with `nm -n build/vulkan-runtime/llvm-pie.elf` after subtracting the `0x400000` load base.
 
 Launch result codes seen on this console (FW 12.70):
 - `0x0000a018`, `0x00008018`, `0x0000e018`, `0x0000c018`: launched; the title may still crash right after.

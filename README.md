@@ -35,8 +35,8 @@ how it is built, and what a run on a console showed.
 > backend is removed. CPU operations still handle remaining media kernels; RADV
 > continues to use the platform GPU driver. See [current status](docs/VK_ACTIVE.md),
 > [media comparison](docs/MEDIA_VULKAN_COMPARISON.md) and [build instructions](docs/BUILDING.md).
-> Prism's private PTQ1_0/PQ2_0 types still need an upstream compatibility adapter before
-> the Bonsai preset can use this runtime.
+> Bonsai's Prism PTQ1_0/PQ2_0 types are applied to the pinned upstream runtime by
+> preparation scripts, so all curated models below share one GGML/Vulkan build.
 
 
 ## Highlights
@@ -79,35 +79,30 @@ preset, including Mistral. The two Mistral storage entries (the flat GGUF and it
 `stable-audio-open-small` folder is a retained legacy asset from an earlier runtime; it
 has no adapter in the current Vulkan build and is not offered as a runnable preset.
 
-The table reports two PS5 HTTP generations per model where both completed. Text timings
-are short greedy arithmetic requests; media timings use fixed prompts and include model
-loading. Image outputs were checked as 512 × 512 PNG/TGA, and audio/speech outputs were
-checked for WAV structure, sample rate, channels, nonzero samples and clipping.
+Every curated model was run three times on a base PS5, in rounds that visit all twelve
+models in turn, so every request is also a model switch — the same path the native and web
+interface use. Times are the HTTP request including model loading after the switch. Text
+models answered an arithmetic check correctly and then generated 128 tokens; image outputs
+were checked as 512 × 512 PNG, and audio and speech outputs for WAV structure, sample rate,
+channels, nonzero samples and clipping. All 36 requests passed and the app stayed running.
 
-| Curated preset | Purpose | PS5 run 1 / run 2 | Result |
+| Curated preset | Purpose | PS5 runs 1 / 2 / 3 | Result |
 | --- | --- | ---: | --- |
-| [Mistral 7B Instruct v0.3 Q4_0](https://huggingface.co/QuantFactory/Mistral-7B-Instruct-v0.3-GGUF) | Text | 3.079 / 3.013 s | Both answers correct |
-| [Qwen3.8 9B Distill Q4_K_M](https://huggingface.co/empero-ai/Qwen3.8-9B-Distill-GGUF) | Text | 5.052 / 4.638 s | Both answers correct |
-| [MiniCPM5 2B Q8_0](https://huggingface.co/openbmb/MiniCPM5-2B-GGUF) | Text | 2.270 / 2.292 s | Both answers correct |
-| [Ternary Bonsai 2 27B PTQ1_0](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf) | Text | 5.653 / 5.583 s | Both answers correct |
-| [Granite 4.0 H-Tiny Q4_K_M](https://huggingface.co/ibm-granite/granite-4.0-h-tiny-GGUF) | Text | 4.247 / 4.127 s | Both answers correct |
-| [BoHF 12B MoE 3A Q3_K_M](https://huggingface.co/theprint/Bohf-12B-MoE-3A-GGUF) | Text | 4.855 / 4.984 s | Both answers correct |
-| [SD-Turbo FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5) | Image | 29.747 / 1.054 s | Both 512 × 512 images valid |
-| [Realistic Vision v5.1 FP16](https://huggingface.co/SG161222/Realistic_Vision_V5.1_noVAE) | Image | 35.922 / 11.485 s | Both 512 × 512 images valid |
-| [Stable Audio 3 Small SFX Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Stable-Audio-3-Small-SFX-GGUF) | Audio | 19.146 / 5.766 s | Both valid 4 s stereo WAV, 44.1 kHz |
-| [ACE-Step 1.5 Turbo Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/ACE-Step1.5-GGUF/turbo) | Music | 112.988 s / failed | First valid 8 s stereo WAV at 48 kHz; repeat failed when Vulkan could not allocate its 1.38 GiB VAE buffer |
-| [Kokoro 82M Vulkan](https://huggingface.co/blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5) | Speech | 3.952 / 0.253 s | Both valid 2.175 s mono WAV at 24 kHz |
-| [Chatterbox 500M Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf) | Speech | Failed / not run | First request aborted: system allocator could not provide a 512 MiB block; no WAV was produced |
+| [Mistral 7B Instruct v0.3 Q4_0](https://huggingface.co/QuantFactory/Mistral-7B-Instruct-v0.3-GGUF) | Text | 4.3 / 4.2 / 4.4 s | 3/3 correct, 72.5 tok/s |
+| [Qwen3.8 9B Distill Q4_K_M](https://huggingface.co/empero-ai/Qwen3.8-9B-Distill-GGUF) | Text | 7.2 / 7.3 / 7.2 s | 3/3 correct, 53.1 tok/s |
+| [MiniCPM5 2B Q8_0](https://huggingface.co/openbmb/MiniCPM5-2B-GGUF) | Text | 3.3 / 3.3 / 3.3 s | 3/3 correct, 109.1 tok/s |
+| [Ternary Bonsai 2 27B PTQ1_0](https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf) | Text | 13.9 / 14.0 / 14.1 s | 3/3 correct, 13.2 tok/s |
+| [Granite 4.0 H-Tiny Q4_K_M](https://huggingface.co/ibm-granite/granite-4.0-h-tiny-GGUF) | Text | 5.2 / 5.2 / 5.4 s | 3/3 correct, 105.0 tok/s |
+| [BoHF 12B MoE 3A Q3_K_M](https://huggingface.co/theprint/Bohf-12B-MoE-3A-GGUF) | Text | 6.7 / 6.9 / 6.8 s | 3/3 correct, 68.9 tok/s |
+| [SD-Turbo FP16](https://huggingface.co/blackbearreloaded/ProsperoAI-SD-Turbo-FP16-PS5) | Image | 30.8 / 30.6 / 30.6 s | 3/3 valid 512 × 512 PNG |
+| [Realistic Vision v5.1 FP16](https://huggingface.co/SG161222/Realistic_Vision_V5.1_noVAE) | Image | 35.9 / 36.1 / 36.0 s | 3/3 valid 512 × 512 PNG |
+| [Stable Audio 3 Small SFX Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/Stable-Audio-3-Small-SFX-GGUF) | Audio | 19.2 / 19.2 / 19.3 s | 3/3 valid 4 s stereo WAV, 44.1 kHz |
+| [ACE-Step 1.5 Turbo Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf/tree/main/ACE-Step1.5-GGUF/turbo) | Music | 114.4 / 114.3 / 114.3 s | 3/3 valid 8 s stereo WAV, 48 kHz |
+| [Kokoro 82M Vulkan](https://huggingface.co/blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5) | Speech | 4.0 / 0.4 / 0.4 s | 3/3 valid 3.9 s mono WAV, 24 kHz |
+| [Chatterbox 500M Q8_0](https://huggingface.co/audio-cpp/audio.cpp-gguf) | Speech, voice cloning | 14.3 / 14.4 / 14.4 s | 3/3 valid 4.2–4.5 s mono WAV, 24 kHz |
 
-Full JSON records and validated artifacts: [two-pass text benchmark](docs/performance/2026-10-13/pr27-all-text-two-pass.json),
-[image/audio benchmark](docs/performance/2026-10-13/pr27-media-two-pass-benchmark.json),
-[ACE-Step retry](docs/performance/2026-10-13/pr27-ace-step-two-pass.json),
-[Kokoro benchmark](docs/performance/2026-10-13/pr27-kokoro-two-pass.json), and
-[Chatterbox failure record](docs/performance/2026-10-13/pr27-chatterbox-two-pass.json).
-
-The Chatterbox GGUF preset currently fails its PS5 allocation check. The planned Q4 ONNX
-replacement, its pinned model files, runtime build work and PS5 acceptance steps are tracked in
-[PR 27 remaining work](docs/PR27_REMAINING_WORK.md).
+Full JSON record: [all models, three rounds](docs/performance/2026-10-14/pr27-all-models-3x-final.json).
+Chatterbox speech was also checked by listening on the console.
 
 The linked repositories contain the exact file layout, integrity hashes, upstream provenance,
 licenses, and preparation recipe for each preset. The app releases its selected runtime after
