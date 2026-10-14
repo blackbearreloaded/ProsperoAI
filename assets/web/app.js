@@ -345,11 +345,23 @@ function clearRecordedVoice(){
   $('voice-record-preview').pause();$('voice-record-preview').removeAttribute('src');$('voice-record-preview').hidden=true;
   if(recordedVoiceUrl)URL.revokeObjectURL(recordedVoiceUrl);recordedVoiceUrl='';
 }
+function voiceStatus(message,kind){const status=$('voice-record-status');status.textContent=message;status.classList.toggle('error',kind==='error');}
+function showVoiceSample(pcm){clearRecordedVoice();if(!pcm)return;recordedVoicePcm=pcm;recordedVoiceUrl=URL.createObjectURL(new Blob([pcm],{type:'audio/wav'}));$('voice-record-preview').src=recordedVoiceUrl;$('voice-record-preview').hidden=false;$('voice-record-save').disabled=false;$('voice-record-start').textContent='Record again';}
+// Live capture (getUserMedia) is only offered on HTTPS or localhost. On the console's plain
+// HTTP address the device's own recorder (a capture file input) or the PS5 microphone is used.
+const browserLiveRecording=()=>window.isSecureContext&&!!navigator.mediaDevices?.getUserMedia&&!!window.MediaRecorder;
+function updateVoiceSource(){
+  const browser=$('voice-record-source').value==='browser',live=browserLiveRecording();
+  $('voice-record-hint').textContent=!browser?'Uses the DualSense or a headset connected to the PS5. Unmute it before you start.'
+    :live?'Your browser will ask for microphone access.'
+    :'This page uses plain HTTP, so the browser cannot open the microphone itself. Your phone\'s recorder opens, or you can choose a recording. Opening the app on localhost or HTTPS enables live recording.';
+  if(!recordedVoicePcm&&!nativeVoiceReady)$('voice-record-start').textContent=browser&&!live?'Record or choose audio':'Start recording';
+}
 const voiceRecorder=window.prosperoVoiceRecording.createVoiceRecorder({
-  onStatus:message=>$('voice-record-status').textContent=message,
+  onStatus:voiceStatus,
   onProgress:seconds=>$('voice-record-progress').value=seconds,
   onRecording:active=>{$('voice-record-source').disabled=active;$('voice-record-start').disabled=active;$('voice-record-stop').hidden=!active;},
-  onReady:pcm=>{clearRecordedVoice();if(!pcm)return;recordedVoicePcm=pcm;recordedVoiceUrl=URL.createObjectURL(new Blob([pcm],{type:'audio/wav'}));$('voice-record-preview').src=recordedVoiceUrl;$('voice-record-preview').hidden=false;$('voice-record-save').disabled=false;$('voice-record-start').textContent='Record again';}
+  onReady:showVoiceSample
 });
 async function nativeVoiceAction(action){
   const response=await api('/api/voices/chatterbox/recording',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
@@ -367,26 +379,35 @@ async function pollNativeVoice(attempt){
     const blob=await audio.blob();if(attempt!==nativeRecordToken)return;
     clearRecordedVoice();nativeVoiceReady=true;recordedVoiceUrl=URL.createObjectURL(blob);
     $('voice-record-preview').src=recordedVoiceUrl;$('voice-record-preview').hidden=false;$('voice-record-save').disabled=false;
-    $('voice-record-start').textContent='Record again';$('voice-record-status').textContent='Listen to your sample, then choose Save and use.';
-  }catch(error){if(attempt!==nativeRecordToken)return;nativeRecording=false;$('voice-record-start').disabled=false;$('voice-record-source').disabled=false;$('voice-record-stop').hidden=true;$('voice-record-status').textContent=error.message;}
+    $('voice-record-start').textContent='Record again';voiceStatus('Listen to your sample, then choose Save and use.');
+  }catch(error){if(attempt!==nativeRecordToken)return;nativeRecording=false;$('voice-record-start').disabled=false;$('voice-record-source').disabled=false;$('voice-record-stop').hidden=true;voiceStatus(error.message,'error');}
 }
-$('voice-record-source').value=window.isSecureContext?'browser':'ps5';
-$('voice-record-open').onclick=()=>{$('voice-record-status').textContent='Ready to record. Unmute the selected microphone before starting.';voiceRecordDialog.showModal();};
+$('voice-record-source').value='browser';
+$('voice-record-source').onchange=updateVoiceSource;
+$('voice-record-open').onclick=()=>{voiceStatus('Ready to record.');updateVoiceSource();voiceRecordDialog.showModal();};
+$('voice-record-file').onchange=async()=>{
+  const file=$('voice-record-file').files[0];$('voice-record-file').value='';if(!file)return;
+  if(file.size>12*1024*1024){voiceStatus('That recording is too large. Choose one under 12 MB.','error');return;}
+  voiceRecorder.cancel();clearRecordedVoice();voiceStatus('Preparing your voice sample…');$('voice-record-start').disabled=true;
+  try{showVoiceSample(await window.prosperoVoiceRecording.convertVoiceSample(await file.arrayBuffer()));voiceStatus('Listen to your sample, then choose Save and use. Only the first five seconds are kept.');}
+  catch(error){voiceStatus(error.message||'This recording could not be read. Try another file.','error');}
+  finally{$('voice-record-start').disabled=false;}
+};
 $('voice-record-start').onclick=async()=>{
-  if($('voice-record-source').value==='browser'){voiceRecorder.start();return;}
+  if($('voice-record-source').value==='browser'){if(browserLiveRecording())voiceRecorder.start();else $('voice-record-file').click();return;}
   voiceRecorder.cancel();clearRecordedVoice();const attempt=++nativeRecordToken;clearTimeout(nativeRecordTimer);
   nativeRecording=true;$('voice-record-start').disabled=true;$('voice-record-source').disabled=true;$('voice-record-stop').hidden=false;
-  $('voice-record-status').textContent='Recording with the PS5 input device — speak clearly. Unmute the DualSense microphone.';
+  voiceStatus('Recording with the PS5 microphone — speak clearly.');
   try{await nativeVoiceAction('start');if(attempt!==nativeRecordToken){await api('/api/voices/chatterbox/recording',{method:'DELETE'});return;}pollNativeVoice(attempt);}
-  catch(error){if(attempt===nativeRecordToken){nativeRecording=false;$('voice-record-start').disabled=false;$('voice-record-source').disabled=false;$('voice-record-stop').hidden=true;$('voice-record-status').textContent=error.message;}}
+  catch(error){if(attempt===nativeRecordToken){nativeRecording=false;$('voice-record-start').disabled=false;$('voice-record-source').disabled=false;$('voice-record-stop').hidden=true;voiceStatus(error.message,'error');}}
 };
-$('voice-record-stop').onclick=async()=>{if(nativeRecording){try{await nativeVoiceAction('stop');}catch(error){$('voice-record-status').textContent=error.message;}}else voiceRecorder.stop();};
+$('voice-record-stop').onclick=async()=>{if(nativeRecording){try{await nativeVoiceAction('stop');}catch(error){voiceStatus(error.message,'error');}}else voiceRecorder.stop();};
 $('voice-record-cancel').onclick=()=>{if(!voiceRecordSaving)voiceRecordDialog.close();};
 voiceRecordDialog.oncancel=event=>{if(voiceRecordSaving)event.preventDefault();};
 voiceRecordDialog.onclose=()=>{
   const cancelNative=nativeRecording||nativeVoiceReady;nativeRecordToken++;clearTimeout(nativeRecordTimer);nativeRecording=false;
   if(cancelNative)void api('/api/voices/chatterbox/recording',{method:'DELETE'}).catch(()=>{});
-  voiceRecorder.cancel();clearRecordedVoice();$('voice-record-progress').value=0;$('voice-record-start').textContent='Start recording';$('voice-record-source').disabled=false;
+  voiceRecorder.cancel();clearRecordedVoice();$('voice-record-progress').value=0;$('voice-record-source').disabled=false;updateVoiceSource();
 };
 window.addEventListener('pagehide',()=>{nativeRecordToken++;clearTimeout(nativeRecordTimer);if(nativeRecording||nativeVoiceReady)void api('/api/voices/chatterbox/recording',{method:'DELETE',keepalive:true}).catch(()=>{});voiceRecorder.cancel();clearRecordedVoice();});
 $('voice-record-save').onclick=async()=>{
@@ -398,6 +419,6 @@ $('voice-record-save').onclick=async()=>{
     customChatterboxVoiceAvailable=true;await runtimeSettings({chatterbox_voice:'custom'});
     populateWorkspaceVoicePicker(current?.model||selectedModel);$('workspace-voice-feedback').textContent='Voice saved on this console. My voice is selected.';
     voiceRecordDialog.close();
-  }catch(error){$('voice-record-status').textContent=error.message;}
+  }catch(error){voiceStatus(error.message,'error');}
   finally{voiceRecordSaving=false;$('voice-record-save').disabled=!recordedVoicePcm&&!nativeVoiceReady;$('voice-record-start').disabled=false;$('voice-record-cancel').disabled=false;}
 };

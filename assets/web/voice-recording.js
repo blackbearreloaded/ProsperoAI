@@ -55,7 +55,7 @@
       onReady(null); onProgress(0); onRecording(true);
       try {
         if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
-          throw Error('Browser microphone recording needs HTTPS or localhost. Use a secure connection, or upload a recorded file.');
+          throw Error('Live browser recording needs HTTPS or localhost. Record with your device or choose a recording instead.');
         if (!window.MediaRecorder) throw Error('Microphone recording is unavailable in this browser. Upload a recorded file.');
         onStatus('Allow microphone access to start recording.');
         const acquired = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -67,10 +67,10 @@
         active.ondataavailable = event => {
           if (attempt !== token) return;
           size += event.data.size;
-          if (size > 2 * 1024 * 1024) { cancel(); onStatus('The recording was too large. Try again.'); }
+          if (size > 2 * 1024 * 1024) { cancel(); onStatus('The recording was too large. Try again.', 'error'); }
           else if (event.data.size) chunks.push(event.data);
         };
-        active.onerror = () => { if (attempt === token) { cancel(); onStatus('Microphone recording failed. Try again.'); } };
+        active.onerror = () => { if (attempt === token) { cancel(); onStatus('Microphone recording failed. Try again.', 'error'); } };
         active.onstop = async () => {
           if (attempt !== token) return;
           cleanup(); onRecording(false); onStatus('Preparing your voice sample…');
@@ -78,7 +78,7 @@
             const pcm = await convertVoiceSample(await new Blob(chunks, { type: active.mimeType }).arrayBuffer());
             if (attempt !== token) return;
             onReady(pcm); onStatus('Listen to your sample, then choose Save and use.');
-          } catch (error) { if (attempt === token) onStatus(error.message); }
+          } catch (error) { if (attempt === token) onStatus(error.message, 'error'); }
         };
         active.start(); const started = performance.now();
         onStatus('Recording — speak clearly.');
@@ -87,7 +87,7 @@
       } catch (error) {
         if (attempt !== token) return;
         cleanup(); onRecording(false);
-        onStatus(error.name === 'NotAllowedError' ? 'Microphone access was denied. Allow access and try again.' : error.message);
+        onStatus(error.name === 'NotAllowedError' ? 'Microphone access was denied. Allow access and try again.' : error.message, 'error');
       }
     }
     return { start, stop, cancel };
