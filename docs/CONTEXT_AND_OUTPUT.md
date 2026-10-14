@@ -42,7 +42,7 @@ bytes. Decode throughput was 93.46 and 89.95 tokens/s. A third request evaluated
 10026 prompt tokens with a 16384-token context and generated 32 tokens.
 These measurements used the private performance integration with MiniCPM5 and
 prefix reuse. This independent controls PR preserves upstream defaults and
-is checked separately on the Linux host. See `docs/performance/2026-10-10/context-*`.
+is checked separately on the Linux host. The detailed capture files were removed from this PR.
 
 ## PR #15 integration
 

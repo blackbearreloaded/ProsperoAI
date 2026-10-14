@@ -63,8 +63,8 @@ cycles passed with different orders, repeated requests for each media model, and
 The failure was C++ TLS teardown on the short-lived PS5 HTTP worker: audio.cpp's C API error
 string and model-spec cache had non-trivial thread-local destructors. The pinned-source
 preparation now uses process-static cache objects; all audio.cpp calls/model loads are serialized
-by the app inference mutex. See the successful cycle reports and the earlier crash record in
-[`docs/performance/2026-10-12/`](performance/2026-10-12/).
+by the app inference mutex. The detailed cycle reports were pruned from this PR; current
+model results are summarized in the [three-round PS5 model record](performance/2026-10-14/pr27-all-models-3x-final.json).
 
 The PS5 production link uses the app's RADV link recipe and one shared upstream GGML target
 for text, SD, Kokoro and audio.cpp. All four projects are subdirectories of
@@ -79,9 +79,10 @@ PTQ1_0/PQ2_0 tensors remain gated until their compatibility adapter is ported to
 ## Chatterbox voice cloning
 
 The Chatterbox GGUF adapter uses audio.cpp's C API with `chatterbox.mem_saver=true` and
-explicitly selects Vulkan device 0 from the shared GGML runtime. The former CPU selection
-failed while allocating a large arena in the title's direct-memory heap. The Vulkan selection
-builds for PPSA99023; generation and WAV validation remain pending a reachable console.
+explicitly selects Vulkan device 0 from the shared upstream GGML runtime. Its settings expose
+all 19 language codes supported by the pinned audio.cpp tokenizer. PPSA99023 generation,
+WAV validation, model switching and a console listening check passed; the retained summary
+is in the [three-round PS5 model record](performance/2026-10-14/pr27-all-models-3x-final.json).
 
 ## Realistic Vision v5.1 image preset
 

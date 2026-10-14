@@ -36,7 +36,7 @@ Never update PPSA99004 for this experiment.
 The final common-ABI console build generates 94 identical tokens in each of three
 warm greedy runs: **11.202328 tokens/s median** (11.204053 / 11.200721 / 11.202328).
 Thinking off/on, 4K/16K, Mistral, MiniCPM5, Qwen 3.5 and return to Bonsai pass.
-Evidence: `performance/2026-10-11/vulkan-runtime-bonsai.json`.
+The retained PS5 summary is the [final three-round model record](performance/2026-10-14/pr27-all-models-3x-final.json); the older standalone Bonsai run record was pruned from the PR.
 
 AirLLM/Strata bounded residency is a separate follow-up draft PR, not implemented
 streamed inference in this runtime.
@@ -46,8 +46,7 @@ streamed inference in this runtime.
 Native inference passes on PS5 FW 12.70 in folder-backed test title <TEST-TITLE-ID>.
 Model host SHA256 and full console readback match the pinned digest. The final
 Prism/media build preserves entry 0x120, 14 program headers and the same 15 NEEDED
-libraries as the normal build. Exact build and model receipts are in
-`performance/2026-10-11/bonsai2-{build,model-verification}.json`.
+libraries as the normal build. The exact historical build and model receipt files were pruned from the PR.
 
 | Resident Vulkan test | Result |
 | --- | --- |
@@ -89,12 +88,12 @@ underflow as available RAM.
 The final Kokoro request took 85.630 seconds and produced 52200 PCM frames; this
 is functional evidence, not a perceptual-parity or speed-improvement claim.
 SD-Turbo and Stable Audio are now installed: all 81 files passed full console SHA256
-readback (`performance/2026-10-11/bonsai2-media-install-verified.json`). The Prism
+readback (the detailed historical install record was pruned from the PR). The Prism
 smoke produced a coherent 512×512 apple image in 73.085 seconds and a non-silent
 stereo 44.1 kHz WAV with 524288 frames in 152.424 seconds; return to Bonsai passed.
 These initial requests include loading. SD still uses AGC in this build. Shared
 Vulkan parity/performance and one common Prism/media ABI remain open.
-Evidence: `performance/2026-10-11/media-prism-smoke.json`.
+The detailed historical media smoke record was pruned from the PR.
 
 Host checks: 54 tests complete with one opt-in skipped, lint passes, separate actual
 Prism cache checks pass under ASan/UBSan. The Prism Vulkan media numerical test also

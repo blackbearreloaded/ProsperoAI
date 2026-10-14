@@ -50,6 +50,7 @@ how it is built, and what a run on a console showed.
 - Draws answers in Latin, Greek, Cyrillic, Chinese, Japanese and Korean with scalable faces.
 - Stores independent text, image, audio, and speech sessions under `/data/prosperoai/sessions`.
 - Supports DualSense navigation, right-stick conversation scrolling, the PS5 on-screen keyboard, and a physical USB keyboard.
+- Offers 19 Chatterbox speech languages, selectable alongside the voice in Workspace and web settings.
 - Ships without weights. Models offers verified presets and standalone GGUF downloads. See
   [Supported models](docs/SUPPORTED_MODELS.md) for curated text models that run through the
   shared GGUF runtime without model-specific adapters.

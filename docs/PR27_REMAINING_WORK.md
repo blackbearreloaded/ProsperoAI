@@ -57,6 +57,7 @@ to keep the embedded ORT object in the app link or remove it.
 
 - [x] Shared upstream GGML/audio.cpp build links for PPSA99023.
 - [x] Text regression benchmarks and existing Stable Audio 3, Kokoro and Stable Diffusion
-  shared-runtime checks are recorded in `docs/performance/`.
-- [x] Chatterbox's GGUF adapter passes on PPSA99023 (allocation, EOS and listener check):
-  `docs/performance/2026-10-14/pr27-chatterbox-t3-explicit-attention-clean.json`.
+  shared-runtime checks are summarized in the retained final all-model record.
+- [x] Chatterbox's GGUF adapter passes on PPSA99023 (allocation, EOS and listener check).
+  The final three-round record is retained at
+  `docs/performance/2026-10-14/pr27-all-models-3x-final.json`.

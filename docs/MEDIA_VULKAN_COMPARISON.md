@@ -53,26 +53,21 @@ AGC inference implementation does not eliminate that driver dependency.
 
 ## Reproducible evidence
 
-- `performance/2026-10-11/media-agc.json` and `media-vulkan.json`: all requests,
-  model timings, artifact paths/hashes, sample formats and switching checks.
-- `performance/2026-10-11/media-comparison.json`: medians, real-time factors and
-  artifact differences for every corresponding phase.
-- `performance/2026-10-11/media-compare-builds.json`: signed eboot hashes, loader layout
-  and dependencies. Both builds use entry 0x120, 14 headers and baseline 15 NEEDED.
-- `performance/2026-10-11/bonsai2-media-install-verified.json`: all 81 model files
-  verified by host SHA256 and complete console FTP readback.
+- The detailed historical JSON receipts and binary artifacts were removed from this PR;
+  the measurements above remain as a summary of those comparison runs.
 - `tools/benchmark-media-ps5.py` runs the fixed fixtures on a deployed test title;
   `tools/compare-media-benchmarks.py` compares two completed passing records.
 
 Actual images/WAVs are retained under ignored `build/media-compare/{agc,vulkan}`.
-This continuation is local and uncommitted/unpushed; PR body results do not imply these
-files are already in the remote diff. PPSA99004 untouched; no reboot.
+The current PR retains the final all-model summary at
+[`performance/2026-10-14/pr27-all-models-3x-final.json`](performance/2026-10-14/pr27-all-models-3x-final.json).
+PPSA99004 was untouched; no reboot was performed for these comparisons.
 
 ## Unified runtime follow-through
 
 The comparison variants above are archived baselines. The current app is named
 `vulkan-runtime`, using complete Prism llama plus SD and media on one ABI. Dedicated
 AGC inference and private ggml copies are removed. Its functional console receipt is
-`performance/2026-10-11/vulkan-runtime-media.json`; its text benchmark is separate
-from the earlier figures. Voice profiling and physical-memory measurement move to
+the retained all-model record; its text benchmark is separate from the earlier figures.
+Voice profiling and physical-memory measurement move to
 the subsequent draft PR. The known voice tradeoff remains explicitly accepted.

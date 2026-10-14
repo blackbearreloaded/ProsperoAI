@@ -23,7 +23,7 @@ the page, and a dialog shows its own.
 
 | Page | What it does |
 | --- | --- |
-| **Workspace** | Opens on a welcome page that says what is installed. Cross starts a conversation: with an empty prompt it opens the system keyboard (whose Done sends), with a typed one it sends. Square starts a new conversation. Left moves to the conversation list, where Cross opens one and Triangle deletes it after a confirmation. Triangle retries a failed answer or plays the latest saved audio. The right stick or Up and Down scroll. |
+| **Workspace** | Opens on a welcome page that says what is installed. In the conversation list, choose a model and generation settings, then choose a voice and (for Chatterbox) a spoken language. “New conversation” follows those controls. Cross opens the focused row; Square starts a fresh conversation from the chat. Triangle retries a failed answer or plays the latest saved audio. The right stick or Up and Down scroll. |
 | **Models** | The model under the focus leads the page; the grid below scrolls over any number of models. Square searches (a USB keyboard types straight into the search), L2 and R2 step through the kinds, Cross chooses a model after a confirmation. While a model is being downloaded, Triangle (or Cross on its card) cancels it after a confirmation; what was downloaded so far is removed. |
 | **Settings** | Appearance (Midnight or Daylight, three accents), Generation, Sound, Accessibility (reduced motion, high contrast, reading size) and About (version and credits). Circle returns to the categories. Changes apply at once and are saved in the background. |
 
@@ -70,6 +70,11 @@ IDs. The legacy numeric preference file is read and migrated on the next save.
 Text, image, audio and speech map to the existing runtime adapters. A compatible installed
 model needs no frontend change; a new architecture still needs a runtime adapter. One
 model job runs at a time. No unmeasured memory estimates are shown.
+
+Chatterbox exposes its 19 runtime-supported languages in both the native Workspace and web
+voice controls. The selected voice controls timbre; the language controls spoken-language
+tokenization. The native conversation list places “New conversation” after the voice and
+language controls when a voice model is selected.
 
 Conversations restore their recorded model; a missing model leaves the conversation
 readable. A failed generation keeps the message for a retry, and sending something else

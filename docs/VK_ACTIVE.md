@@ -1,6 +1,8 @@
 # Active work
 
 Updated: 2026-10-14. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
+The PR keeps only the final all-model performance record at
+`performance/2026-10-14/pr27-all-models-3x-final.json`; earlier raw reports were pruned.
 
 ## PR27 user fixes — 2026-10-14
 
@@ -50,13 +52,12 @@ Details: [PR27_HANDOFF.md](PR27_HANDOFF.md); open items:
   tokens/s (about `+5.9%`), with correct greedy output. Eight rows, large workgroups for all
   m, and forced wave32 were measured and rejected.
 - Run-to-run spread under this protocol is about `0.5` tokens/s; treat smaller deltas as
-  noise. Evidence: `performance/2026-10-12/rdna2-*.json`.
+  noise. The detailed run records were pruned from the PR.
 - PR #29's PS5 Pro settings are now available as an explicit `ps5pro` tuning profile. On
   PPSA99023 (base PS5), the same Mistral 7B Q4_0 4K/256-token benchmark measured 72.27 and
   72.31 tok/s with the `ps5` profile before and after the Pro run, versus 69.17 tok/s using
   `DMMV_WG=1` and subgroup 32. Keep `ps5` as the default; the Pro profile is not validated on
-  Pro hardware. See `docs/PS5_VULKAN_PROFILES.md` and
-  `performance/2026-10-13/pr29-ps5-profile-comparison.json`.
+  Pro hardware. See `docs/PS5_VULKAN_PROFILES.md`; the detailed comparison record was pruned.
 
 ## Speech on ggml/Vulkan
 
@@ -68,8 +69,7 @@ Details: [PR27_HANDOFF.md](PR27_HANDOFF.md); open items:
 - The PS5 adapter caps Kokoro's scheduler/metadata reservation at 131072 nodes. On 2026-10-12,
   repeated Kokoro requests passed (first 3.97 s, warm median 0.268 s) and text → Kokoro → text
   succeeded. The utterance was valid mono 24 kHz WAV. SD-Turbo likewise passed repeated
-  text → SD PNG → text checks with verified 512×512 PNGs. Current reports are in
-  `docs/performance/2026-10-12/`.
+  text → SD PNG → text checks with verified 512×512 PNGs. Detailed reports were pruned from the PR.
 - The adjustment is an explicit PS5 dependency adapter (`tools/prepare-kokoro-ps5.py`) invoked by
   `tools/build-vulkan-runtime.sh`, so a fresh dependency checkout gets the same guarded patch.
   Host reference comparison remains `0.9985` envelope correlation. The old Kokoro/OpenCL
@@ -101,7 +101,7 @@ Details: [PR27_HANDOFF.md](PR27_HANDOFF.md); open items:
   uses process-static cache objects; calls remain serialized by the inference mutex.
 - The fix passed two randomized complete modality cycles, each with two requests per media model
   and text round-trips before/between/after modalities. Orders: Kokoro → SD → SA3, then SA3 → SD →
-  Kokoro. Reports: `docs/performance/2026-10-12/vulkan-runtime-random-cycle-1.json` and `...-2.json`.
+  Kokoro. Detailed reports were pruned from the PR.
 - Isolated SA3 on the final clean build: 4-second 44.1 kHz stereo PCM16 WAV, 19.09 s cold / 5.83 s warm; repeated
   output hash identical. Full cycle and text switch verified on PPSA99023. Earlier crash attempt
   remains in `vulkan-runtime-media.json` as regression history.
@@ -119,9 +119,8 @@ Details: [PR27_HANDOFF.md](PR27_HANDOFF.md); open items:
   runtime. Its router path, WAV output, release hook and a PS5 cross-build pass.
 - The curated Turbo Q8_0 bundle pins the GGUF and upstream tokenizer/config sidecars. After the
   1 GiB tensor-read fix, PPSA99023 generated a valid 8-second stereo 48 kHz WAV in 118.28 s,
-  then returned to Qwen 9B and answered a text prompt. Artifact and request evidence:
-  `performance/2026-10-12/pr27-console-followup.json` and
-  `../work/audio/ace-step-1.5-ps5-2026-10-12.wav`.
+  then returned to Qwen 9B and answered a text prompt. The detailed report and generated artifact
+  were pruned from the PR.
 - The decoder compatibility patch uses a pinned-GGML BF16 cast round-trip where this audio.cpp
   revision's fused round operator is unavailable. Console quality/performance validation is a
   single smoke generation; repeatability and parity still need a controlled comparison.
@@ -142,13 +141,13 @@ Details: [PR27_HANDOFF.md](PR27_HANDOFF.md); open items:
 - BoHF 12B MoE 3A Q3_K_M was added as a pinned text preset and verified on PPSA99023. Its 4.70 GB
   GGUF passed the preset SHA check, loaded with the standard `llama` architecture, and returned a
   correct short answer plus a 48-token warm response at about 66 tokens/s. The model is
-  experimental; this confirms runtime compatibility, not general answer quality. See
-  [BoHF console run](performance/2026-10-13/pr27-bohf-12b-moe.json).
+  experimental; this confirms runtime compatibility, not general answer quality. The detailed
+  console run record was pruned from the PR.
 - Internal vs `/mnt/ext1/prosperoai` storage comparison on PPSA99023 found no meaningful warm
   inference difference. Qwen3.5 0.8B warm requests were 0.118–0.121 s on both paths. Kokoro warm
   requests had medians of 0.301 s internal and 0.303 s external. Cold process/model setup was about
   2.7–3.0 s for Qwen and 3.96–4.04 s for Kokoro. External test models remain in the requested
-  directory. Full samples: `performance/2026-10-13/pr27-storage-comparison.json`.
+  directory. Detailed samples were pruned from the PR.
 - The image adapter has a 768px/28-step SD3 profile for a locally supplied compatible model.
   The official Stability AI SD3.5 Medium checkpoint is gated and is not included as a preset.
 - Fish Speech V1.5 remains out of scope for this runtime: its autoregressive model and DAC codec
@@ -175,8 +174,7 @@ Details: [PR27_HANDOFF.md](PR27_HANDOFF.md); open items:
   connections. Poll samples were about 28–30 MiB/s at 8 and 37–42 MiB/s at 16; 16 is the
   current setting. A 32-connection run ended with a `CRASH KILL_END` event before a reliable
   speed or resource sample. The PS5 `shsrv` monitor was unavailable, so peak CPU/RSS is unknown.
-- Full run details, Granite inference and the ACE-Step retest are in
-  `performance/2026-10-12/pr27-console-followup.json`.
+- Full run details, Granite inference and the ACE-Step retest were pruned from the PR.
 - One-minute idle unload was verified in klog; the next Qwen request reloaded successfully in
   about 4.1 s. The configured two-minute timeout was restored.
 - Workspace text export now saves the conversation before inference, archives plain `.txt`, and
@@ -220,5 +218,6 @@ Draft #20 carries AirLLM/Strata bounded-residency research, voice profiling, pea
 extended switching and capacity gates. PR #15 does not claim streaming inference, universal
 quality or real-time audio.
 
-Evidence: `performance/2026-10-11/vulkan-runtime-{build,bonsai,media,legacy-alias}.json`.
+The detailed historical runtime evidence files were pruned from the PR. The retained current
+summary is `performance/2026-10-14/pr27-all-models-3x-final.json`.
 See [runtime details](VULKAN_RUNTIME.md) and [media comparison](MEDIA_VULKAN_COMPARISON.md).

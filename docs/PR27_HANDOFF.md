@@ -2,18 +2,19 @@
 
 ## Scope and console rules
 
-Finish all installed text/media models on PS5 using the common upstream GGML/Vulkan
-runtime. Chatterbox is the user's next priority. Keep upstream pinned; Bonsai's narrow
-Prism quantization/Hadamard compatibility is applied by preparation scripts.
+Keep the installed text/media models working on PS5 with the common upstream GGML/Vulkan
+runtime. Chatterbox uses the pinned audio.cpp adapter and now exposes all supported languages
+in the voice controls. Keep upstream pinned; Bonsai's narrow Prism quantization/Hadamard
+compatibility is applied by preparation scripts.
 Read AGENTS.md before console work. Set PS5_HOST and PROSPERO_TEST_TITLE in the environment;
 the authorized folder-backed test slot is PPSA99023. Never overwrite PPSA99004 or reboot
 without separate authorization. Task deployments, payloads and test launches are authorized.
 
 ## Verified Bonsai result
 
-`docs/performance/2026-10-14/bonsai-hadamard-no-profile.json` records correct arithmetic,
-three coherent 94-token answers (13.2605, 13.4333, 13.2587 tok/s), Thinking mode and
-a short 16K-context request. Median decode is 13.2605 tok/s. The profiling package marker
+The retained PR performance record is
+`docs/performance/2026-10-14/pr27-all-models-3x-final.json`; it includes three coherent
+Bonsai runs and the final all-model benchmark. The profiling package marker
 `vulkan_profile.txt` reduced performance to approximately 4.8 tok/s; it was removed from
 the local package and the console test folder. Preserve that removal.
 
@@ -44,7 +45,8 @@ the llama adapter budgets total free direct memory instead of the largest contig
 (`include/direct_memory.hpp`). ACE-Step loads its stages on demand and drops each one after
 use (Vulkan peak 7.39 → 4.53 GiB), so repeated runs and runs after large text models pass.
 `tools/benchmark-all-models-ps5.py` runs every installed model for N rounds with a model
-switch on every request; results are in `docs/performance/2026-10-14/`.
+switch on every request. Intermediate performance reports were removed from this PR; the
+retained final three-round record is `docs/performance/2026-10-14/pr27-all-models-3x-final.json`.
 
 Native DualSense capture and web capture/save are implemented. The user confirmed PS5
 recording works. The native voice picker has visible glyph explanations and L3 delete
@@ -54,6 +56,8 @@ Physical persistent output storage is `/data/prosperoai/work/{image,audio,voice}
 `/download0/ProsperoAI/...` remains the sandbox/HTTP alias.
 
 Web runtime control initialization is fixed, including Chatterbox voice switching.
+Chatterbox now offers all 19 supported speech languages in the web and native controls.
+In the PS5 Workspace list, “New conversation” follows the voice and language settings.
 Settings requests are serialized. Model selection sends `prepare:false`; first typing
 prepares once, and submission waits for preparation. Deleting the current conversation
 opens an empty chat instead of returning to welcome. Both headers show actual backend

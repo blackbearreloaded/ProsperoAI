@@ -11,8 +11,8 @@ Exact Bonsai 2 PTQ1_0 has 5.379 GB of layer weights; a packed largest-layer pair
 probes measured 1.384/1.778 GB/s serial/four workers with uncontrolled cache and no GPU
 upload. A full-layer disk-only bound is approximately 0.33 tokens/s. Resident Vulkan
 inference remains the speed and output reference; bounded streaming is a capacity
-feature, not an assumed throughput improvement. See [research](AIRLLM_PS5_RESEARCH.md)
-and `performance/2026-10-11/streaming-*.json`.
+feature, not an assumed throughput improvement. See [research](AIRLLM_PS5_RESEARCH.md).
+The detailed historical streaming probe files were removed from this PR.
 
 ## S1: native bounded residency
 

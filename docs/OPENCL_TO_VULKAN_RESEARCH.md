@@ -34,11 +34,8 @@ caches to process-static state; ProsperoAI serializes model operations with its 
 - Two complete modality cycles passed with different orders, repeated media requests and text
   round-trips. SD-Turbo writes PNG under `work/image/`; Kokoro writes WAV under `work/voice/`;
   SA3 writes WAV under `work/audio/`.
-- Reports: [random cycle 1](performance/2026-10-12/vulkan-runtime-random-cycle-1.json),
-  [random cycle 2](performance/2026-10-12/vulkan-runtime-random-cycle-2.json),
-  [isolated SA3 repeat check](performance/2026-10-12/vulkan-runtime-sa3.json), and
-  [text benchmark](performance/2026-10-12/vulkan-runtime-bonsai.json). The initial pre-fix
-  crash remains in `vulkan-runtime-media.json` for regression history.
+The detailed historical cycle reports were removed from this PR. Current all-model results
+are summarized in the [retained three-round record](performance/2026-10-14/pr27-all-models-3x-final.json).
 
 Historical OpenCL ABI, Adreno kernel and old model timing observations below explain why the
 compatibility runtime was replaced; they are not a description of the current build.

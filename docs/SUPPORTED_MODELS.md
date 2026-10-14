@@ -17,4 +17,4 @@ types are supported by the bundled runtime, but they are not verified presets. I
 and voice models use their modality adapters and are listed separately in the main README.
 
 Z-Image Turbo is present in the image catalog, but its current PS5 preset has not passed an
-end-to-end generation test. See the [PS5 follow-up report](performance/2026-10-13/pr27-z-image-ps5-followup.json).
+end-to-end generation test. Its detailed follow-up report was removed from this PR.
