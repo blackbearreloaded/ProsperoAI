@@ -14,6 +14,7 @@ export TMPDIR="$root/build/compiler-tmp"
 mkdir -p "$TMPDIR"
 options=(-DPROS_LLAMA_SOURCE="$source_tree" -DPROS_GGML_SOURCE="$ggml_source" -DVulkan_INCLUDE_DIR="$root/.deps/Vulkan-Headers/include" -DGGML_CCACHE=ON)
 python3 "$root/tools/prepare-bonsai-ggml.py" --ggml-source "$ggml_source" --prism-source "$prism_source"
+python3 "$root/tools/prepare-bonsai-llama.py" --llama-source "$source_tree" --prism-source "$prism_source"
 python3 "$root/tools/prepare-ggml-graph-setter.py" --source "$ggml_source"
 python3 "$root/tools/prepare-audio-cpp-sa3.py" --source "$root/build/audio-cpp-upstream" --ggml-source "$ggml_source"
 if [[ $mode == ps5 ]]; then

@@ -105,6 +105,14 @@
       "path": "build/audio-cpp-upstream"
     },
     {
+      "name": "onnxruntime",
+      "about": "ONNX Runtime v1.22.1 for the Chatterbox ONNX CPU adapter; PS5 FreeBSD changes are in tools/patches/onnxruntime-1.22.1-ps5.patch",
+      "kind": "git",
+      "url": "https://github.com/microsoft/onnxruntime.git",
+      "commit": "89746dc19a0a1ae59ebf4b16df9acab8f99f3925",
+      "path": "build/onnxruntime-upstream"
+    },
+    {
       "name": "espeak-ng-headers",
       "about": "espeak-ng 1.51 source, used only for its public headers. kokoro.cpp links espeak-ng directly and the PS5 build has no system copy; the symbols come from vendor/lib/libespeak-ng.a.",
       "kind": "git",

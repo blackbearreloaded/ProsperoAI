@@ -32,7 +32,7 @@ def request(path, body=None):
 
 
 original = request('/api/settings/runtime')
-result = {'runtime': 'Prism e8fd209c975c80aa7fb36a8423571ff3b1b7e955',
+result = {'runtime': 'upstream llama.cpp + GGML v0.26.0 d7cb574 with Bonsai PTQ1_0 Vulkan adapter',
     'title': title, 'method': 'resident Vulkan, greedy, 4K, automatic KV; warm repeats; no model transfer during timing',
     'original_settings': original, 'presets': request('/api/models/presets'), 'runs': []}
 args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -89,6 +89,9 @@ try:
     assert 'four' in text.lower() or '4' in text, text
     result['passed'] = True
 finally:
-    request('/api/settings/runtime', original)
+    restorable = {key: original[key] for key in (
+        'context', 'output_limit', 'kv', 'thinking', 'idle_unload_minutes',
+        'kokoro_voice', 'chatterbox_voice')}
+    request('/api/settings/runtime', restorable)
     result['restored_settings'] = request('/api/settings/runtime')
     save()

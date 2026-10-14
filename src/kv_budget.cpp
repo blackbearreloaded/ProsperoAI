@@ -2,6 +2,7 @@
 #include "kv_budget.hpp"
 #include <algorithm>
 #include <array>
+#include <limits>
 
 namespace prospero_kv
 {
@@ -14,6 +15,15 @@ std::uint64_t kv_bytes_per_token(const ModelKvShape &shape, KvType type)
     return std::uint64_t(shape.kv_layers) * shape.kv_heads * 2 * row;
 }
 
+std::uint64_t kv_bytes_for_context(const ModelKvShape &shape, KvType type,
+                                   unsigned context_length)
+{
+    const auto per_token = kv_bytes_per_token(shape, type);
+    if (per_token && context_length > std::numeric_limits<std::uint64_t>::max() / per_token)
+        return std::numeric_limits<std::uint64_t>::max();
+    return per_token * context_length;
+}
+
 KvChoice choose_auto(const ModelKvShape &shape, std::uint64_t weights_bytes,
                      std::uint64_t compute_reserve_bytes, std::uint64_t free_bytes,
                      const KvType *fixed_type)
@@ -23,24 +33,40 @@ KvChoice choose_auto(const ModelKvShape &shape, std::uint64_t weights_bytes,
     // `steps` to clamp to; return its own ceiling directly rather than falling through to the
     // loop below, which would otherwise return the unclamped steps[0].
     if (shape.n_ctx_train < steps[0])
-        return {shape.n_ctx_train, fixed_type ? *fixed_type : KvType::F16,
-                fixed_type && *fixed_type != KvType::F16};
+    {
+        const KvType type = fixed_type ? *fixed_type : KvType::F16;
+        const auto required = kv_bytes_for_context(shape, type, shape.n_ctx_train);
+        const auto usable = free_bytes > weights_bytes && free_bytes - weights_bytes > compute_reserve_bytes
+                                ? free_bytes - weights_bytes - compute_reserve_bytes
+                                : 0;
+        if (!required || required > usable)
+            return {0, type, type != KvType::F16};
+        return {shape.n_ctx_train, type, type != KvType::F16};
+    }
     const std::uint64_t usable =
         free_bytes > weights_bytes && free_bytes - weights_bytes > compute_reserve_bytes
             ? free_bytes - weights_bytes - compute_reserve_bytes
             : 0;
-    KvChoice best{steps[0], fixed_type ? *fixed_type : KvType::F16,
+    KvChoice best{0, fixed_type ? *fixed_type : KvType::F16,
                   fixed_type && *fixed_type != KvType::F16};
     for (unsigned step : steps)
     {
         if (step > shape.n_ctx_train)
             break;
-        const KvType type = fixed_type ? *fixed_type : step <= 8192 ? KvType::F16 : KvType::Q8_0;
-        const std::uint64_t needed =
-            static_cast<std::uint64_t>(step) * kv_bytes_per_token(shape, type);
-        if (needed > usable)
-            continue; // q8_0 at 16K can fit even when f16 at 8K does not.
-        best = {step, type, type != KvType::F16};
+        const KvType preferred = fixed_type ? *fixed_type : step <= 8192 ? KvType::F16 : KvType::Q8_0;
+        const std::uint64_t needed = kv_bytes_for_context(shape, preferred, step);
+        if (needed <= usable) {
+            best = {step, preferred, preferred != KvType::F16};
+            continue;
+        }
+        // On constrained GPUs, retain the largest usable context by trying Q8 KV at
+        // smaller steps too. This is particularly useful for large hybrid models
+        // whose weight buffers leave less room than the usual F16 4K cache.
+        if (!fixed_type && preferred == KvType::F16) {
+            const auto q8_needed = kv_bytes_for_context(shape, KvType::Q8_0, step);
+            if (q8_needed <= usable)
+                best = {step, KvType::Q8_0, true};
+        }
     }
     return best;
 }

@@ -4,6 +4,7 @@
 #include "model_paths.hpp"
 #include "model_presets.hpp"
 #include "model_downloader_ps5.hpp"
+#include "storage.hpp"
 #include <cassert>
 #include <algorithm>
 #include <cstring>
@@ -26,7 +27,7 @@ unsigned gpt_runtime_model_count()
 }
 const char *gpt_runtime_model_id(unsigned i)
 {
-    return i ? "text1" : "mistral-7b-instruct-v0.3-q4-0.gguf";
+    return i ? "text1" : "Mistral-7B-Instruct-v0.3.Q4_0.gguf";
 }
 const char *gpt_runtime_model_name(unsigned i)
 {
@@ -77,6 +78,19 @@ bool delete_model_files(const char *)
     return true;
 }
 } // namespace prospero_model_download
+namespace prospero
+{
+const Storage &storage()
+{
+    static const Storage state = [] {
+        Storage value;
+        value.data_root = model_root();
+        value.model_root = model_root();
+        return value;
+    }();
+    return state;
+}
+} // namespace prospero
 extern "C"
 {
     std::int64_t sceKernelGetDirectMemorySize()
@@ -126,10 +140,12 @@ extern "C"
     {
         return 1;
     }
-    int ps5_kokoro_tts_generate(const char *root, const char *prompt, char *out, std::size_t n,
-                                std::uint64_t *elapsed, gpt_runtime_progress_fn)
+    int ps5_kokoro_tts_generate(const char *root, const char *voice, const char *prompt,
+                                char *out, std::size_t n, std::uint64_t *elapsed,
+                                gpt_runtime_progress_fn)
     {
         assert(std::string(root) == std::string(prospero::model_root()) + "/kokoro-82m-vulkan");
+        assert(std::strcmp(voice, "af_heart") == 0);
         assert(std::strcmp(prompt, "Hello") == 0);
         ++generated;
         if (block_voice.load())
@@ -141,6 +157,11 @@ extern "C"
         *elapsed = 123;
         std::snprintf(out, n, "voice.wav");
         return 0;
+    }
+    int ps5_chatterbox_tts_generate(const char *, const char *, const char *, char *, std::size_t,
+                                    std::uint64_t *, gpt_runtime_progress_fn)
+    {
+        return 1;
     }
 }
 int main()
@@ -176,7 +197,9 @@ int main()
         const std::string relative = voice.files[i].path;
         if (relative.compare(0, 9, "licenses/") == 0)
             continue;
-        const auto path = std::filesystem::path(prospero::model_root()) / voice.id / relative;
+        const auto path = relative.compare(0, 7, "voices/") == 0
+            ? std::filesystem::path(prospero::storage().data_root) / relative
+            : std::filesystem::path(prospero::model_root()) / voice.id / relative;
         std::filesystem::create_directories(path.parent_path());
         std::ofstream(path) << "fixture";
     }
@@ -219,12 +242,12 @@ int main()
     // Existing bundle IDs resolve to their equivalent GGUF on Vulkan, preserving
     // saved conversations without linking any AGC runtime or loading the bundle.
     const auto legacy = std::filesystem::path(prospero::model_root()) /
-                        "mistral-7b-instruct-v0.3-q4-0" / "model.ps5lm";
+                        "Mistral-7B-Instruct-v0.3.Q4_0" / "model.ps5lm";
     std::filesystem::create_directories(legacy.parent_path());
     std::ofstream(legacy) << "legacy data must remain untouched";
     gpt_runtime_refresh_models();
     assert(gpt_runtime_model_count() == 4);
-    assert(std::strcmp(gpt_runtime_model_id(2), "mistral-7b-instruct-v0.3-q4-0") == 0);
+    assert(std::strcmp(gpt_runtime_model_id(2), "Mistral-7B-Instruct-v0.3.Q4_0") == 0);
     assert(std::strcmp(gpt_runtime_model_purpose(3), "text-to-speech") == 0);
     assert(gpt_runtime_select_model(2));
     assert(std::strcmp(gpt_runtime_backend(), "Vulkan") == 0);

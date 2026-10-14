@@ -1,0 +1,306 @@
+diff --git a/cmake/CMakeLists.txt b/cmake/CMakeLists.txt
+index 5e68990..a479495 100644
+--- a/cmake/CMakeLists.txt
++++ b/cmake/CMakeLists.txt
+@@ -10,6 +10,11 @@ cmake_policy(SET CMP0104 OLD)
+ # Project
+ project(onnxruntime C CXX ASM)
+ 
++if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
++  # PS5 libc supports pthread TLS but limits static TLS alignment to 32 bytes.
++  add_compile_definitions(GOOGLE_PROTOBUF_NO_THREADLOCAL EIGEN_MAX_ALIGN_BYTES=32)
++endif()
++
+ # Disable fast-math for Intel oneAPI compiler
+ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "IntelLLVM")
+   if("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC-like")
+@@ -644,7 +649,7 @@ file (STRINGS "${REPO_ROOT}/VERSION_NUMBER" ORT_VERSION)
+ find_package(Threads)
+ # On Windows we directly use Windows APIs to do the job
+ # Android NDK doesn't provide the iconv lib.
+-if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
++if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "Android" AND NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+   find_package(Iconv REQUIRED)
+   set(ICONV_LIB Iconv::Iconv)
+ endif()
+diff --git a/cmake/onnxruntime_mlas.cmake b/cmake/onnxruntime_mlas.cmake
+index 8decca1..78123cf 100644
+--- a/cmake/onnxruntime_mlas.cmake
++++ b/cmake/onnxruntime_mlas.cmake
+@@ -652,12 +652,24 @@ else()
+ message(STATUS "CMAKE_CXX_COMPILER_ID: ${CMAKE_CXX_COMPILER_ID}")
+ message(STATUS "CMAKE_CXX_COMPILER_VERSION: ${CMAKE_CXX_COMPILER_VERSION}")
+ 
+-if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "11")
++if((NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "11") AND NOT CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+           message(STATUS "Using -mavx2 -mfma -mavxvnni flags")
+           set_source_files_properties(${mlas_platform_srcs_avx2} PROPERTIES COMPILE_FLAGS "-mavx2 -mfma -mf16c -mavxvnni")
+ else()
+           message(STATUS "Using -mavx2 -mfma flags")
+           set_source_files_properties(${mlas_platform_srcs_avx2} PROPERTIES COMPILE_FLAGS "-mavx2 -mfma -mf16c")
++endif()
++if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
++  # Compile the PS5 n-bit kernel as baseline AVX2. Its source disables VNNI-only paths;
++  # AVX-512 kernels remain separate translation units with their own dispatch.
++  set_property(SOURCE ${MLAS_SRC_DIR}/sqnbitgemm_kernel_avx2.cpp APPEND PROPERTY COMPILE_OPTIONS
++    -mavx2 -mfma -mf16c -Wno-array-bounds -DMLAS_PS5_AVX2_ONLY)
++  set_property(SOURCE ${MLAS_SRC_DIR}/sqnbitgemm_kernel_avx512.cpp APPEND PROPERTY COMPILE_OPTIONS
++    -Wno-array-bounds)
++  set_property(SOURCE ${MLAS_SRC_DIR}/sqnbitgemm_kernel_avx512vnni.cpp APPEND PROPERTY COMPILE_OPTIONS
++    -Wno-array-bounds)
++  set_property(SOURCE ${MLAS_SRC_DIR}/platform.cpp APPEND PROPERTY COMPILE_DEFINITIONS
++    MLAS_PS5_AVX2_ONLY)
+ endif()
+         set(mlas_platform_srcs_avx512f
+           ${MLAS_SRC_DIR}/x86_64/DgemmKernelAvx512F.S
+diff --git a/include/onnxruntime/core/platform/EigenNonBlockingThreadPool.h b/include/onnxruntime/core/platform/EigenNonBlockingThreadPool.h
+index 26fc440..a8bdfbd 100644
+--- a/include/onnxruntime/core/platform/EigenNonBlockingThreadPool.h
++++ b/include/onnxruntime/core/platform/EigenNonBlockingThreadPool.h
+@@ -189,7 +189,11 @@ enum class PushResult {
+ //   support for aligned allocation which we could use here.
+ 
+ #if defined(__x86_64__)
++#if defined(__FreeBSD__)
++#define ORT_FALSE_SHARING_BYTES 32
++#else
+ #define ORT_FALSE_SHARING_BYTES 128
++#endif
+ #else
+ #define ORT_FALSE_SHARING_BYTES 64
+ #endif
+diff --git a/onnxruntime/core/common/logging/logging.cc b/onnxruntime/core/common/logging/logging.cc
+index a79e730..b55c703 100644
+--- a/onnxruntime/core/common/logging/logging.cc
++++ b/onnxruntime/core/common/logging/logging.cc
+@@ -25,7 +25,6 @@
+ 
+ #if __FreeBSD__
+ #include <sys/thr.h>  // Use thr_self() syscall under FreeBSD to get thread id
+-#include "logging.h"
+ #endif
+ 
+ namespace onnxruntime {
+diff --git a/onnxruntime/core/common/threadpool.cc b/onnxruntime/core/common/threadpool.cc
+index b192688..22dbe0c 100644
+--- a/onnxruntime/core/common/threadpool.cc
++++ b/onnxruntime/core/common/threadpool.cc
+@@ -34,6 +34,8 @@ limitations under the License.
+ #endif
+ #elif defined(__wasm__)
+ #include <emscripten/threading.h>
++#elif defined(__FreeBSD__)
++#include <sys/thr.h>
+ #else
+ #include <sched.h>
+ #endif
+@@ -139,6 +141,9 @@ void ThreadPoolProfiler::MainThreadStat::LogCore() {
+   core_ = emscripten_num_logical_cores();
+ #elif defined(_AIX)
+   core_ = mycpu();
++#elif defined(__FreeBSD__)
++  long tid = 0;
++  core_ = thr_self(&tid) == 0 ? static_cast<unsigned int>(tid) : 0;
+ #else
+   core_ = sched_getcpu();
+ #endif
+@@ -223,6 +228,8 @@ void ThreadPoolProfiler::LogRun(int thread_idx) {
+       child_thread_stats_[thread_idx].core_ = emscripten_num_logical_cores();
+ #elif defined(_AIX)
+       child_thread_stats_[thread_idx].core_ = mycpu();
++#elif defined(__FreeBSD__)
++      child_thread_stats_[thread_idx].core_ = 0;
+ #else
+       child_thread_stats_[thread_idx].core_ = sched_getcpu();
+ #endif
+diff --git a/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx2.cpp b/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx2.cpp
+index 384b04c..2f5729f 100644
+--- a/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx2.cpp
++++ b/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx2.cpp
+@@ -666,6 +666,7 @@ SQ8BitGemmKernel_BlkSum_CompInt8_avx2(
+     return CountM;
+ }
+ 
++#if !defined(MLAS_PS5_AVX2_ONLY)
+ size_t
+ SQ4BitGemmKernel_BlkSum_CompInt8_avx2vnni(
+   const size_t BlkLen,
+@@ -720,6 +721,7 @@ SQ4BitGemmKernel_BlkSum_CompInt8_avx2vnni(
+     }
+     return CountM;
+ }
++#endif
+ 
+ template <size_t NCols, bool HasZeroPoint>
+ MLAS_FORCEINLINE void
+@@ -1461,6 +1463,9 @@ const MLAS_QNBIT_GEMM_DISPATCH MlasSQNBitGemmDispatchAvx2 = []() {
+     return d;
+ }();
+ 
++#if defined(MLAS_PS5_AVX2_ONLY)
++const MLAS_QNBIT_GEMM_DISPATCH MlasSQNBitGemmDispatchAvx2vnni = MlasSQNBitGemmDispatchAvx2;
++#else
+ const MLAS_QNBIT_GEMM_DISPATCH MlasSQNBitGemmDispatchAvx2vnni = []() {
+     MLAS_QNBIT_GEMM_DISPATCH d;
+ 
+@@ -1482,3 +1487,4 @@ const MLAS_QNBIT_GEMM_DISPATCH MlasSQNBitGemmDispatchAvx2vnni = []() {
+ 
+     return d;
+ }();
++#endif
+diff --git a/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx_common.h b/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx_common.h
+index e7df817..9022088 100644
+--- a/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx_common.h
++++ b/onnxruntime/core/mlas/lib/sqnbitgemm_kernel_avx_common.h
+@@ -557,6 +557,7 @@ UnrolledLoop(IterationFn&& f)
+ 
+ // this function is used to dot product 2 pairs of 32 epi8s. it is used with Int8 precision
+ // and blklen >= 64. In this case, 64 of 4b weights are filled with one load.
++#if !defined(MLAS_PS5_AVX2_ONLY)
+ static MLAS_FORCEINLINE __m256
+ dot_quad_avx512vnni(
+     const __m256i bv0_32_epi8, const __m256i bv1_32_epi8, const __m256i av0_32_epi8, const __m256i av1_32_epi8
+@@ -567,6 +568,7 @@ dot_quad_avx512vnni(
+     sum_8_epi32 = _mm256_dpbusd_epi32(sum_8_epi32, _mm256_sign_epi8(bv1_32_epi8, bv1_32_epi8), _mm256_sign_epi8(av1_32_epi8, bv1_32_epi8));
+     return _mm256_cvtepi32_ps(sum_8_epi32);
+ }
++#endif
+ 
+ static MLAS_FORCEINLINE __m256
+ dot_quad_avx2(
+@@ -585,6 +587,7 @@ dot_quad_avx2(
+ 
+ // TODO: refactor load_and_mul_sum_s8_quads_with_zp_avx512vnni, load_and_mul_sum_s8_quads_with_zp_avx2
+ // and accumulate_mul_sum_avx512vnni, accumulate_mul_sum_avx2
++#if !defined(MLAS_PS5_AVX2_ONLY)
+ static MLAS_FORCEINLINE void
+ load_and_mul_sum_s8_quads_with_zp_avx512vnni(
+     const __m256i av_0_epi8, const __m128i* QuantBDataPtr, const __m128i low_mask, const __m256i zero, const int8_t zp, const __m256 scale0, __m256& acc0
+@@ -615,6 +618,7 @@ load_and_mul_sum_s8_quads_with_zp_avx512vnni(
+     const __m256 sum_ps = _mm256_cvtepi32_ps(dot_0_epi32);
+     acc0 = _mm256_fmadd_ps(sum_ps, scale0, acc0);
+ }
++#endif
+ 
+ static MLAS_FORCEINLINE void
+ load_and_mul_sum_s8_quads_with_zp_avx2(
+@@ -686,6 +690,7 @@ using AccumulateFunctionType = void (*)(
+     const __m256i, const __m128i*, const __m128i, const __m256i, const std::byte*, bool, const float, __m256&
+ );
+ 
++#if !defined(MLAS_PS5_AVX2_ONLY)
+ template <bool HasZeroPoint>
+ static MLAS_FORCEINLINE void
+ accumulate_mul_sum_avx512vnni(
+@@ -700,6 +705,7 @@ accumulate_mul_sum_avx512vnni(
+         zp, scale0, acc0
+     );
+ }
++#endif
+ 
+ template <bool HasZeroPoint>
+ static MLAS_FORCEINLINE void
+@@ -763,6 +769,7 @@ hsum_float_8(const __m256 x)
+  * @brief Horizontally sum 4 vectors and store
+  *        the results in the returned vector
+  */
++#if !defined(MLAS_PS5_AVX2_ONLY)
+ static MLAS_FORCEINLINE __m128
+ FoldAccumulators(const __m512& acc0, const __m512& acc1, const __m512& acc2, const __m512& acc3)
+ {
+@@ -791,6 +798,7 @@ FoldAccumulators(const __m512& acc0, const __m512& acc1, const __m512& acc2, con
+         _mm256_add_ps(_mm512_extractf32x8_ps(acc_lo0123, 0), _mm512_extractf32x8_ps(acc_lo0123, 1));
+     return _mm_add_ps(_mm256_extractf32x4_ps(acc_y, 0), _mm256_extractf32x4_ps(acc_y, 1));
+ }
++#endif
+ 
+ static MLAS_FORCEINLINE __m128i
+ convert_2_ps_to_epi8(__m256 v0, __m256 v1)
+diff --git a/onnxruntime/core/platform/posix/env.cc b/onnxruntime/core/platform/posix/env.cc
+index 94aadf3..ac79b72 100644
+--- a/onnxruntime/core/platform/posix/env.cc
++++ b/onnxruntime/core/platform/posix/env.cc
+@@ -19,7 +19,7 @@ limitations under the License.
+ #include <assert.h>
+ #include <dlfcn.h>
+ #include <fcntl.h>
+-#include <ftw.h>
++#include <dirent.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <stdio.h>
+@@ -33,6 +33,7 @@ limitations under the License.
+ 
+ #include <iostream>
+ #include <optional>
++#include <string>
+ #include <thread>
+ #include <utility>  // for std::forward
+ #include <vector>
+@@ -104,15 +105,38 @@ long int TempFailureRetry(TFunc retriable_operation, TFuncArgs&&... args) {
+   return result;
+ }
+ 
+-// nftw() callback to remove a file
+-int nftw_remove(
+-    const char* fpath, const struct stat* /*sb*/,
+-    int /*typeflag*/, struct FTW* /*ftwbuf*/) {
+-  const auto result = remove(fpath);
+-  if (result != 0) {
+-    auto [err_no, err_msg] = GetErrnoInfo();
+-    LOGS_DEFAULT(WARNING) << "remove() failed. Error code: " << err_no << " error msg: " << err_msg
+-                          << ", path: " << fpath;
++// PS5's userland does not export nftw(), so walk without following symlinks.
++int RemoveFolderRecursively(const char* path) {
++  struct stat info {};
++  if (lstat(path, &info) != 0) {
++    return -1;
++  }
++  if (!S_ISDIR(info.st_mode)) {
++    return remove(path);
++  }
++  DIR* directory = opendir(path);
++  if (directory == nullptr) {
++    return -1;
++  }
++  int result = 0;
++  while (dirent* entry = readdir(directory)) {
++    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
++      continue;
++    }
++    const std::string child = std::string(path) + "/" + entry->d_name;
++    struct stat child_info {};
++    if (lstat(child.c_str(), &child_info) != 0 ||
++        (S_ISDIR(child_info.st_mode) ? RemoveFolderRecursively(child.c_str()) : remove(child.c_str())) != 0) {
++      result = -1;
++      break;
++    }
++  }
++  const int close_result = closedir(directory);
++  if (result == 0 && close_result != 0) {
++    result = -1;
++  }
++  if (result == 0) {
++    result = rmdir(path);
+   }
+   return result;
+ }
+@@ -209,7 +233,7 @@ class PosixThread : public EnvThread {
+   static void* ThreadMain(void* param) {
+     std::unique_ptr<Param> p(static_cast<Param*>(param));
+     ORT_TRY {
+-#if !defined(__APPLE__) && !defined(__ANDROID__) && !defined(__wasm__) && !defined(_AIX)
++#if !defined(__APPLE__) && !defined(__ANDROID__) && !defined(__wasm__) && !defined(_AIX) && !defined(__FreeBSD__)
+       if (p->affinity.has_value() && !p->affinity->empty()) {
+         cpu_set_t cpuset;
+         CPU_ZERO(&cpuset);
+@@ -495,8 +519,7 @@ class PosixEnv : public Env {
+   }
+ 
+   common::Status DeleteFolder(const PathString& path) const override {
+-    const auto result = nftw(
+-        path.c_str(), &nftw_remove, 32, FTW_DEPTH | FTW_PHYS);
++    const auto result = RemoveFolderRecursively(path.c_str());
+     ORT_RETURN_IF_NOT(result == 0, "DeleteFolder(): nftw() failed with error: ", result);
+     return Status::OK();
+   }

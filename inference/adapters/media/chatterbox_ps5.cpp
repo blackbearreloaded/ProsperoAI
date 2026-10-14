@@ -209,9 +209,10 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
     }
     const auto model = std::unique_ptr<audiocpp_model, decltype(&audiocpp_model_free)>(raw_model,
                                                                                        audiocpp_model_free);
-    // The smaller PS5 decode cache keeps the T3 graph within the CPU backend's
-    // bounded direct-memory allocation while we retain a clear size diagnostic.
-    audiocpp_backend_config backend{"cpu", 0, 4};
+    // Keep Chatterbox on the same shared Vulkan device as the other model
+    // adapters. A CPU session tried to reserve a 192–256 MiB arena in the
+    // title's constrained direct-memory heap and aborted the HTTP worker.
+    audiocpp_backend_config backend{"vulkan", 0, 4};
     audiocpp_options *raw_session_options = audiocpp_options_create();
     if (!raw_session_options ||
         audiocpp_options_set(raw_session_options, "chatterbox.mem_saver", "true") != AUDIOCPP_OK) {
@@ -224,8 +225,9 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
     const auto session_options = std::unique_ptr<audiocpp_options, decltype(&audiocpp_options_free)>(
         raw_session_options, audiocpp_options_free);
     audiocpp_session *raw_session = nullptr;
+    log_line("session backend=vulkan device=0 mem_saver=true");
     if (audiocpp_session_create(raw_model, "clon", "offline", &backend, raw_session_options, &raw_session) != AUDIOCPP_OK || !raw_session) {
-        log_failure("CPU session creation failed");
+        log_failure("Vulkan session creation failed");
         std::snprintf(response, response_capacity, "Could not create Chatterbox session: %s", audiocpp_last_error());
         return 5;
     }
@@ -249,7 +251,7 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
     if (progress) progress("Generating speech with Chatterbox");
     audiocpp_result *raw_result = nullptr;
     if (audiocpp_session_run(raw_session, raw_request, &raw_result) != AUDIOCPP_OK || !raw_result) {
-        log_failure("CPU generation failed");
+        log_failure("Vulkan generation failed");
         std::snprintf(response, response_capacity, "Chatterbox speech generation failed: %s", audiocpp_last_error());
         return 8;
     }

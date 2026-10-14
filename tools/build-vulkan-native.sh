@@ -105,6 +105,12 @@ for relative in "${sources[@]}"; do
  objects+=("$object")
 done
 ninja_run
+# ONNX Runtime is compiled into one relocatable object because the title loader cannot load
+# a custom DSO. Keep OrtGetApiBase reachable in the final eboot for native ORT adapters.
+bash "$root/tools/build-onnxruntime-ps5.sh"
+ort_object="$root/build/onnxruntime-ps5/Release/libonnxruntime-ps5.o"
+[[ -f $ort_object ]] || { echo "Missing embedded ONNX Runtime object: $ort_object" >&2; exit 2; }
+objects+=("$ort_object")
 # The model downloader's HTTPS (vulkan/net): libcurl with OpenSSL, libpsl and zstd from the
 # pinned PacBrew prefix, linked into one object with console_curl.c. What that file puts in
 # place of libc for them (name lookup, fcntl on sockets, a few more functions) gets a name of
@@ -161,7 +167,7 @@ for symbol in pthread_once strtof strtod fseek ftell strcasestr; do radv_link_fl
 for symbol in fopen freopen open stat lstat mkdir rmdir unlink remove rename access opendir \
   sceKernelOpen sceKernelMkdir sceKernelRmdir sceKernelUnlink; do radv_link_flags+=("--wrap=$symbol"); done
 # What the app prints for the console's log is also kept by the debug log (vulkan/debug_tee.cpp).
-radv_link_flags+=(--wrap=sceKernelDebugOutText)
+radv_link_flags+=(--wrap=sceKernelDebugOutText --undefined=OrtGetApiBase)
 cat > "$work/app-compat.map" <<'MAP'
 { local: pthread_once; strtof; strtod; fseek; ftell; strcasestr; gl*; hui_release_splash; __wrap_*; };
 MAP
@@ -174,7 +180,7 @@ audio_archives+=("$root/.deps/pacbrew/v0.40.2/sysroot/user/homebrew/lib/libFLAC.
 for audio_input in "${audio_archives[@]}"; do
  [[ -f $audio_input ]] || { echo "Run make vulkan-runtime-libs first: missing $audio_input" >&2; exit 2; }
 done
-"$sdk/bin/prospero-lld" "${radv_linker_script[@]}" --eh-frame-hdr "${radv_link_flags[@]}" --wrap=sceAgcInit \
+"$sdk/bin/prospero-lld" "${radv_linker_script[@]}" --eh-frame-hdr --no-dynamic-linker "${radv_link_flags[@]}" --wrap=sceAgcInit \
  --version-script "$work/app-compat.map" --version-script "$ref/tooling/native/app-symbols.map" --exclude-libs=ALL -e _start \
  -o "$work/llvm-pie.elf" "$work/obj/app_crt.o" "$work/obj/app_cpp_runtime.o" "${objects[@]}" "$work/obj/llama_compat.o" \
  "$work/stubs/libSceAgc.so" "$work/stubs/libSceAgcDriver.so" "$work/stubs/libSceCommonDialog.so" \
@@ -188,6 +194,13 @@ done
  --defsym=vkCmdCopyBuffer=vk_common_CmdCopyBuffer --defsym=vkGetPhysicalDeviceFeatures2=vk_common_GetPhysicalDeviceFeatures2 \
  --defsym=execlp=prospero_execlp --defsym=posix_madvise=prospero_posix_madvise \
  "${radv_link_inputs[@]}" --as-needed "$sdk"/target/lib/*.so
+if readelf -d "$work/llvm-pie.elf" | rg -q 'libonnxruntime'; then
+ echo "ONNX Runtime must be statically linked into eboot, not listed as a dependency" >&2
+ exit 1
+fi
+nm "$work/llvm-pie.elf" | rg -q ' OrtGetApiBase$' || {
+ echo "Embedded ONNX Runtime entry point is missing from the linked eboot" >&2; exit 1;
+}
 "$root/build/host/ps5-native-tool" link --in "$work/llvm-pie.elf" --out "$work/eboot.elf" --stub-dir "$sdk/target/lib" \
  --stub "$work/stubs/libSceAgc.so" --stub "$work/stubs/libSceAgcDriver.so" --stub "$work/stubs/libSceCommonDialog.so" \
  --module-sdk 0x02000009 --companion-sdk 0x08050001 --file-name eboot.elf

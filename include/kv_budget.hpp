@@ -19,6 +19,8 @@ struct KvChoice {
     bool flash_attention;
 };
 std::uint64_t kv_bytes_per_token(const ModelKvShape &shape, KvType type);
+std::uint64_t kv_bytes_for_context(const ModelKvShape &shape, KvType type,
+                                   unsigned context_length);
 KvChoice choose_auto(const ModelKvShape &shape, std::uint64_t weights_bytes,
                       std::uint64_t compute_reserve_bytes, std::uint64_t free_bytes,
                       const KvType *fixed_type = nullptr);

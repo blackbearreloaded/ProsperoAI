@@ -81,11 +81,9 @@ inline constexpr PresetFile preset_files_6[] = {
 inline constexpr PresetFile preset_files_7[] = {
     {"MiniCPM5-2B-Q8_0.gguf", "", "c5415f8989bf88a8288f1b55a3cc371af53c07b0faa220a63bd7a990cfaba078", 2679710688ULL, nullptr, nullptr},
 };
-#ifdef PROSPERO_PRISM_RUNTIME
 inline constexpr PresetFile preset_files_8[] = {
     {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "", "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3", 5946648928ULL, nullptr, nullptr},
 };
-#endif
 inline constexpr PresetFile preset_files_9[] = {
     {"granite-4.0-h-tiny-Q4_K_M.gguf", "", "5a38b08c441ae1adbafb1d2b8a7167e0d48734d83af68b268cefea1eec553dcd", 4230976352ULL, nullptr, nullptr},
 };
@@ -113,9 +111,7 @@ inline constexpr Preset presets[] = {
     {"ace-step-1.5-turbo-q8-0", "ACE-Step 1.5 Turbo Q8_0 (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 2, 6244194798ULL, preset_files_5, 15},
     {"kokoro-82m-vulkan", "Kokoro 82M Vulkan", "blackbearreloaded/ProsperoAI-Kokoro-82M-FP16-PS5", "a06dcbed88d1d04f7653d899e95d025daa55f16d", 3, 167324763ULL, preset_files_6, 28},
     {"minicpm5-2b-q8-0.gguf", "MiniCPM5 2B Q8_0", "openbmb/MiniCPM5-2B-GGUF", "2079a22f3beaa4e306449978533478fe0522f4b3", 0, 2679710688ULL, preset_files_7, 1},
-#ifdef PROSPERO_PRISM_RUNTIME
     {"Ternary-Bonsai-2-27B-PTQ1_0.gguf", "Ternary Bonsai 2 27B PTQ1_0", "prism-ml/Ternary-Bonsai-2-27B-gguf", "b072e1d3b35a0a630cece372c2127528e0994386", 0, 5946648928ULL, preset_files_8, 1},
-#endif
     {"granite-4.0-h-tiny-q4-k-m.gguf", "Granite 4.0 H-Tiny Q4_K_M", "ibm-granite/granite-4.0-h-tiny-GGUF", "08d5a8a9741dd5c1a95d2d39e25253226aa1464e", 0, 4230976352ULL, preset_files_9, 1},
     {"bohf-12b-moe-3a-q3-k-m.gguf", "BoHF 12B MoE 3A Q3_K_M", "theprint/Bohf-12B-MoE-3A-GGUF", "a0ab1f1455f4bad47f31c8c52f6aec1569699da5", 0, 4703718432ULL, preset_files_10, 1},
     {"chatterbox-500m-q8-0", "Chatterbox 500M Q8_0 (Vulkan)", "audio-cpp/audio.cpp-gguf", "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5", 3, 2092546523ULL, preset_files_11, 10},

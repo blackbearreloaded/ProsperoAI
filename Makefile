@@ -204,9 +204,12 @@ app-vulkan-media-folder: vulkan-runtime
 sd-vulkan-check:
 	bash tools/build-sd-vulkan.sh
 
-.PHONY: vulkan-runtime-libs shared-vulkan app-vulkan-shared-folder
+.PHONY: vulkan-runtime-libs onnxruntime-ps5 shared-vulkan app-vulkan-shared-folder
 vulkan-runtime-libs: deps ## Build llama/SD against one ggml ABI and Vulkan backend (host-only cross build)
 	bash tools/build-vulkan-runtime.sh ps5
+
+onnxruntime-ps5: deps ## Build pinned ONNX Runtime CPU library for the PS5
+	bash tools/build-onnxruntime-ps5.sh
 
 app-vulkan-shared-folder: vulkan-runtime ## Compatibility alias
 

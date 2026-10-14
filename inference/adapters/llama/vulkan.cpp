@@ -49,6 +49,7 @@ bool requested_kv_is_auto = true;     // from gpt_runtime_settings_t::kv_cache
 std::string requested_kv_setting;     // "f16"/"q8_0"/"q4_0" when not Auto
 unsigned requested_batch_setting;
 unsigned requested_ubatch_setting;
+std::uint64_t model_load_free_bytes;
 std::vector<llama_token> previous_tokens; // the last turn's token sequence, for prefix reuse
 
 // Derived from llama.cpp's own model-introspection API (llama_model_n_layer/n_head_kv,
@@ -143,6 +144,7 @@ void release_model() {
     if (model) llama_model_free(model);
     context = nullptr;
     model = nullptr;
+    model_load_free_bytes = 0;
     // The KV cache that previous_tokens describes no longer exists once the context is
     // freed; keeping it would make the next call "reuse" a prefix that was never decoded
     // into the new context.
@@ -224,19 +226,23 @@ bool prepare() {
     if (!devices[0]) return false;
     size_t free_bytes = 0, total_bytes = 0;
     ggml_backend_dev_memory(devices[0], &free_bytes, &total_bytes);
+    const size_t free_before_model = free_bytes;
     char memory_line[256];
     std::snprintf(memory_line, sizeof(memory_line),
                   "Vulkan memory: reported free=%zu total=%zu bytes\n", free_bytes, total_bytes);
     log_message(GGML_LOG_LEVEL_INFO, memory_line, nullptr);
     auto mp = llama_model_default_params();
-    const bool bonsai = files[selected].id.find("Ternary-Bonsai-2-27B-PTQ1_0") != std::string::npos;
-    // The build-time Bonsai GGML adapter currently provides the exact private
-    // codecs and CPU dot products. Keep these weights off Vulkan until their
-    // native GGML Vulkan kernels are part of the adapter.
-    mp.devices = bonsai ? nullptr : devices;
-    mp.n_gpu_layers = bonsai ? 0 : 99;
+    // PTQ1_0 now has an upstream Vulkan dequant/mat-vec path. Place Bonsai
+    // weights on Vulkan too; unsupported graph operations can still fall back
+    // through the normal llama.cpp scheduler.
+    mp.devices = devices;
+    mp.n_gpu_layers = 99;
     mp.load_mode = LLAMA_LOAD_MODE_NONE;
-    if (!model) model = llama_model_load_from_file(files[selected].path.c_str(), mp);
+    if (!model) {
+        model_load_free_bytes = free_before_model;
+        model = llama_model_load_from_file(files[selected].path.c_str(), mp);
+        if (!model) model_load_free_bytes = 0;
+    }
     if (!model) return false;
     const int64_t weights_ready = ggml_time_us();
     prefix_cache_enabled = access("/app0/disable_prefix_cache.txt", F_OK) != 0;
@@ -247,11 +253,45 @@ bool prepare() {
                                    model_head_dim(model), static_cast<unsigned>(llama_model_n_ctx_train(model))};
     // Query the remaining heap after weights load: do not subtract weights a second time.
     ggml_backend_dev_memory(devices[0], &free_bytes, &total_bytes);
-    free_bytes = prospero_kv::validated_free_bytes(free_bytes, total_bytes);
+    const auto reported_free_bytes = prospero_kv::validated_free_bytes(free_bytes, total_bytes);
+    if (reported_free_bytes) {
+        free_bytes = reported_free_bytes;
+    } else {
+        // Some RADV allocations make the post-load free-size query wrap. Estimate
+        // remaining capacity conservatively from the valid pre-load query and the
+        // complete model size; do not turn the wrapped result into a false zero.
+        const auto model_bytes = llama_model_size(model);
+        free_bytes = model_load_free_bytes > model_bytes
+            ? model_load_free_bytes - model_bytes : 0;
+        char estimate[192];
+        std::snprintf(estimate, sizeof(estimate),
+                      "Vulkan free query invalid after model load; conservative remainder=%llu MiB from pre-load free=%llu MiB and model=%llu MiB.\n",
+                      static_cast<unsigned long long>(free_bytes / (1024 * 1024)),
+                      static_cast<unsigned long long>(model_load_free_bytes / (1024 * 1024)),
+                      static_cast<unsigned long long>(model_bytes / (1024 * 1024)));
+        log_message(GGML_LOG_LEVEL_WARN, estimate, nullptr);
+    }
     const auto fixed_type = requested_kv_setting == "q8_0" ? prospero_kv::KvType::Q8_0
                           : requested_kv_setting == "q4_0" ? prospero_kv::KvType::Q4_0 : prospero_kv::KvType::F16;
-    const auto choice = prospero_kv::choose_auto(shape, 0, 1536ULL * 1024 * 1024, free_bytes,
+    // The Vulkan heap is queried after model weights have loaded. Keep 512 MiB for
+    // graph/workspace allocations while allowing large PTQ models to fit their KV cache.
+    constexpr std::uint64_t kVulkanSafetyReserve = 512ULL * 1024 * 1024;
+    const auto choice = prospero_kv::choose_auto(shape, 0, kVulkanSafetyReserve, free_bytes,
                                                requested_kv_is_auto ? nullptr : &fixed_type);
+    if (!choice.context_length)
+    {
+        char error[256];
+        std::snprintf(error, sizeof(error),
+                      "Insufficient Vulkan memory: free=%llu MiB, total=%llu MiB, minimum F16 KV=%llu MiB, reserve=%llu MiB.\n",
+                      static_cast<unsigned long long>(free_bytes / (1024 * 1024)),
+                      static_cast<unsigned long long>(total_bytes / (1024 * 1024)),
+                      static_cast<unsigned long long>(prospero_kv::kv_bytes_for_context(
+                          shape, prospero_kv::KvType::F16,
+                          std::min<unsigned>(4096, shape.n_ctx_train)) / (1024 * 1024)),
+                      static_cast<unsigned long long>(kVulkanSafetyReserve / (1024 * 1024)));
+        log_message(GGML_LOG_LEVEL_ERROR, error, nullptr);
+        return false;
+    }
     requested_context = requested_context_setting ? requested_context_setting : choice.context_length;
     if (FILE *config = std::fopen("/app0/context_size.txt", "r")) {
         unsigned value = 0;
@@ -260,8 +300,34 @@ bool prepare() {
         std::fclose(config);
     }
     cp.n_ctx = std::min<uint32_t>(requested_context, llama_model_n_ctx_train(model));
-    kv_type = requested_kv_is_auto ? (cp.n_ctx <= 8192 ? GGML_TYPE_F16 : GGML_TYPE_Q8_0)
-                                   : parse_kv_type_setting(requested_kv_setting);
+    kv_type = requested_kv_is_auto
+        ? (choice.context_length == cp.n_ctx && choice.kv_type == prospero_kv::KvType::Q8_0
+               ? GGML_TYPE_Q8_0
+               : cp.n_ctx <= 8192 ? GGML_TYPE_F16 : GGML_TYPE_Q8_0)
+        : parse_kv_type_setting(requested_kv_setting);
+    const auto effective_kv_type = kv_type == GGML_TYPE_F16 ? prospero_kv::KvType::F16
+                                  : kv_type == GGML_TYPE_Q8_0 ? prospero_kv::KvType::Q8_0
+                                                              : prospero_kv::KvType::Q4_0;
+    const auto kv_required = prospero_kv::kv_bytes_for_context(shape, effective_kv_type, cp.n_ctx);
+    const auto safe_budget = free_bytes > kVulkanSafetyReserve ? free_bytes - kVulkanSafetyReserve : 0;
+    char budget_line[224];
+    std::snprintf(budget_line, sizeof(budget_line),
+                  "KV budget: free=%llu MiB reserve=%llu MiB ctx=%u type=%s cache=%llu MiB\n",
+                  static_cast<unsigned long long>(free_bytes / (1024 * 1024)),
+                  static_cast<unsigned long long>(kVulkanSafetyReserve / (1024 * 1024)),
+                  cp.n_ctx, ggml_type_name(kv_type),
+                  static_cast<unsigned long long>(kv_required / (1024 * 1024)));
+    log_message(GGML_LOG_LEVEL_INFO, budget_line, nullptr);
+    if (!kv_required || kv_required > safe_budget)
+    {
+        char error[192];
+        std::snprintf(error, sizeof(error),
+                      "KV cache needs %llu MiB; safe Vulkan budget is %llu MiB (includes 512 MiB reserve).\n",
+                      static_cast<unsigned long long>(kv_required / (1024 * 1024)),
+                      static_cast<unsigned long long>(safe_budget / (1024 * 1024)));
+        log_message(GGML_LOG_LEVEL_ERROR, error, nullptr);
+        return false;
+    }
     cp.type_k = kv_type;
     cp.type_v = kv_type;
     cp.n_batch = requested_batch_setting ? requested_batch_setting

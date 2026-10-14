@@ -50,6 +50,124 @@ def add_before(path: Path, anchor: str, addition: str) -> None:
     path.write_text(text.replace(anchor, addition + "\n\n" + anchor, 1))
 
 
+def add_case_to_function(path: Path, signature: str, anchor: str, case: str) -> None:
+    """Add one type case to one upstream function without touching other switches."""
+    function = extract_function(path, signature)
+    if case in function:
+        return
+    if function.count(anchor) != 1:
+        raise SystemExit(f"{path}: expected one case anchor in {signature!r}")
+    patched = function.replace(anchor, anchor + case, 1)
+    replace_once(path, function, patched)
+
+
+def add_line_after_prefix(path: Path, prefix: str, line: str) -> None:
+    text = path.read_text()
+    if line in text:
+        return
+    lines = text.splitlines(keepends=True)
+    matches = [i for i, current in enumerate(lines) if prefix in current]
+    if len(matches) != 1:
+        raise SystemExit(f"{path}: expected one line containing {prefix!r}, got {len(matches)}")
+    lines.insert(matches[0] + 1, line + "\n")
+    path.write_text("".join(lines))
+
+
+def prepare_ptq1_vulkan(ggml: Path, prism: Path) -> None:
+    """Port PTQ1_0 shader decoding into upstream's shader source tree."""
+    vk = ggml / "src/ggml-vulkan"
+    prism_vk = prism / "src/ggml-vulkan"
+    shader_dir = vk / "vulkan-shaders"
+    prism_shader_dir = prism_vk / "vulkan-shaders"
+
+    for name in ("ptq1_0.glsl", "mul_mat_vec_ptq1_0.comp", "dequant_ptq1_0.comp"):
+        target = shader_dir / name
+        source = prism_shader_dir / name
+        if not target.exists():
+            target.write_text(source.read_text())
+
+    types = shader_dir / "types.glsl"
+    add_before(types, "#define QUANT_K_Q2_0 64", """
+// PTQ1_0 private ternary format (128 values per block).
+#define QUANT_K_PTQ1_0 128
+#define QUANT_R_PTQ1_0 1
+struct block_ptq1_0 { uint8_t qs[24]; uint8_t qh[2]; float16_t d; };
+#if defined(DATA_A_PTQ1_0)
+#define QUANT_K QUANT_K_PTQ1_0
+#define QUANT_R QUANT_R_PTQ1_0
+#define QUANT_AUXF 1
+#define A_TYPE block_ptq1_0
+#endif
+""")
+
+    dequant = shader_dir / "dequant_funcs.glsl"
+    add_before(dequant, "#if defined(DATA_A_Q1_0)\nvec2 dequantize", """
+#if defined(DATA_A_PTQ1_0)
+#include "ptq1_0.glsl"
+vec2 dequantize(uint ib, uint iqs, uint a_offset) {
+    return vec2(ptq1_0_trit(ib, a_offset, iqs), ptq1_0_trit(ib, a_offset, iqs + 1u));
+}
+vec4 dequantize4(uint ib, uint iqs, uint a_offset) {
+    return vec4(ptq1_0_trit(ib, a_offset, iqs), ptq1_0_trit(ib, a_offset, iqs + 1u),
+                ptq1_0_trit(ib, a_offset, iqs + 2u), ptq1_0_trit(ib, a_offset, iqs + 3u));
+}
+vec2 get_dm(uint ib, uint a_offset) { return vec2(float(data_a[a_offset + ib].d), 0); }
+#endif
+""")
+
+    generator = shader_dir / "vulkan-shaders-gen.cpp"
+    add_before(generator, '    "q2_0",', '    "ptq1_0",')
+    replace_once(generator,
+        'tname == "tq2_0" || tname == "tq1_0") ? "mul_mat_vec_" + tname + ".comp" : "mul_mat_vec.comp";',
+        'tname == "tq2_0" || tname == "tq1_0" || tname == "ptq1_0") ? "mul_mat_vec_" + tname + ".comp" : "mul_mat_vec.comp";')
+
+    # Register the generated PTQ shaders in upstream's Vulkan backend and let
+    # the backend select them for mat-vec decode. Prefill can use upstream's
+    # existing dequantize-to-f16 fallback when no PTQ matrix-matrix kernel is
+    # available; this avoids importing Prism's backend ABI.
+    backend = vk / "ggml-vulkan.cpp"
+    pipeline_anchors = (
+        ('            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f32_f32[w][GGML_TYPE_Q1_0][i],',
+         '            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f32_f32[w][GGML_TYPE_PTQ1_0][i], "mul_mat_vec_ptq1_0_f32_f32", arr_dmmv_ptq1_0_f32_f32_len[reduc], arr_dmmv_ptq1_0_f32_f32_data[reduc], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2*rm_stdq, 1, 1}, {wg_size_subgroup, 2*rm_stdq, i+1}, 1, true, use_subgroups, force_subgroup_size);'),
+        ('            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f16_f32[w][GGML_TYPE_Q1_0][i],',
+         '            ggml_vk_create_pipeline(device, device->pipeline_dequant_mul_mat_vec_f16_f32[w][GGML_TYPE_PTQ1_0][i], "mul_mat_vec_ptq1_0_f16_f32", arr_dmmv_ptq1_0_f16_f32_len[reduc], arr_dmmv_ptq1_0_f16_f32_data[reduc], "main", mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2*rm_stdq, 1, 1}, {wg_size_subgroup, 2*rm_stdq, i+1}, 1, true, use_subgroups, force_subgroup_size);'),
+    )
+    for anchor, addition in pipeline_anchors:
+        add_line_after_prefix(backend, anchor, addition)
+
+    # Dedicated dequant/get_rows shaders are generated for PTQ1_0 above.
+    for anchor, addition in (
+        ('    ggml_vk_create_pipeline(device, device->pipeline_dequant[GGML_TYPE_Q1_0],',
+         '    ggml_vk_create_pipeline(device, device->pipeline_dequant[GGML_TYPE_PTQ1_0], "dequant_ptq1_0", dequant_ptq1_0_len, dequant_ptq1_0_data, "main", 2, 5 * sizeof(uint32_t), {256 * 8, 1, 1}, {}, 1);'),
+        ('    ggml_vk_create_pipeline(device, device->pipeline_get_rows[GGML_TYPE_Q1_0],',
+         '    ggml_vk_create_pipeline(device, device->pipeline_get_rows[GGML_TYPE_PTQ1_0], "get_rows_ptq1_0", get_rows_ptq1_0_len, get_rows_ptq1_0_data, "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);'),
+        ('    ggml_vk_create_pipeline(device, device->pipeline_get_rows_f32[GGML_TYPE_Q1_0],',
+         '    ggml_vk_create_pipeline(device, device->pipeline_get_rows_f32[GGML_TYPE_PTQ1_0], "get_rows_ptq1_0_f32", get_rows_ptq1_0_f32_len, get_rows_ptq1_0_f32_data, "main", 3, sizeof(vk_op_binary_push_constants), {1024, 1, 1}, {}, 1);'),
+    ):
+        add_line_after_prefix(backend, anchor, addition)
+
+    case_anchor = "        case GGML_TYPE_Q1_0:\n"
+    add_case_to_function(backend, "vk_pipeline ggml_vk_get_to_fp16(", case_anchor,
+                         "        case GGML_TYPE_PTQ1_0:\n")
+    add_case_to_function(backend, "static vk_pipeline ggml_vk_get_dequantize_mul_mat_vec(", case_anchor,
+                         "        case GGML_TYPE_PTQ1_0:\n")
+    # supports_op has several type matrices; only matmul and GET_ROWS have a
+    # generated/dequant fallback for PTQ in this initial upstream port.
+    support_fn = extract_function(backend, "static bool ggml_backend_vk_device_supports_op(")
+    support_patched = support_fn
+    marker = "                    case GGML_TYPE_Q1_0:\n                    case GGML_TYPE_Q2_0:"
+    patched_marker = marker.replace(
+        "case GGML_TYPE_Q1_0:\n",
+        "case GGML_TYPE_Q1_0:\n                    case GGML_TYPE_PTQ1_0:\n",
+    )
+    if "case GGML_TYPE_PTQ1_0:" not in support_patched:
+        if support_patched.count(marker) < 2:
+            raise SystemExit(f"{backend}: expected matmul and GET_ROWS type cases")
+        support_patched = support_patched.replace(marker, patched_marker, 2)
+    if support_patched != support_fn:
+        replace_once(backend, support_fn, support_patched)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ggml-source", type=Path, required=True)
@@ -195,6 +313,7 @@ void ggml_vec_dot_ptq1_0_q8_0(int, float * GGML_RESTRICT, size_t, const void * G
             raise SystemExit(f"{ops}: no Q2_0 operation cases")
         text = text.replace(old, old + "        case GGML_TYPE_PQ2_0:\n        case GGML_TYPE_PTQ1_0:\n")
         ops.write_text(text)
+    prepare_ptq1_vulkan(ggml, prism)
     print(f"{ggml}: added Bonsai private quant format metadata and codecs")
 
 

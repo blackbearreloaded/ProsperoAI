@@ -1,0 +1,214 @@
+{
+  "label": "pr27-embedded-ort",
+  "test_title": "PPSA99023",
+  "original_settings": {
+    "chatterbox_voice": "cemo",
+    "chatterbox_voices": [
+      {
+        "id": "cemo",
+        "locale": "English",
+        "name": "Cemo"
+      },
+      {
+        "id": "custom",
+        "locale": "Uploaded WAV",
+        "name": "My voice"
+      },
+      {
+        "id": "alana_jordan",
+        "locale": "American Midwest",
+        "name": "Alana Jordan"
+      },
+      {
+        "id": "alan_davis_drake",
+        "locale": "New York English",
+        "name": "Alan Davis Drake"
+      },
+      {
+        "id": "ruth_golding",
+        "locale": "British English",
+        "name": "Ruth Golding"
+      },
+      {
+        "id": "phil_chenevert",
+        "locale": "American English",
+        "name": "Phil Chenevert"
+      },
+      {
+        "id": "demo_1_man",
+        "locale": "Added voice",
+        "name": "demo_1_man"
+      }
+    ],
+    "context": "4k",
+    "idle_unload_minutes": 1,
+    "kokoro_voice": "af_heart",
+    "kokoro_voices": [
+      {
+        "id": "af_heart",
+        "locale": "en-US",
+        "name": "Heart"
+      },
+      {
+        "id": "af_bella",
+        "locale": "en-US",
+        "name": "Bella"
+      },
+      {
+        "id": "af_nicole",
+        "locale": "en-US",
+        "name": "Nicole"
+      },
+      {
+        "id": "af_sarah",
+        "locale": "en-US",
+        "name": "Sarah"
+      },
+      {
+        "id": "am_adam",
+        "locale": "en-US",
+        "name": "Adam"
+      },
+      {
+        "id": "kokoro-voice-af_bella",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_bella"
+      },
+      {
+        "id": "kokoro-voice-af_heart",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_heart"
+      },
+      {
+        "id": "kokoro-voice-af_nicole",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_nicole"
+      },
+      {
+        "id": "kokoro-voice-af_sarah",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_sarah"
+      },
+      {
+        "id": "kokoro-voice-am_adam",
+        "locale": "Added voice",
+        "name": "kokoro-voice-am_adam"
+      }
+    ],
+    "kv": "auto",
+    "output_limit": 0,
+    "thinking": false
+  },
+  "method": "one initial request per model then 0 repeated requests; elapsed HTTP includes actual runtime loading; no console transfers during generation",
+  "fixtures": {
+    "sd": {
+      "width": 512,
+      "height": 512,
+      "steps": 1,
+      "seed": 42,
+      "cfg": 1
+    },
+    "audio": {
+      "latent_length": 256,
+      "expected_rate": 44100
+    },
+    "tts": {
+      "expected_rate": 24000
+    }
+  },
+  "runs": [
+    {
+      "model": "sd-turbo-fp16",
+      "phase": "initial",
+      "request": {
+        "model": "sd-turbo-fp16",
+        "prompt": "A red apple on a wooden table, natural window light, photographic detail.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-13T20:47:27Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 30987897000,
+        "model": "sd-turbo-fp16",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": "Image generated locally.\nPNG: /download0/ProsperoAI/work/image/prosperoai-image-1791924416966188-1.png\nPreview: /download0/ProsperoAI/work/image/prosperoai-image-1791924416965581-0.tga"
+      },
+      "http_seconds": 31.00572656499571,
+      "passed": true,
+      "output": {
+        "sandbox_path": "/download0/ProsperoAI/work/image/prosperoai-image-1791924416965581-0.tga",
+        "mapped_path": "/data/prosperoai/work/image/prosperoai-image-1791924416965581-0.tga",
+        "artifact": "docs/performance/2026-10-13/pr27-embedded-ort-media-artifacts/sd-turbo-fp16-initial.tga",
+        "bytes": 1048594,
+        "sha256": "a2a3d77a8fb5fa19dd9e99d2dcae7643b0b720254c027e4abc278fec310830b0",
+        "rgb_stddev": 45.249510852434256,
+        "width": 512,
+        "height": 512
+      },
+      "png_output": {
+        "sandbox_path": "/download0/ProsperoAI/work/image/prosperoai-image-1791924416966188-1.png",
+        "mapped_path": "/data/prosperoai/work/image/prosperoai-image-1791924416966188-1.png",
+        "artifact": "docs/performance/2026-10-13/pr27-embedded-ort-media-artifacts/sd-turbo-fp16-initial.png",
+        "bytes": 601452,
+        "sha256": "6eb9ee6fd315b4fdafcb2421b7a484f3084a48e74100c62452bdd635959b6f95",
+        "width": 512,
+        "height": 512
+      }
+    }
+  ],
+  "switch_checks": [
+    {
+      "name": "before-media",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 32,
+        "context_tokens": 4096
+      },
+      "response": {
+        "id": "chatcmpl-1791924413-1",
+        "object": "chat.completion",
+        "created": 1791924413,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 14,
+          "completion_tokens": 2,
+          "total_tokens": 16,
+          "tokens_per_second": 22.547405920948794,
+          "generation_time_ms": 131.855
+        }
+      }
+    }
+  ],
+  "passed": false,
+  "failure": {
+    "type": "RemoteDisconnected",
+    "message": "Remote end closed connection without response"
+  },
+  "restore_error": {
+    "type": "URLError",
+    "message": "<urlopen error [Errno 111] Connection refused>"
+  }
+}

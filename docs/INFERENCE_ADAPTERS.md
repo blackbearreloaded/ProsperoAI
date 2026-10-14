@@ -76,6 +76,13 @@ Build-time source adjustments are repeatable and confined to `build/` by
 `tools/prepare-audio-cpp-sa3.py` and `tools/prepare-ggml-graph-setter.py`. Prism-private
 PTQ1_0/PQ2_0 tensors remain gated until their compatibility adapter is ported to upstream.
 
+## Chatterbox voice cloning
+
+The Chatterbox GGUF adapter uses audio.cpp's C API with `chatterbox.mem_saver=true` and
+explicitly selects Vulkan device 0 from the shared GGML runtime. The former CPU selection
+failed while allocating a large arena in the title's direct-memory heap. The Vulkan selection
+builds for PPSA99023; generation and WAV validation remain pending a reachable console.
+
 ## Realistic Vision v5.1 image preset
 
 The preset uses the official FP16 no-EMA SD 1.5 checkpoint and the repository's VAE file.
