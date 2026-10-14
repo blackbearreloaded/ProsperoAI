@@ -74,7 +74,7 @@ void validate(Preferences &p)
         p.context_length = 0;
     p.kv_cache = 0; // Cache precision is always automatic.
     if (!prospero_settings::valid_idle_unload_minutes(p.idle_unload_minutes))
-        p.idle_unload_minutes = 2;
+        p.idle_unload_minutes = 5;
     p.kokoro_voice = std::min(p.kokoro_voice, 127U);
     p.chatterbox_voice = std::min(p.chatterbox_voice, 127U);
     if (!prospero_language::valid_chatterbox_language(p.chatterbox_language))

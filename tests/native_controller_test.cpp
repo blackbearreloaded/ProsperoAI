@@ -205,6 +205,7 @@ int main(int argc, char **argv)
         settle(app);
         assert(app.state().models.size() == 500 && app.state().model_counts[0] == 500);
         assert(app.state().preferences.style == 2 && app.state().preferences.output_limit == 192);
+        assert(app.state().preferences.idle_unload_minutes == 5);
         assert(app.state().preferences.context_length == 0 &&
                app.state().preferences.kv_cache == 0 && !app.state().preferences.thinking);
         const auto before_refresh = app.state();

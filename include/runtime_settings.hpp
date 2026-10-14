@@ -12,7 +12,7 @@
 #define PROSPERO_SETTINGS_PATH "/download0/prosperoai.cfg"
 #endif
 namespace prospero_settings {
-struct Runtime { unsigned context = 0, output_limit = 0, kv = 0; bool thinking = false; unsigned idle_unload_minutes = 2; unsigned kokoro_voice = 0, chatterbox_voice = 0, chatterbox_language = 0; };
+struct Runtime { unsigned context = 0, output_limit = 0, kv = 0; bool thinking = false; unsigned idle_unload_minutes = 5; unsigned kokoro_voice = 0, chatterbox_voice = 0, chatterbox_language = 0; };
 inline std::mutex mutex;
 inline bool valid_context(unsigned n) {
     return n == 0 || n == 4096 || n == 8192 || n == 16384 || n == 32768 || n == 65536 ||

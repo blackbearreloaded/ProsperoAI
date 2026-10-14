@@ -2,6 +2,7 @@
 
 ## 01.006.000
 
+- The default idle timeout before releasing a model is now five minutes.
 - Text and media inference now share the pinned upstream GGML/Vulkan runtime, with
   PS5-specific Bonsai compatibility kept in guarded preparation scripts.
 - Native and web interfaces share conversation and runtime model state; model preparation
