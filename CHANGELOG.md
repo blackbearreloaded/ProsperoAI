@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Text and media inference now share the pinned upstream GGML/Vulkan runtime, with
+  PS5-specific Bonsai compatibility kept in guarded preparation scripts.
+- Native and web interfaces share conversation and runtime model state; model preparation
+  is deferred until a conversation starts, and backend residency is visible in both UIs.
+- Added DualSense and browser voice recording, custom Chatterbox voice management, and
+  selection from all 19 languages supported by the pinned Chatterbox tokenizer.
+- Fixed Chatterbox and ACE-Step model switching and several cross-modality memory and
+  runtime lifecycle issues.
+
 ## 01.005.000
 
 - Output and context ceilings are now 131072 and 262144 tokens; response and session

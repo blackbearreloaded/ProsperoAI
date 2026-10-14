@@ -12,8 +12,7 @@ Bonsai (budget total free direct memory, not the largest block), Chatterbox (T3 
 buffers cleared; stale memory after llama.cpp made decode NaN) and ACE-Step (stages loaded
 on demand, Vulkan peak 7.39 → 4.53 GiB). `tools/benchmark-all-models-ps5.py` measures all
 models with a switch on every request. `ps5ctl.py trace` reads the app debug trace.
-Details: [PR27_HANDOFF.md](PR27_HANDOFF.md); open items:
-[PR27_REMAINING_WORK.md](PR27_REMAINING_WORK.md).
+Details and known limitations: [PR27_HANDOFF.md](PR27_HANDOFF.md).
 
 ## Verified vulkan-runtime
 

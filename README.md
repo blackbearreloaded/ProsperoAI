@@ -470,7 +470,7 @@ For responsibilities and the adapter contract, see [Inference layers and adapter
 | --- | --- |
 | Shell title | `ProsperoAI` |
 | Title ID | `PPSA99004` |
-| Current app version | `01.004.000` |
+| Current app version | `01.005.000` |
 | Writable data | `/data/prosperoai` (the app's sandbox without storage access) |
 | Compute backend | `vulkan-runtime` on RADV, with documented CPU media operations |
 
