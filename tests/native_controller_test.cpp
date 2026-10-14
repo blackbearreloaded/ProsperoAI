@@ -215,9 +215,10 @@ int main(int argc, char **argv)
         assert(app.state().selected_model == before_refresh.selected_model);
         assert(app.state().messages.size() == before_refresh.messages.size());
         assert(app.state().ready == before_refresh.ready);
-        assert(app.state().ready && app.state().selected_model == 0);
+        // Starting without an explicitly selected model leaves the app unprepared.
+        assert(!app.state().ready && app.state().selected_model == -1);
         assert(app.activity() == prospero::Activity::Idle);
-        assert(told(app, prospero::Notice::ModelReady));
+        assert(!told(app, prospero::Notice::ModelReady));
         assert(app.select_model(499));
         settle(app);
         assert(app.state().preferences.model_id == "model-499");
