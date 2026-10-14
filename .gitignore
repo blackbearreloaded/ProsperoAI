@@ -5,6 +5,7 @@
 .local/
 .deps/
 .env
+.env.ps5.local
 __pycache__/
 *.pyc
 build/
@@ -23,6 +24,7 @@ models/*
 *.suo
 *.log
 *.elf
+!tools/payloads/*.elf
 *.self
 *.sprx
 *.prx

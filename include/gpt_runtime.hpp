@@ -41,6 +41,8 @@ struct gpt_runtime_stats_t
 
 using gpt_runtime_progress_fn = void (*)(const char *text);
 
+// Snapshot of actual backend residency; empty buffers when no model is loaded.
+bool gpt_runtime_loaded_model(char *id, std::size_t id_capacity, char *name, std::size_t name_capacity);
 bool gpt_runtime_available();
 // Number of active model generations across text, image, audio, and speech.
 unsigned gpt_runtime_generations_running();

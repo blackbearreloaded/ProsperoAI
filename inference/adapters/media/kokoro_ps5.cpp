@@ -1,3 +1,4 @@
+#include "runtime_residency.hpp"
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Speech through kokoro.cpp on the shared ggml/Vulkan backend. This replaces the prebuilt
 // OpenCL archive, whose wall time sat in its own CPU code rather than in any kernel the PS5
@@ -155,6 +156,7 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *voice_id, c
     params.backend = KOKORO_BACKEND_VULKAN;
     params.n_threads = 4;
     kokoro_context *context = kokoro_init_from_file(model.c_str(), params);
+    prospero_runtime::set_model_resident(context != nullptr);
     if (!context)
     {
         std::snprintf(response, response_capacity, "Could not load the speech model: %s",
@@ -166,6 +168,7 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *voice_id, c
         std::snprintf(response, response_capacity, "Could not load the voice pack: %s",
                       kokoro_last_error());
         kokoro_free(context);
+        prospero_runtime::set_model_resident(false);
         return 3;
     }
 
@@ -180,6 +183,7 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *voice_id, c
                       kokoro_last_error());
         kokoro_audio_free(&audio);
         kokoro_free(context);
+        prospero_runtime::set_model_resident(false);
         return 4;
     }
 
@@ -200,6 +204,7 @@ extern "C" int ps5_kokoro_tts_generate(const char *root, const char *voice_id, c
     const bool written = write_wav(output, audio.samples, audio.n_samples, audio.sample_rate);
     kokoro_audio_free(&audio);
     kokoro_free(context);
+        prospero_runtime::set_model_resident(false);
     if (!written)
     {
         std::remove(output);

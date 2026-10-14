@@ -5,6 +5,7 @@
 #include "native_ui.hpp"
 #include "model_downloader_ps5.hpp"
 #include "update.hpp"
+#include "voice_recorder.hpp"
 #include "ui/components/dialog.hpp"
 #include "ui/components/form.hpp"
 #include "ui/components/grid.hpp"
@@ -217,6 +218,11 @@ struct NativeUI::Impl
     bool kokoro_voice_picker_open_ = false;
     int kokoro_voice_picker_focus_ = 0;
     bool voice_picker_chatterbox_ = false;
+    bool voice_recording_open_ = false;
+    VoiceRecorder &voice_recorder_ = voice_recorder();
+    bool voice_recording_remote_ = false;
+    std::string voice_recording_feedback_;
+    std::string voice_delete_id_;
     bool conversation_ = false, search_open_ = false, chat_keyboard_open_ = false, rail_ = false,
          category_focus_ = false, workspace_generation_open_ = false,
          conversation_restore_pending_ = false;

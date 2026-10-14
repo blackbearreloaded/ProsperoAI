@@ -31,6 +31,7 @@ FONTS = tool("bake-fonts.sh")
 kit_sources = [KIT / line for line in (ROOT / "ui-kit/sources.txt").read_text().split()
                if line.endswith(".cpp") and not line.startswith("platform/")]
 sources = [ROOT / "src/native_app.cpp", ROOT / "src/native_ui.cpp",
+           ROOT / "src/voice_recorder.cpp", ROOT / "third_party/qrcodegen/qrcodegen.cpp",
            ROOT / "src/native_ui_screens.cpp", ROOT / "src/native_ui_style.cpp",
            ROOT / "src/native_ui_update.cpp",
            ROOT / "src/font_set.cpp", ROOT / "src/media_preview.cpp",
@@ -42,11 +43,11 @@ if VULKAN:
     sources = [p for p in sources if p.name != 'gl_program.cpp']
     sources += [ROOT / 'vulkan/ui/backend.cpp', ROOT / 'vulkan/ui/program.cpp']
 cxx = os.environ.get("HOST_CXX", "clang++")
-flags = ["-std=c++20", "-O2", "-g", "-fno-exceptions", "-fno-rtti", "-DGL_GLEXT_PROTOTYPES",
+flags = ["-std=c++20", "-O2", "-g", "-fexceptions", "-fno-rtti", "-DGL_GLEXT_PROTOTYPES",
          "-DPROSPERO_HOST", f'-DPROSPERO_SETTINGS_PATH="{BUILD / "settings.cfg"}"',
-         "-I" + str(ROOT / "include"), "-I" + str(ROOT / "src"), "-I" + str(KIT)]
+         "-I" + str(ROOT / "include"), "-I" + str(ROOT / "src"), "-I" + str(ROOT / "vulkan"), "-I" + str(KIT)]
 if VULKAN:
-    flags += ['-DPROSPERO_UI_VULKAN', '-I' + str(ROOT / 'vulkan/ui'), '-I' + str(BUILD / 'generated')]
+    flags += ['-DPROSPERO_UI_VULKAN', '-I' + str(ROOT / 'vulkan'), '-I' + str(ROOT / 'vulkan/ui'), '-I' + str(BUILD / 'generated')]
 flags += os.environ.get("HOST_PREVIEW_CXXFLAGS", "").split()
 headers_time = max(p.stat().st_mtime for base in (KIT, ROOT / "include", ROOT / "src")
                    for p in base.rglob("*.hpp"))

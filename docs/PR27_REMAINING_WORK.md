@@ -7,12 +7,21 @@ explicitly removed from scope with the reason recorded here.
 ## Chatterbox direction (2026-10-14)
 
 Keep the upstream `audio.cpp` GGUF adapter and run it on shared Vulkan device 0. The app's
-CPU adapter crashed while reserving a 192–256 MiB CPU arena, and the probed ONNX Runtime path
-has no PS5 Vulkan execution provider, so it does not meet the requirement that model inference
-use the GPU. The Chatterbox adapter now requests Vulkan explicitly and logs the selected
-backend. The PS5 is currently unreachable from the development host, so this backend change
-still needs two successful console generations, WAV validation, a memory check, and a text
-round-trip after switching back.
+CPU adapter crashed while reserving oversized metadata arenas. Pinned preparation now
+bounds S3/T3/HiFT arenas; the voice catalog no longer uses short-lived worker TLS.
+Console connectivity is restored, and Cemo/Alana/custom tests ran on PPSA99023.
+Zeroing the unused T3 KV tail removes the 20 ms silence for Cemo, but the user confirmed
+that the resulting speech is unintelligible. Duration/non-clipping checks are insufficient;
+Chatterbox remains a failed quality gate. Explicit F32 attention is the next diagnostic
+(compiled, not yet console verified). Original and multilingual ONNX remain research;
+there is no PS5 Vulkan ONNX execution provider, so the CPU-only alternative does not meet
+the GPU requirement. Current evidence and continuation steps: [PR27_HANDOFF.md](PR27_HANDOFF.md).
+
+Completed user-facing work: native DualSense and web recording, native control hints/L3
+voice deletion, fixed web voice switching, lazy model preparation on first typing,
+keeping chat open after conversation deletion, and shared backend residency indicators.
+`ps5ctl.py` now has local env setup and bundled verified service payloads; P5 Manager
+is optional.
 
 ## Chatterbox ONNX adapter
 

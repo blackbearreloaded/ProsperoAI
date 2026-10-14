@@ -1,0 +1,390 @@
+{
+  "label": "pr27-alana-preset",
+  "test_title": "PPSA99023",
+  "original_settings": {
+    "chatterbox_voice": "alana_jordan",
+    "chatterbox_voices": [
+      {
+        "id": "cemo",
+        "locale": "English",
+        "name": "Cemo"
+      },
+      {
+        "id": "custom",
+        "locale": "Uploaded WAV",
+        "name": "My voice"
+      },
+      {
+        "id": "alana_jordan",
+        "locale": "American Midwest",
+        "name": "Alana Jordan"
+      },
+      {
+        "id": "alan_davis_drake",
+        "locale": "New York English",
+        "name": "Alan Davis Drake"
+      },
+      {
+        "id": "ruth_golding",
+        "locale": "British English",
+        "name": "Ruth Golding"
+      },
+      {
+        "id": "phil_chenevert",
+        "locale": "American English",
+        "name": "Phil Chenevert"
+      },
+      {
+        "id": "demo_1_man",
+        "locale": "Added voice",
+        "name": "demo_1_man"
+      }
+    ],
+    "context": "4k",
+    "idle_unload_minutes": 1,
+    "kokoro_voice": "af_heart",
+    "kokoro_voices": [
+      {
+        "id": "af_heart",
+        "locale": "en-US",
+        "name": "Heart"
+      },
+      {
+        "id": "af_bella",
+        "locale": "en-US",
+        "name": "Bella"
+      },
+      {
+        "id": "af_nicole",
+        "locale": "en-US",
+        "name": "Nicole"
+      },
+      {
+        "id": "af_sarah",
+        "locale": "en-US",
+        "name": "Sarah"
+      },
+      {
+        "id": "am_adam",
+        "locale": "en-US",
+        "name": "Adam"
+      },
+      {
+        "id": "kokoro-voice-af_bella",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_bella"
+      },
+      {
+        "id": "kokoro-voice-af_heart",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_heart"
+      },
+      {
+        "id": "kokoro-voice-af_nicole",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_nicole"
+      },
+      {
+        "id": "kokoro-voice-af_sarah",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_sarah"
+      },
+      {
+        "id": "kokoro-voice-am_adam",
+        "locale": "Added voice",
+        "name": "kokoro-voice-am_adam"
+      }
+    ],
+    "kv": "auto",
+    "output_limit": 0,
+    "thinking": false
+  },
+  "method": "one initial request per model then 1 repeated requests; elapsed HTTP includes actual runtime loading; no console transfers during generation",
+  "fixtures": {
+    "sd": {
+      "width": 512,
+      "height": 512,
+      "steps": 1,
+      "seed": 42,
+      "cfg": 1
+    },
+    "audio": {
+      "latent_length": 256,
+      "expected_rate": 44100
+    },
+    "tts": {
+      "expected_rate": 24000
+    }
+  },
+  "runs": [
+    {
+      "model": "chatterbox-500m-q8-0",
+      "phase": "initial",
+      "request": {
+        "model": "chatterbox-500m-q8-0",
+        "prompt": "Hello from Prospero AI.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-14T08:42:36Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 18476243000,
+        "model": "chatterbox-500m-q8-0",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": "Speech generated locally: /download0/ProsperoAI/work/voice/chatterbox-speech-1791967356330751-2.wav"
+      },
+      "http_seconds": 18.494326558022294,
+      "passed": false,
+      "output": {
+        "sandbox_path": "/download0/ProsperoAI/work/voice/chatterbox-speech-1791967356330751-2.wav",
+        "mapped_path": "/data/prosperoai/work/voice/chatterbox-speech-1791967356330751-2.wav",
+        "artifact": "work/voice/alana-preset/chatterbox-500m-q8-0-initial.wav",
+        "bytes": 1964,
+        "sha256": "28fcdb82fadef104ee8308abf01a0ed41210497cefc7e432cbf16a2a08947942",
+        "channels": 1,
+        "rate": 24000,
+        "width": 2,
+        "frames": 960,
+        "peak": 7,
+        "rms": 1.803064520938357,
+        "clipped_fraction": 0.0,
+        "seconds": 0.04
+      },
+      "speech_quality_failure": "40 ms near-silent output is not valid speech."
+    },
+    {
+      "model": "chatterbox-500m-q8-0",
+      "phase": "repeat-1",
+      "request": {
+        "model": "chatterbox-500m-q8-0",
+        "prompt": "Hello from Prospero AI.",
+        "stream": false,
+        "options": {
+          "num_predict": 64
+        }
+      },
+      "response": {
+        "created_at": "2026-10-14T08:42:42Z",
+        "done": true,
+        "done_reason": "stop",
+        "eval_count": 1,
+        "eval_duration": 5598311000,
+        "model": "chatterbox-500m-q8-0",
+        "prompt_eval_count": 0,
+        "prompt_eval_duration": 0,
+        "response": "Speech generated locally: /download0/ProsperoAI/work/voice/chatterbox-speech-1791967362111876-3.wav"
+      },
+      "http_seconds": 5.609810964961071,
+      "passed": false,
+      "output": {
+        "sandbox_path": "/download0/ProsperoAI/work/voice/chatterbox-speech-1791967362111876-3.wav",
+        "mapped_path": "/data/prosperoai/work/voice/chatterbox-speech-1791967362111876-3.wav",
+        "artifact": "work/voice/alana-preset/chatterbox-500m-q8-0-repeat-1.wav",
+        "bytes": 1964,
+        "sha256": "b5d179ca3dc31969e38b1365542cae318cbcee5f73cab2a558ec38e91bd04c2a",
+        "channels": 1,
+        "rate": 24000,
+        "width": 2,
+        "frames": 960,
+        "peak": 6,
+        "rms": 1.5498655855697077,
+        "clipped_fraction": 0.0,
+        "seconds": 0.04
+      },
+      "speech_quality_failure": "40 ms near-silent output is not valid speech."
+    }
+  ],
+  "switch_checks": [
+    {
+      "name": "before-media",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 32,
+        "context_tokens": 4096
+      },
+      "response": {
+        "id": "chatcmpl-1791967337-3",
+        "object": "chat.completion",
+        "created": 1791967337,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 14,
+          "completion_tokens": 2,
+          "total_tokens": 16,
+          "tokens_per_second": 32.60089978483406,
+          "generation_time_ms": 40.536
+        }
+      }
+    },
+    {
+      "name": "after-chatterbox-500m-q8-0",
+      "request": {
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What is two plus two? Answer briefly."
+          }
+        ],
+        "temperature": 0,
+        "max_tokens": 32,
+        "context_tokens": 4096
+      },
+      "response": {
+        "id": "chatcmpl-1791967362-4",
+        "object": "chat.completion",
+        "created": 1791967362,
+        "model": "Mistral-7B-Instruct-v0.3.Q4_0.gguf",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": " Four."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 14,
+          "completion_tokens": 2,
+          "total_tokens": 16,
+          "tokens_per_second": 23.25527313318295,
+          "generation_time_ms": 123.887
+        }
+      }
+    }
+  ],
+  "summary": {
+    "chatterbox-500m-q8-0": {
+      "initial_http_seconds": 18.494326558022294,
+      "repeat_http_seconds": [
+        5.609810964961071
+      ],
+      "median_repeat_http_seconds": 5.609810964961071
+    }
+  },
+  "passed": true,
+  "restored_settings": {
+    "chatterbox_voice": "alana_jordan",
+    "chatterbox_voices": [
+      {
+        "id": "cemo",
+        "locale": "English",
+        "name": "Cemo"
+      },
+      {
+        "id": "custom",
+        "locale": "Uploaded WAV",
+        "name": "My voice"
+      },
+      {
+        "id": "alana_jordan",
+        "locale": "American Midwest",
+        "name": "Alana Jordan"
+      },
+      {
+        "id": "alan_davis_drake",
+        "locale": "New York English",
+        "name": "Alan Davis Drake"
+      },
+      {
+        "id": "ruth_golding",
+        "locale": "British English",
+        "name": "Ruth Golding"
+      },
+      {
+        "id": "phil_chenevert",
+        "locale": "American English",
+        "name": "Phil Chenevert"
+      },
+      {
+        "id": "demo_1_man",
+        "locale": "Added voice",
+        "name": "demo_1_man"
+      }
+    ],
+    "context": "4k",
+    "idle_unload_minutes": 1,
+    "kokoro_voice": "af_heart",
+    "kokoro_voices": [
+      {
+        "id": "af_heart",
+        "locale": "en-US",
+        "name": "Heart"
+      },
+      {
+        "id": "af_bella",
+        "locale": "en-US",
+        "name": "Bella"
+      },
+      {
+        "id": "af_nicole",
+        "locale": "en-US",
+        "name": "Nicole"
+      },
+      {
+        "id": "af_sarah",
+        "locale": "en-US",
+        "name": "Sarah"
+      },
+      {
+        "id": "am_adam",
+        "locale": "en-US",
+        "name": "Adam"
+      },
+      {
+        "id": "kokoro-voice-af_bella",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_bella"
+      },
+      {
+        "id": "kokoro-voice-af_heart",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_heart"
+      },
+      {
+        "id": "kokoro-voice-af_nicole",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_nicole"
+      },
+      {
+        "id": "kokoro-voice-af_sarah",
+        "locale": "Added voice",
+        "name": "kokoro-voice-af_sarah"
+      },
+      {
+        "id": "kokoro-voice-am_adam",
+        "locale": "Added voice",
+        "name": "kokoro-voice-am_adam"
+      }
+    ],
+    "kv": "auto",
+    "output_limit": 0,
+    "thinking": false
+  },
+  "speech_quality_passed": false
+}

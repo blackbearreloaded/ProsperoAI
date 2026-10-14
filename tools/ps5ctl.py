@@ -3,6 +3,8 @@
 """Control a jailbroken PS5 from the host: status, payloads, FTP, titles, klog and screenshots.
 
   ps5ctl.py status
+  ps5ctl.py doctor                     check environment and bundled payloads, offline
+  ps5ctl.py service restore            restore missing FTP/control/klog/shell services
   ps5ctl.py payload PATH.elf            send an ELF to the payload port (9021)
   ps5ctl.py ftp ls [REMOTE]             list a directory over the homebrew FTP server
   ps5ctl.py ftp get REMOTE LOCAL      download a binary file without text decoding
@@ -17,14 +19,17 @@
 
 Hosts and ports come from the environment: PS5_HOST (required, your console's address,
 e.g. <PS5-IP>), PS5_PAYLOAD_PORT (9021), PS5_FTP_PORT (2120), PS5_KLOG_PORT (3232),
-P5_MANAGER (defaults to http://$PS5_HOST:3001), P5_SESSION (Remote Play session id,
-needed for shot).
+P5_MANAGER (optional development-host URL), P5_SESSION (Remote Play session id,
+both needed only for shot). Local settings load from ignored .env.ps5.local;
+explicit environment variables take precedence. There is no console address fallback.
 
 Deleting a title from /data/homebrew removes its files only. The console's title registration
 is kept by the system until the title is deleted from the console UI, so re-install after a
 delete may need that step too. Destructive commands refuse to run without --yes.
 """
 import argparse
+import hashlib
+import json
 import ftplib
 import io
 import os
@@ -33,9 +38,12 @@ import socket
 import sys
 import time
 import urllib.request
+from ps5_config import load_console_env
+
+load_console_env()
 
 HOST = os.environ.get("PS5_HOST")
-if not HOST:
+if not HOST and (len(sys.argv)<2 or sys.argv[1] not in ("doctor", "--help", "-h")):
     sys.exit("PS5_HOST is not set. Export it to your console's address, e.g. "
              "PS5_HOST=192.168.1.42")
 PAYLOAD_PORT = int(os.environ.get("PS5_PAYLOAD_PORT", "9021"))
@@ -43,9 +51,66 @@ FTP_PORT = int(os.environ.get("PS5_FTP_PORT", "2120"))
 KLOG_PORT = int(os.environ.get("PS5_KLOG_PORT", "3232"))
 SHSRV_PORT = int(os.environ.get("PS5_SHSRV_PORT", "2323"))
 SHSRV_PROMPT = b"/$ "
-MANAGER = os.environ.get("P5_MANAGER", f"http://{HOST}:3001").rstrip("/")
+MANAGER = os.environ.get("P5_MANAGER", "").rstrip("/")
 SESSION = os.environ.get("P5_SESSION", "")
 HOMEBREW = "/data/homebrew"
+PAYLOAD_DIR = pathlib.Path(__file__).resolve().parent / "payloads"
+
+
+def payload_manifest():
+    return json.loads((PAYLOAD_DIR / "manifest.json").read_text())
+
+
+def verify_payload(name):
+    entry = payload_manifest()[name]
+    path = PAYLOAD_DIR / entry["filename"]
+    data = path.read_bytes()
+    if (len(data) != entry["bytes"] or data[:6] != b"\x7fELF\x02\x01" or
+            hashlib.sha256(data).hexdigest() != entry["sha256"]):
+        raise ValueError(f"{path}: payload size, ELF header or SHA-256 does not match manifest.json")
+    return path, entry
+
+
+def cmd_doctor(_args):
+    missing = not HOST
+    print("PS5_HOST:", "configured" if HOST else "missing (required)")
+    title = os.environ.get("PROSPERO_TEST_TITLE", "")
+    print("PROSPERO_TEST_TITLE:", title or "unset (needed for test builds/deployment/benchmarks)")
+    print("P5_MANAGER:", "configured (optional)" if MANAGER else "unset (optional; screenshots only)")
+    print("P5_SESSION:", "configured" if SESSION else "unset (needed only for screenshots)")
+    for name in payload_manifest():
+        try:
+            path, entry = verify_payload(name)
+            print(f"{name}: verified {path.relative_to(PAYLOAD_DIR.parent.parent)} ({entry['bytes']} bytes)")
+        except (OSError, ValueError) as error:
+            missing = True
+            print(f"{name}: {error}")
+    return 2 if missing else 0
+
+
+def cmd_service(args):
+    names = list(payload_manifest()) if args.name == "restore" else [args.name]
+    for name in names:
+        path, entry = verify_payload(name)
+        port = int(os.environ.get(entry["port_env"], entry["port"]))
+        try:
+            with socket.create_connection((HOST, port), timeout=2):
+                print(f"{name}: port {port} already available; payload not resent")
+                continue
+        except OSError:
+            pass
+        print(f"{name}: restoring from {path.relative_to(PAYLOAD_DIR.parent.parent)}")
+        cmd_payload(argparse.Namespace(path=path, timeout=2))
+        for attempt in range(10):
+            try:
+                with socket.create_connection((HOST, port), timeout=2):
+                    print(f"{name}: port {port} available")
+                    break
+            except OSError:
+                if attempt == 9:
+                    raise SystemExit(f"{name}: payload sent, but port {port} did not become available")
+                time.sleep(0.2)
+    return 0
 
 
 def ftp_connect():
@@ -70,17 +135,22 @@ def cmd_status(_args):
     except ftplib.all_errors as error:
         print(f"ftp port {FTP_PORT}: {error}")
         ok = False
-    try:
-        with urllib.request.urlopen(f"{MANAGER}/api/remoteplay/discover?ip={HOST}", timeout=8) as r:
-            print("p5 manager discover:", r.read(200).decode(errors="replace"))
-    except OSError as error:
-        print(f"p5 manager: {error}")
+    if MANAGER:
+        try:
+            with urllib.request.urlopen(f"{MANAGER}/api/remoteplay/discover?ip={HOST}", timeout=8) as r:
+                print("p5 manager discover:", r.read(200).decode(errors="replace"))
+        except OSError as error:
+            print(f"p5 manager: {error}")
+    else:
+        print("p5 manager: not configured (optional)")
     return 0 if ok else 1
 
 
 def cmd_payload(args):
     with open(args.path, "rb") as fh:
         data = fh.read()
+    if len(data)<64 or data[:6] != b"\x7fELF\x02\x01":
+        raise SystemExit(f"{args.path}: expected a nonempty 64-bit little-endian ELF payload")
     with socket.create_connection((HOST, PAYLOAD_PORT), timeout=args.timeout) as sock:
         sock.sendall(data)
         sock.shutdown(socket.SHUT_WR)
@@ -214,6 +284,9 @@ def cmd_klog(args):
 
 
 def cmd_shot(args):
+    if not MANAGER:
+        print("set optional P5_MANAGER to the Remote Play server URL before using shot", file=sys.stderr)
+        return 2
     session = args.session
     if not session:
         print("set P5_SESSION to an active Remote Play session id", file=sys.stderr)
@@ -360,6 +433,9 @@ def main(argv=None):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
+    sub.add_parser("doctor", help="check local environment and bundled payload integrity; no network calls")
+    service = sub.add_parser("service", help="restore missing services using verified repository payloads")
+    service.add_argument("name", choices=("restore", *payload_manifest()))
     p = sub.add_parser("payload")
     p.add_argument("path")
     p.add_argument("--timeout", type=float, default=20)
@@ -418,7 +494,7 @@ def main(argv=None):
     sh2.add_argument("title_id", nargs="?", default="")
     sh2.add_argument("--yes", action="store_true")
     args = parser.parse_args(argv)
-    handlers = {"agent": cmd_agent, "cat": cmd_cat, "shadow": cmd_shadow, "status": cmd_status, "payload": cmd_payload, "ftp": cmd_ftp,
+    handlers = {"doctor": cmd_doctor, "service": cmd_service, "agent": cmd_agent, "cat": cmd_cat, "shadow": cmd_shadow, "status": cmd_status, "payload": cmd_payload, "ftp": cmd_ftp,
                 "title": cmd_title, "klog": cmd_klog, "shot": cmd_shot,
                 "shell": cmd_shell, "ps": cmd_ps, "launch": cmd_launch}
     return handlers[args.command](args)

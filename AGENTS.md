@@ -73,23 +73,36 @@ disagree about what to do next.
 Use `tools/ps5ctl.py`. It covers status, payloads, FTP, title removal, klog, shell (shsrv on
 port 2323), process list, launch and screenshots.
 
+- Console environment: copy `.env.ps5.example` to ignored `.env.ps5.local`, set `PS5_HOST`
+  and `PROSPERO_TEST_TITLE`, then `source tools/ps5-env.sh` before builds or benchmarks.
+  `ps5ctl.py` also loads the local file automatically; explicit environment variables win.
+  Run `python3 tools/ps5ctl.py doctor` to verify configuration and payload hashes offline.
+  `P5_MANAGER` is optional and has no default. Set it to the development host's URL only
+  for Remote Play; `P5_SESSION` is needed only for screenshots. Neither is required for
+  deployment, launching, klog or direct app HTTP tests. Never assume P5 Manager runs on PS5.
+- All standard service ELFs are bundled in `tools/payloads/` with exact sizes, SHA-256,
+  upstream sources and licenses in its `manifest.json`. Use
+  `python3 tools/ps5ctl.py service restore` after a reboot, or `service ftp`, `service agent`,
+  `service klog` and `service shell` individually. These validate the ELF before sending,
+  skip services whose port is already available, and confirm the restored listener.
+  Do not depend on another checkout, a console-side file or `/tmp` for a standard payload.
+
 - Ports: payload 9021, FTP 2120, klog 3232, shsrv 2323, P5 Manager 3001 (remote play).
 - After a console reboot, check each service instead of assuming the previous session survived:
-  the payload loader (9021) may be listening while FTP (2120) is not. If FTP is refused,
-  send the configured `zftpd` ELF to the payload port first. Then send
-  `build/ps5vkctl/ps5vkctl.elf` to restore the control service on 9111; the build source is
-  `.deps/mihawk-vulkan-review/tools/build-ps5vkctl.sh`. Start
-  `/data/payloads/klogsrv-ps5.elf` as a payload too when klog (3232) is unavailable.
-  These resident payloads do not survive a reboot and are separate from the title under test.
-- If `agent status` / `agent procs` returns connection refused on port 9111, first send
-  `build/ps5vkctl/ps5vkctl.elf` with `tools/ps5ctl.py payload`, then retry the agent command.
+  the payload loader (9021) may be listening while FTP (2120) is not. Restore missing services
+  from the repository with `python3 tools/ps5ctl.py service restore`. This starts the FTP
+  service before the control, klog and shell services. The loader itself must already be
+  available. These resident payloads are separate from the title under test and do not
+  survive a reboot.
+- If `agent status` / `agent procs` returns connection refused on port 9111, run
+  `python3 tools/ps5ctl.py service agent`, then retry the agent command.
   A refused control port alone means the resident control payload is absent; it does not
   prove that the console is frozen or unavailable. Check the payload loader separately.
 - Never commit a real console IP. In docs and usage text, write `<PS5-IP>` (e.g.
   `http://<PS5-IP>:11434/`). In code, the address is a variable, not a default: `PS5_HOST` is a
   required environment variable with no fallback value (`tools/ps5ctl.py` exits with a clear
   message if it's unset); don't hardcode any address, real or placeholder, as a code default.
-  Set the real address only in your own shell environment, never in a tracked file.
+  Set the real address only in your own environment or ignored `.env.ps5.local`, never in a tracked file.
 - Screenshot before every confirming press (Cross) in the UI. Keep a screenshot in
   `~/radv_title/` or the scratchpad, and read it before pressing.
 - Scope `kill`, `rm`, `launch`, `title rm` and `--yes` to the test titles and temporary

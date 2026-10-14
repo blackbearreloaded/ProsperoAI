@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #ifdef PROSPERO_VULKAN_RUNTIME
 #include "gpt_runtime.hpp"
+#include "runtime_residency.hpp"
 #include "runtime_adapter.hpp"
 #include "runtime_vulkan.hpp"
 #include "model_paths.hpp"
@@ -327,6 +328,16 @@ bool select_model_locked(unsigned index)
     return true;
 }
 } // namespace
+bool gpt_runtime_loaded_model(char *id, std::size_t id_capacity, char *name, std::size_t name_capacity)
+{
+    if (id && id_capacity) id[0]='\0';
+    if (name && name_capacity) name[0]='\0';
+    std::lock_guard<std::mutex> lock(mutex);
+    if (!prospero_runtime::model_resident.load(std::memory_order_acquire) || selected >= models.size()) return false;
+    if (id && id_capacity) std::snprintf(id,id_capacity,"%s",models[selected].id.c_str());
+    if (name && name_capacity) std::snprintf(name,name_capacity,"%s",models[selected].name.c_str());
+    return true;
+}
 bool gpt_runtime_select_model(unsigned index)
 {
     std::unique_lock<std::mutex> inference(inference_mutex, std::try_to_lock);

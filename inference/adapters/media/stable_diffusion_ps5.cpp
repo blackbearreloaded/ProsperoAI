@@ -1,3 +1,4 @@
+#include "runtime_residency.hpp"
 #include "ggml-vulkan.h"
 static_assert(GGML_MAX_NAME == 160, "SD and llama must share the tensor ABI");
 #include "stable-diffusion.h"
@@ -186,6 +187,7 @@ bool write_png(const char *path, const sd_image_t &image)
 
 void release_context()
 {
+    prospero_runtime::set_model_resident(false);
     if (context)
     {
         free_sd_ctx(context);
@@ -264,6 +266,7 @@ bool ensure_context(const char *root)
                               : "CPU,diffusion=Vulkan0,vae=Vulkan0";
     parameters.params_backend = "Vulkan0";
     context = new_sd_ctx(&parameters);
+    prospero_runtime::set_model_resident(context != nullptr);
     if (!context || !sd_ctx_supports_image_generation(context))
     {
         release_context();

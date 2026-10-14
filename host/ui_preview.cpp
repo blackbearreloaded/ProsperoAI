@@ -72,6 +72,9 @@ const char *gpt_runtime_model_purpose(unsigned index)
 {
     return purposes[index % 5];
 }
+bool gpt_runtime_loaded_model(char *id, std::size_t ic, char *name, std::size_t nc) {
+    if(id && ic) id[0]=0; if(name && nc) name[0]=0; return false;
+}
 bool gpt_runtime_select_model(unsigned index)
 {
     selected = index;
@@ -582,6 +585,8 @@ int main(int argc, char **argv)
     // A conversation: the empty page, the wait, the answer as it arrives, the result.
     press(hui::Action::west);
     capture("conversation-new");
+    assert(app.select_model(0));
+    settle();
     type("Imagine a quiet lunar outpost. What makes it feel like home?");
     feedback.clear();
     ui.submit(feedback);
@@ -680,3 +685,8 @@ int main(int argc, char **argv)
     app.shutdown();
     std::remove(PROSPERO_SETTINGS_PATH);
 }
+
+bool prospero_http_server_mobile_url(char *output, std::size_t capacity) { if(output && capacity) output[0]=0; return false; }
+
+void gpt_runtime_set_idle_unload_timeout(unsigned) {}
+namespace prospero_model_download { bool delete_model_files(const char *) { return false; } }

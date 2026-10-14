@@ -1,0 +1,45 @@
+{
+  "ftp": {
+    "filename": "zftpd-ps5.elf",
+    "port_env": "PS5_FTP_PORT",
+    "port": 2120,
+    "version": "v1.6.0",
+    "bytes": 495456,
+    "sha256": "39ed57bef579282418f822da2e58ea5d56acfa5aa4cd38816744b1f610bfa14d",
+    "url": "https://github.com/seregonwar/zftpd/releases/download/v1.6.0/zftpd-ps5-v1.6.0.elf",
+    "source": "https://github.com/seregonwar/zftpd/tree/v1.6.0",
+    "license": "licenses/zftpd-LICENSE"
+  },
+  "agent": {
+    "filename": "ps5vkctl.elf",
+    "port_env": "PS5_AGENT_PORT",
+    "port": 9111,
+    "version": "3f3ee69607013b345d2baa6d6a37c86745649a08",
+    "bytes": 150824,
+    "sha256": "7ade3411fe15a9d6c843f8e0d944652863ea47569f8e9807602330c9364c2436",
+    "source": "https://github.com/mihawk-99/PS5_Vulkan/tree/3f3ee69607013b345d2baa6d6a37c86745649a08/payload/ps5vkctl",
+    "license": "licenses/ps5vkctl-GPL-3.0.txt"
+  },
+  "klog": {
+    "filename": "klogsrv-ps5.elf",
+    "port_env": "PS5_KLOG_PORT",
+    "port": 3232,
+    "version": "v0.9",
+    "bytes": 136016,
+    "sha256": "e828ec144231f81547cb58bc7d2c396fa984be0c2295f31364b58017816dcceb",
+    "url": "https://github.com/ps5-payload-dev/klogsrv/releases/download/v0.9/klogsrv-ps5.elf",
+    "source": "https://github.com/ps5-payload-dev/klogsrv/tree/v0.9",
+    "license": "licenses/klogsrv-LICENSE"
+  },
+  "shell": {
+    "filename": "shsrv-ps5.elf",
+    "port_env": "PS5_SHSRV_PORT",
+    "port": 2323,
+    "version": "v0.20",
+    "bytes": 986184,
+    "sha256": "fa4ccb2587bb61be317df0d001f668b17ebf9b4aafad87acf691b1fb8da0bd2d",
+    "url": "https://github.com/ps5-payload-dev/shsrv/releases/download/v0.20/shsrv-ps5.elf",
+    "source": "https://github.com/ps5-payload-dev/shsrv/tree/v0.20",
+    "license": "licenses/shsrv-LICENSE"
+  }
+}

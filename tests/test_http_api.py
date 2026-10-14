@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 class HttpApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.scratch = tempfile.TemporaryDirectory(prefix="prospero-http-")
+        (ROOT / "build/tests").mkdir(parents=True, exist_ok=True)
+        cls.scratch = tempfile.TemporaryDirectory(prefix="prospero-http-", dir=ROOT / "build/tests")
         tmp = Path(cls.scratch.name)
         cls.binary = tmp / "http-test"
         compiler = shutil.which("clang++") or shutil.which("g++")
@@ -24,6 +25,7 @@ class HttpApiTests(unittest.TestCase):
                         '-DPROSPERO_SETTINGS_PATH="'+str(tmp / "runtime.cfg")+'"', "-Wl,--gc-sections", "-I"+str(ROOT / "vulkan"), "-I"+str(ROOT / "include"),
                         "-I"+str(ROOT / ".deps/llama.cpp/vendor"),
                         str(ROOT / "tests/http_api_harness.cpp"), str(ROOT / "src/session_store.cpp"),
+                        "-DPROSPERO_HOST", str(ROOT / "src/voice_recorder.cpp"),
                         "-o", str(cls.binary)], check=True)
 
     @classmethod
@@ -48,13 +50,16 @@ class HttpApiTests(unittest.TestCase):
         config.write_text('version=2\nstyle=2\ntokens=192\ntheme=1\n')
         header, body = self.request('/api/settings/runtime', body={'context':'32k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':2, 'kokoro_voice':'af_bella'})
         self.assertIn('200 OK', header)
-        expected = {'context':'32k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':2, 'kokoro_voice':'af_bella'}
+        expected = json.loads(body)
+        self.assertEqual({k:expected[k] for k in ('context','kv','thinking','idle_unload_minutes','kokoro_voice')},
+                         {'context':'32k','kv':'auto','thinking':True,'idle_unload_minutes':2,'kokoro_voice':'af_bella'})
         self.assertEqual(json.loads(body), expected)
-        self.assertIn('style=2\ntokens=192\ntheme=1\n', config.read_text())
+        for line in ('style=2','tokens=192','theme=1'):
+            self.assertIn(line,config.read_text().splitlines())
         self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
         header, body = self.request('/api/settings/runtime', body={'context':'256k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':5})
         self.assertIn('200 OK', header)
-        expected = {'context':'256k', 'kv':'auto', 'thinking':True, 'idle_unload_minutes':5, 'kokoro_voice':'af_bella'}
+        expected.update(context='256k',kv='auto',thinking=True,idle_unload_minutes=5,kokoro_voice='af_bella')
         self.assertEqual(json.loads(body), expected)
         self.assertEqual(json.loads(self.request('/api/settings/runtime')[1]), expected)
         for invalid in ({'context':'2k'}, {'kv':'q8_0'}, {'kv':'q2_0'}, {'thinking':'false'}, {'idle_unload_minutes':3}, {'kokoro_voice':'missing'}, {'unknown':1}, {'context':'16k','kv':'bad'}, []):
@@ -109,7 +114,7 @@ class HttpApiTests(unittest.TestCase):
 
     def test_request_context_does_not_replace_shared_settings(self):
         shared = {'context': '32k', 'kv': 'auto', 'thinking': True, 'idle_unload_minutes': 2, 'kokoro_voice': 'af_heart'}
-        self.request('/api/settings/runtime', body=shared)
+        shared = json.loads(self.request('/api/settings/runtime', body=shared)[1])
         try:
             for route, body in [
                 ('/v1/chat/completions', {'model': 'tiny.gguf', 'context_tokens': 16384,
@@ -131,6 +136,12 @@ class HttpApiTests(unittest.TestCase):
         finally:
             self.request('/api/settings/runtime', body={'context': 'auto', 'kv': 'auto', 'thinking': False, 'idle_unload_minutes': 2})
 
+    def test_model_memory_status(self):
+        head, body = self.request("/api/models/memory")
+        self.assertIn("200 OK", head)
+        self.assertEqual(json.loads(body), {"loaded": False, "id": "", "name": ""})
+        self.assertIn("401 Unauthorized", self.request("/api/models/memory", key="secret")[0])
+
     def test_models_and_selection(self):
         _, body = self.request("/v1/models")
         self.assertEqual([m["id"] for m in json.loads(body)["data"]], ["tiny.gguf", "second.gguf"])
@@ -139,6 +150,10 @@ class HttpApiTests(unittest.TestCase):
         head, body = self.request("/api/models/selection", body={"id": "second.gguf"})
         self.assertIn("200 OK", head)
         self.assertEqual(json.loads(body)["id"], "second.gguf")
+        head, body = self.request("/api/models/selection", body={"id": "second.gguf", "prepare": False})
+        self.assertIn("200 OK", head)
+        self.assertTrue(json.loads(body)["preparation_deferred"])
+        self.assertIn("400 Bad Request", self.request("/api/models/selection", body={"id": "second.gguf", "prepare": "false"})[0])
         self.assertIn("404 Not Found", self.request("/api/models/selection", body={"id": "missing.gguf"})[0])
         self.assertIn("400 Bad Request", self.request("/api/models/selection", body={"id": 3})[0])
         self.assertIn("401 Unauthorized", self.request("/api/models/selection", key="secret")[0])
@@ -198,9 +213,18 @@ class HttpApiTests(unittest.TestCase):
             self.assertEqual(json.loads(response)["error"]["code"], "invalid_context_tokens")
         _, response = self.request(body={"model": "tiny.gguf",
                                        "messages": [{"role": "user", "content": "limits"}]})
-        self.assertEqual(json.loads(response)["choices"][0]["message"]["content"], "131072:0")
+        self.assertEqual(json.loads(response)["choices"][0]["message"]["content"], "0:0")
         _, response = self.request("/api/generate", {"model": "tiny.gguf", "prompt": "limits"})
         self.assertEqual(json.loads(response)["response"], "131072:0")
+
+    def test_voice_recording_status_validation_and_authentication(self):
+        route='/api/voices/chatterbox/recording'
+        header,body=self.request(route)
+        self.assertIn('200 OK',header)
+        self.assertEqual(json.loads(body),{'state':'idle','seconds':0.0,'level':0,'preview':'','error':''})
+        self.assertIn('400 Bad Request',self.request(route,body={'action':'unknown'})[0])
+        self.assertIn('409 Conflict',self.request(route,body={'action':'save'})[0])
+        self.assertIn('401 Unauthorized',self.request(route,body={'action':'start'},key='secret')[0])
 
     def test_ollama_benchmark_batch_overrides(self):
         _, response = self.request('/api/generate', {

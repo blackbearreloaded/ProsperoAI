@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "runtime_vulkan.hpp"
+#include "runtime_residency.hpp"
 #include "runtime_adapter.hpp"
 #include "model_paths.hpp"
 #include "model_presets.hpp"
@@ -47,18 +48,21 @@ std::uint64_t gpt_runtime_vulkan_heap_bytes()
 }
 bool gpt_runtime_select_model(unsigned i)
 {
+    if(text_selected != i) prospero_runtime::set_model_resident(false);
     text_selected = i;
     return i < 2;
 }
 void release_model_memory()
 {
     ++released;
+    prospero_runtime::set_model_resident(false);
 }
 void gpt_runtime_refresh_models()
 {
 }
 int gpt_runtime_prepare()
 {
+    prospero_runtime::set_model_resident(true);
     return 0;
 }
 int gpt_runtime_generate(const gpt_runtime_message_t *, unsigned,
@@ -120,6 +124,7 @@ extern "C"
     void ps5_ace_step_release()
     {
     }
+    void ps5_chatterbox_release() {}
     int ps5_ace_step_generate(const char *root, const char *prompt, char *out, std::size_t n,
                               std::uint64_t *elapsed, gpt_runtime_progress_fn)
     {
@@ -252,6 +257,9 @@ int main()
     assert(gpt_runtime_select_model(2));
     assert(std::strcmp(gpt_runtime_backend(), "Vulkan") == 0);
     assert(gpt_runtime_prepare() == 0);
+    char loaded_id[256]{},loaded_name[256]{};
+    assert(gpt_runtime_loaded_model(loaded_id,sizeof(loaded_id),loaded_name,sizeof(loaded_name)));
+    assert(std::strcmp(loaded_id,gpt_runtime_model_id(gpt_runtime_selected_model()))==0);
     assert(gpt_runtime_generate(messages, 1, {}, out, sizeof(out), &stats, nullptr) == 0);
     assert(std::strcmp(out, "text0") == 0);
     assert(std::filesystem::file_size(legacy) > 0);

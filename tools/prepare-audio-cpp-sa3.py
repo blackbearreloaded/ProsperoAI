@@ -163,12 +163,55 @@ def adapt_chatterbox_s3_tokenizer_arena(source: Path) -> None:
         "        64ull * 1024ull * 1024ull); // PS5: tensor metadata only",
     )
     t3_runner = source / "src/models/chatterbox/components/t3_runtime.h"
+    # Older local preparations used oversized metadata-only arenas. Tensor
+    # payloads are backend-allocated; the 131072-node prefill graph needs
+    # roughly 8 MiB for its graph tables, not hundreds of MiB of host heap.
+    text = t3_runner.read_text()
+    text = text.replace(
+        "params.mem_size = 96ull * 1024ull * 1024ull; // PS5: graph metadata only",
+        "params.mem_size = 256ull * 1024ull * 1024ull;",
+    ).replace(
+        "params.mem_size = 128ull * 1024ull * 1024ull; // PS5: graph metadata only",
+        "params.mem_size = 768ull * 1024ull * 1024ull;",
+    )
+    t3_runner.write_text(text)
     replace_once(
         t3_runner,
         "        params.mem_size = 256ull * 1024ull * 1024ull;",
-        "        params.mem_size = 96ull * 1024ull * 1024ull; // PS5: graph metadata only",
+        "        params.mem_size = 32ull * 1024ull * 1024ull; // PS5: decode graph metadata only",
     )
+    replace_once(
+        t3_runner,
+        "        params.mem_size = 768ull * 1024ull * 1024ull;",
+        "        params.mem_size = 32ull * 1024ull * 1024ull; // PS5: prefill graph metadata only",
+    )
+    replace_once(t3_runner,
+        '    auto * flash = ggml_flash_attn_ext(\n        ctx.ggml,\n        q_heads.tensor,\n        all_k_heads.tensor,\n        all_v_heads.tensor,\n        attention_mask.tensor,\n        1.0f / std::sqrt(static_cast<float>(head_dim)),\n        0.0f,\n        0.0f);\n    ggml_flash_attn_ext_set_prec(flash, GGML_PREC_F32);\n    auto context = core::wrap_tensor(\n        flash,\n        core::TensorShape::from_dims({q_heads.shape.dims[0], q_heads.shape.dims[2], q_heads.shape.dims[1], head_dim}),\n        GGML_TYPE_F32);\n    context = contiguous(ctx, context);',
+        '    // PS5: match the reference attention with explicit F32 scores/softmax.\n    auto k_transposed = modules::TransposeModule({{0, 1, 3, 2}, 4}).build(ctx, all_k_heads);\n    auto scores = modules::MatMulModule().build(ctx, q_heads, k_transposed);\n    scores = core::wrap_tensor(ggml_scale(ctx.ggml,scores.tensor,1.0f / std::sqrt(static_cast<float>(head_dim))),scores.shape,GGML_TYPE_F32);\n    auto mask = core::wrap_tensor(ggml_cast(ctx.ggml,attention_mask.tensor,GGML_TYPE_F32),attention_mask.shape,GGML_TYPE_F32);\n    scores = add_contiguous(ctx,scores,mask);\n    auto attn = core::wrap_tensor(ggml_soft_max(ctx.ggml,contiguous(ctx,scores).tensor),scores.shape,GGML_TYPE_F32);\n    auto context = modules::MatMulModule().build(ctx,attn,all_v_heads);\n    context = modules::TransposeModule({{0, 2, 1, 3}, 4}).build(ctx,context);\n    context = contiguous(ctx, context);')
+    # Vulkan flash attention reads the full capacity. Masked unused values must
+    # be zero: stale NaNs survive multiplication by zero in the attention kernel.
+    for label in ("batch_key", "batch_value"):
+        replace_once(t3_runner,
+            f"std::vector<float> {label}(static_cast<size_t>(cache_state_.steps * hidden_size_), 0.0f);",
+            f"std::vector<float> {label}(static_cast<size_t>(cache_steps_ * hidden_size_), 0.0f); // PS5: initialize the masked KV tail")
     t3_component = source / "src/models/chatterbox/t3_component.cpp"
+    replace_once(t3_component, '#include <chrono>',
+        '#include <chrono>\n#include <cmath>\n#include <cstdio>\n#if defined(PROSPERO_PS5_MODEL_IO)\nextern "C" int sceKernelDebugOutText(int, const char *);\n#endif')
+    # Narrow PS5 diagnostic: distinguish immediate EOS from non-finite logits.
+    replace_once(t3_component,
+        "        generated_ids.push_back(next_token);",
+        """        generated_ids.push_back(next_token);
+#if defined(PROSPERO_PS5_MODEL_IO)
+        if (step < 4 || next_token == kStopSpeechToken) {
+
+            size_t invalid = 0;
+            for (float value : logits) if (!std::isfinite(value)) ++invalid;
+            char trace[192];
+            std::snprintf(trace,sizeof(trace),"[prosperoai] T3 step=%lld token=%d masked_or_invalid_logits=%zu\\n", static_cast<long long>(step),next_token,invalid);
+            sceKernelDebugOutText(0,trace);
+        }
+#endif""")
+
     replace_once(
         t3_component,
         "    constexpr int64_t kDecodeCapacityChunk = 256;",
@@ -185,6 +228,50 @@ def adapt_chatterbox_s3_tokenizer_arena(source: Path) -> None:
                 throw std::runtime_error("failed to allocate backend tensors for T3 decode runner (" +
                     std::to_string(requested_bytes / (1024 * 1024)) + " MiB)");''',
     )
+    # S3 retains attention and feed-forward runners for every encoder layer.
+    # Their no_alloc contexts contain metadata only, but upstream reserves
+    # 128/192 MiB per runner, exhausting the host heap before audio decoding.
+    s3_runtime = source / "src/framework/codecs/s3gen_runtime.cpp"
+    text = s3_runtime.read_text()
+    for arena_mb, expected_count in ((192, 3), (128, 1), (512, 1)):
+        old = f"params.mem_size = {arena_mb}ull * 1024ull * 1024ull;"
+        previous = (f"params.mem_size = 32ull * 1024ull * 1024ull; "
+               f"// PS5: S3 metadata arena (upstream {arena_mb} MiB)")
+        size = 32 if arena_mb == 512 else 8
+        new = (f"params.mem_size = {size}ull * 1024ull * 1024ull; "
+               f"// PS5: S3 metadata arena (upstream {arena_mb} MiB)")
+        if text.count(new) == expected_count:
+            continue
+        text = text.replace(previous,old)
+        if text.count(old) != expected_count:
+            raise SystemExit(f"{s3_runtime}: unexpected S3 {arena_mb} MiB arena count")
+        text = text.replace(old, new)
+    s3_runtime.write_text(text)
+    hift = source / "src/framework/modules/vocoders/hift_vocoder.cpp"
+    replace_once(
+        hift,
+        "ggml_init_params params{128ull * 1024ull * 1024ull, nullptr, true};",
+        "ggml_init_params params{32ull * 1024ull * 1024ull, nullptr, true}; // PS5: F0 metadata only",
+    )
+    replace_once(
+        hift,
+        "const size_t context_size = static_cast<size_t>(kBaseBytes + clamped_frames * kPerFrameBytes);",
+        "const size_t context_size = 32ull * 1024ull * 1024ull; // PS5: HiFT metadata only; payloads use backend buffers",
+    )
+    # BackendWeightStore also uses no_alloc=true. Its GiB-sized contexts are
+    # tensor metadata reservations, not model payloads or Vulkan workspaces.
+    t3_weights = source / "src/models/chatterbox/t3_weights.cpp"
+    for size in (1024,4096):
+        replace_once(t3_weights,
+            f"constexpr size_t kDefaultWeightStoreBytes = {size}ull * 1024ull * 1024ull;",
+            f"constexpr size_t kDefaultWeightStoreBytes = 32ull * 1024ull * 1024ull; // PS5: T3 metadata (upstream {size} MiB)")
+    for label,size in (("s3gen.encoder.weights",1024),("s3gen.decoder.weights",2048)):
+        replace_once(s3_runtime,
+            f'"{label}",\n        {size}ull * 1024ull * 1024ull);',
+            f'"{label}",\n        32ull * 1024ull * 1024ull); // PS5: weight tensor metadata only')
+    replace_once(hift,
+        '"framework.hift.weights",\n        768ull * 1024ull * 1024ull);',
+        '"framework.hift.weights",\n        32ull * 1024ull * 1024ull); // PS5: weight tensor metadata only')
 
 
 def adapt_gguf_streaming(path: Path) -> None:

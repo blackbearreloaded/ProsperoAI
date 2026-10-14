@@ -37,7 +37,7 @@ ninja_begin "$work/app.ninja"
 objects=()
 sources=(src/kv_budget.cpp src/prefix_reuse.cpp src/main.cpp src/native_app.cpp src/native_ui.cpp src/native_ui_screens.cpp src/native_ui_style.cpp third_party/qrcodegen/qrcodegen.cpp
  src/font_set.cpp src/media_preview.cpp src/dev_script.cpp src/gpt_input.cpp src/gpt_ime.cpp
- src/media_output_ps5.cpp src/session_store.cpp src/runtime_support.cpp
+ src/media_output_ps5.cpp src/voice_recorder.cpp src/session_store.cpp src/runtime_support.cpp
  src/agc_lifecycle.cpp inference/router.cpp inference/adapters/registry.cpp
  inference/adapters/media/stable_diffusion_ps5.cpp inference/adapters/media/stable_audio_ps5.cpp
  inference/adapters/media/kokoro_ps5.cpp inference/adapters/media/ace_step_ps5.cpp
@@ -158,6 +158,8 @@ for lib in Agc AgcDriver; do
 done
 cc -O2 -fPIC -c "$root/tooling/native/prosperoai_import_stub_common_dialog.cpp" -o "$work/obj/CommonDialog.o"
 "$sdk/bin/prospero-lld" --shared -soname libSceCommonDialog.prx -o "$work/stubs/libSceCommonDialog.so" "$work/obj/CommonDialog.o"
+cc -O2 -fPIC -c "$root/tooling/native/prosperoai_import_stub_audio_in.cpp" -o "$work/obj/AudioIn.o"
+"$sdk/bin/prospero-lld" --shared -soname libSceAudioIn.prx -o "$work/stubs/libSceAudioIn.so" "$work/obj/AudioIn.o"
 source "$ref/tools/radv-link.sh"
 export PS5_CLANG=${PS5_CLANG:-clang-18}
 radv_link_recipe "$ref" "$sdk" "$archive"
@@ -183,7 +185,7 @@ done
 "$sdk/bin/prospero-lld" "${radv_linker_script[@]}" --eh-frame-hdr --no-dynamic-linker "${radv_link_flags[@]}" --wrap=sceAgcInit \
  --version-script "$work/app-compat.map" --version-script "$ref/tooling/native/app-symbols.map" --exclude-libs=ALL -e _start \
  -o "$work/llvm-pie.elf" "$work/obj/app_crt.o" "$work/obj/app_cpp_runtime.o" "${objects[@]}" "$work/obj/llama_compat.o" \
- "$work/stubs/libSceAgc.so" "$work/stubs/libSceAgcDriver.so" "$work/stubs/libSceCommonDialog.so" \
+ "$work/stubs/libSceAgc.so" "$work/stubs/libSceAgcDriver.so" "$work/stubs/libSceCommonDialog.so" "$work/stubs/libSceAudioIn.so" \
  --start-group "$root/vendor/ps5/sdl/lib/libSDL2.a" "$llama_build/src/libllama.a" \
  "$ggml_build/src/libggml.a" "$ggml_build/src/libggml-base.a" \
  "$ggml_build/src/libggml-cpu.a" "$ggml_build/src/ggml-vulkan/libggml-vulkan.a" \
@@ -202,7 +204,7 @@ nm "$work/llvm-pie.elf" | rg -q ' OrtGetApiBase$' || {
  echo "Embedded ONNX Runtime entry point is missing from the linked eboot" >&2; exit 1;
 }
 "$root/build/host/ps5-native-tool" link --in "$work/llvm-pie.elf" --out "$work/eboot.elf" --stub-dir "$sdk/target/lib" \
- --stub "$work/stubs/libSceAgc.so" --stub "$work/stubs/libSceAgcDriver.so" --stub "$work/stubs/libSceCommonDialog.so" \
+ --stub "$work/stubs/libSceAgc.so" --stub "$work/stubs/libSceAgcDriver.so" --stub "$work/stubs/libSceCommonDialog.so" --stub "$work/stubs/libSceAudioIn.so" \
  --module-sdk 0x02000009 --companion-sdk 0x08050001 --file-name eboot.elf
 "$root/build/host/ps5-native-tool" self --sign --in "$work/eboot.elf" --out "$app/eboot.bin" --magic 0x1D3D154F
 cp "$root/runtime/libc.prx" "$app/sce_module/"

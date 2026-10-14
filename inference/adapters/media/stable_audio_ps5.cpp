@@ -1,3 +1,4 @@
+#include "runtime_residency.hpp"
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Stable Audio 3 through audio.cpp's C API and the shared ggml/Vulkan runtime.
 #include "audiocpp.h"
@@ -28,6 +29,7 @@ std::string g_model_path;
 
 void release_engine()
 {
+    prospero_runtime::set_model_resident(false);
     audiocpp_session_free(g_session);
     g_session = nullptr;
     audiocpp_options_free(g_options);
@@ -131,6 +133,7 @@ bool ensure_engine(const std::string &model_path, void (*progress)(const char *)
         return false;
     }
     g_model_path = model_path;
+    prospero_runtime::set_model_resident(true);
     sceKernelDebugOutText(0, "[prosperoai:stable-audio] Vulkan model ready\n");
     return true;
 }

@@ -1,3 +1,4 @@
+#include "runtime_residency.hpp"
 // ProsperoAI - llama.cpp inference through the PS5 RADV Vulkan backend.
 // SPDX-License-Identifier: GPL-3.0-or-later
 #ifdef PS5_LLAMA_VULKAN
@@ -140,6 +141,7 @@ void scan_models() {
     log_message(GGML_LOG_LEVEL_INFO, line, nullptr);
 }
 void release_model() {
+    prospero_runtime::set_model_resident(false);
     if (context) llama_free(context);
     if (model) llama_model_free(model);
     context = nullptr;
@@ -241,6 +243,7 @@ bool prepare() {
     if (!model) {
         model_load_free_bytes = free_before_model;
         model = llama_model_load_from_file(files[selected].path.c_str(), mp);
+        prospero_runtime::set_model_resident(model != nullptr);
         if (!model) model_load_free_bytes = 0;
     }
     if (!model) return false;
@@ -348,6 +351,7 @@ bool prepare() {
     cp.offload_kqv = true;
     cp.op_offload = true;
     context = llama_init_from_model(model, cp);
+    prospero_runtime::set_model_resident(model != nullptr);
     if (!context) { previous_tokens.clear(); return false; }
     char config_line[256];
     std::snprintf(config_line, sizeof(config_line),

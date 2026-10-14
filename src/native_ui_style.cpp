@@ -1,3 +1,4 @@
+#include "gpt_runtime.hpp"
 // ProsperoAI native frontend: palette, theme and the small shapes every screen shares.
 // Copyright (C) 2026 BlackBearReloaded
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -240,6 +241,8 @@ const char *NativeUI::Impl::activity_text() const
         break;
     }
     const auto &state = app_.state();
+    char loaded_id[256]{},loaded_name[256]{};
+    if(gpt_runtime_loaded_model(loaded_id,sizeof(loaded_id),loaded_name,sizeof(loaded_name))) return "Ready";
     if (state.selected_model < 0)
         return state.models.empty() ? "No models" : "Choose a model";
     return state.ready ? "Ready" : "Needs attention";

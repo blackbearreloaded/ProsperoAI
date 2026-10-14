@@ -1,3 +1,4 @@
+#include "runtime_residency.hpp"
 // SPDX-License-Identifier: GPL-3.0-or-later
 // ACE-Step 1.5 music generation through audio.cpp and the PS5 Vulkan backend.
 #include "audiocpp.h"
@@ -26,6 +27,7 @@ std::string g_model_root;
 
 void release_engine()
 {
+    prospero_runtime::set_model_resident(false);
     audiocpp_session_free(g_session);
     g_session = nullptr;
     audiocpp_options_free(g_options);
@@ -123,6 +125,7 @@ bool ensure_engine(const std::string &root, void (*progress)(const char *))
         return false;
     }
     g_model_root = root;
+    prospero_runtime::set_model_resident(true);
     return true;
 }
 } // namespace

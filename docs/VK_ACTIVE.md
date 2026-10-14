@@ -2,6 +2,22 @@
 
 Updated: 2026-10-13. Gates: [VK_PLAN.md](VK_PLAN.md); evidence: [VK_LOG.md](VK_LOG.md).
 
+## PR27 user fixes — 2026-10-14
+
+Test slot PPSA99023 runs `pr27-memory-zero-kv`, PID 173 at last check. Main PPSA99004
+was untouched. Resident FTP/control/klog/shell payloads are restored and bundled in
+`tools/payloads/`; local environment setup is documented; P5 Manager is optional.
+Native/web voice recording, native control explanations and L3 deletion are implemented.
+Browser voice switching, first-typing model preparation and staying in chat after deletion
+pass browser/host tests. Live PS5 API confirms deferred selection and voice changes.
+Both headers now show actual model residency, including loads initiated from the web.
+Native workspace displays the loaded name instead of "Choose model". Memory state
+passes host API/router tests and live web preparation/switch/unload checks.
+Chatterbox allocation failures and voice-catalog teardown crash were addressed. Zeroing
+unused T3 KV capacity fixes the observed invalid decode/20 ms silence for Cemo:
+15.34/12.66-second non-clipped outputs. Custom cold run still fails, repeat yields15.36 s.
+The user confirmed unintelligible speech: Chatterbox quality still fails. Explicit F32
+decode attention compiled but has not yet run on console. See [PR27_HANDOFF.md](PR27_HANDOFF.md) and dated reports.
 ## Verified vulkan-runtime
 
 - One complete Prism llama/ggml pin `e8fd209`, `GGML_MAX_NAME=160`, source-built SD and

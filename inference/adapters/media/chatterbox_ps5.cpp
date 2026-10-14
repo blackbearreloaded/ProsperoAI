@@ -1,3 +1,4 @@
+#include "runtime_residency.hpp"
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Chatterbox zero-shot voice cloning through audio.cpp's C API and the shared Vulkan backend.
 #include "audiocpp.h"
@@ -19,10 +20,22 @@
 extern "C" {
 std::uint64_t sceKernelGetProcessTime(void);
 int sceKernelDebugOutText(int, const char *);
+std::int64_t sceKernelGetDirectMemorySize(void);
+int sceKernelAvailableDirectMemorySize(std::int64_t, std::int64_t, std::size_t, std::int64_t *, std::size_t *);
 }
 
 namespace {
 constexpr const char *kLegacyCustomVoice = "/download0/ProsperoAI/voices/chatterbox/custom.wav";
+std::unique_ptr<audiocpp_registry,decltype(&audiocpp_registry_free)> g_registry{nullptr,audiocpp_registry_free};
+std::unique_ptr<audiocpp_model,decltype(&audiocpp_model_free)> g_model{nullptr,audiocpp_model_free};
+std::unique_ptr<audiocpp_options,decltype(&audiocpp_options_free)> g_options{nullptr,audiocpp_options_free};
+std::unique_ptr<audiocpp_session,decltype(&audiocpp_session_free)> g_session{nullptr,audiocpp_session_free};
+std::string g_model_root;
+
+void release_engine() {
+    prospero_runtime::set_model_resident(false);
+    g_session.reset(); g_options.reset(); g_model.reset(); g_registry.reset(); g_model_root.clear();
+}
 
 struct Audio {
     std::vector<float> samples;
@@ -159,7 +172,19 @@ void log_failure(const char *stage) {
     std::snprintf(message, sizeof(message), "%s: %.240s", stage, audiocpp_last_error());
     log_line(message);
 }
+struct MemoryLog {
+    const char *stage;
+    ~MemoryLog() {
+        std::int64_t start = 0; std::size_t bytes = 0;
+        const int rc = sceKernelAvailableDirectMemorySize(0, sceKernelGetDirectMemorySize(), 0x4000, &start, &bytes);
+        char message[160];
+        std::snprintf(message,sizeof(message),"%s largest free block=%zu MiB rc=0x%08x",stage,bytes>>20,static_cast<unsigned>(rc));
+        log_line(message);
+    }
+};
 } // namespace
+
+extern "C" void ps5_chatterbox_release() { release_engine(); }
 
 extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_id,
                                              const char *prompt, char *response,
@@ -168,6 +193,8 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
                                              void (*progress)(const char *)) {
     if (!root || !*root || !voice_id || !prompt || !*prompt || !response || !response_capacity)
         return 1;
+    const MemoryLog memory_after{"after request"};
+    { const MemoryLog memory_before{"before request"}; }
     const auto voice = prospero_voice::runtime_voice_by_id(true, voice_id);
     if (voice.id.empty()) { std::snprintf(response, response_capacity, "Unknown Chatterbox voice."); return 1; }
 
@@ -191,48 +218,56 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
 
     if (progress) progress("Preparing Chatterbox voice");
     const std::uint64_t start = sceKernelGetProcessTime();
-    audiocpp_registry *raw_registry = nullptr;
-    if (audiocpp_registry_create(nullptr, &raw_registry) != AUDIOCPP_OK || !raw_registry) {
-        log_failure("registry initialization failed");
-        std::snprintf(response, response_capacity, "Could not initialize the Chatterbox runtime: %s",
-                      audiocpp_last_error());
-        return 3;
+    // Inference is serialized by the router. Retain weights/conditionals between
+    // requests; the adapter release hook tears down the session on model switches.
+    if (!g_session || g_model_root!=root) {
+        release_engine();
+        audiocpp_registry *raw_registry = nullptr;
+        if (audiocpp_registry_create(nullptr, &raw_registry) != AUDIOCPP_OK || !raw_registry) {
+            log_failure("registry initialization failed");
+            std::snprintf(response, response_capacity, "Could not initialize the Chatterbox runtime: %s",
+                          audiocpp_last_error());
+            return 3;
+        }
+        auto registry = std::unique_ptr<audiocpp_registry, decltype(&audiocpp_registry_free)>(
+            raw_registry, audiocpp_registry_free);
+        audiocpp_model_config config{"chatterbox", nullptr, nullptr, nullptr};
+        audiocpp_model *raw_model = nullptr;
+        if (audiocpp_model_load(raw_registry, root, &config, nullptr, &raw_model) != AUDIOCPP_OK || !raw_model) {
+            log_failure("model load failed");
+            std::snprintf(response, response_capacity, "Could not load Chatterbox: %s", audiocpp_last_error());
+            return 4;
+        }
+        auto model = std::unique_ptr<audiocpp_model, decltype(&audiocpp_model_free)>(raw_model,
+                                                                                           audiocpp_model_free);
+        // Keep Chatterbox on the same shared Vulkan device as the other model
+        // adapters. A CPU session tried to reserve a 192–256 MiB arena in the
+        // title's constrained direct-memory heap and aborted the HTTP worker.
+        audiocpp_backend_config backend{"vulkan", 0, 4};
+        audiocpp_options *raw_session_options = audiocpp_options_create();
+        if (!raw_session_options ||
+            audiocpp_options_set(raw_session_options, "chatterbox.mem_saver", "true") != AUDIOCPP_OK) {
+            log_failure("low-memory options failed");
+            audiocpp_options_free(raw_session_options);
+            std::snprintf(response, response_capacity, "Could not configure low-memory Chatterbox mode: %s",
+                          audiocpp_last_error());
+            return 5;
+        }
+        auto session_options = std::unique_ptr<audiocpp_options, decltype(&audiocpp_options_free)>(
+            raw_session_options, audiocpp_options_free);
+        audiocpp_session *raw_session = nullptr;
+        log_line("session backend=vulkan device=0 mem_saver=true");
+        if (audiocpp_session_create(raw_model, "clon", "offline", &backend, raw_session_options, &raw_session) != AUDIOCPP_OK || !raw_session) {
+            log_failure("Vulkan session creation failed");
+            std::snprintf(response, response_capacity, "Could not create Chatterbox session: %s", audiocpp_last_error());
+            return 5;
+        }
+        auto session = std::unique_ptr<audiocpp_session, decltype(&audiocpp_session_free)>(raw_session,
+                                                                                            audiocpp_session_free);
+        g_registry=std::move(registry); g_model=std::move(model); g_options=std::move(session_options);
+        g_session=std::move(session); g_model_root=root;
+        prospero_runtime::set_model_resident(true);
     }
-    const auto registry = std::unique_ptr<audiocpp_registry, decltype(&audiocpp_registry_free)>(
-        raw_registry, audiocpp_registry_free);
-    audiocpp_model_config config{"chatterbox", nullptr, nullptr, nullptr};
-    audiocpp_model *raw_model = nullptr;
-    if (audiocpp_model_load(raw_registry, root, &config, nullptr, &raw_model) != AUDIOCPP_OK || !raw_model) {
-        log_failure("model load failed");
-        std::snprintf(response, response_capacity, "Could not load Chatterbox: %s", audiocpp_last_error());
-        return 4;
-    }
-    const auto model = std::unique_ptr<audiocpp_model, decltype(&audiocpp_model_free)>(raw_model,
-                                                                                       audiocpp_model_free);
-    // Keep Chatterbox on the same shared Vulkan device as the other model
-    // adapters. A CPU session tried to reserve a 192–256 MiB arena in the
-    // title's constrained direct-memory heap and aborted the HTTP worker.
-    audiocpp_backend_config backend{"vulkan", 0, 4};
-    audiocpp_options *raw_session_options = audiocpp_options_create();
-    if (!raw_session_options ||
-        audiocpp_options_set(raw_session_options, "chatterbox.mem_saver", "true") != AUDIOCPP_OK) {
-        log_failure("low-memory options failed");
-        audiocpp_options_free(raw_session_options);
-        std::snprintf(response, response_capacity, "Could not configure low-memory Chatterbox mode: %s",
-                      audiocpp_last_error());
-        return 5;
-    }
-    const auto session_options = std::unique_ptr<audiocpp_options, decltype(&audiocpp_options_free)>(
-        raw_session_options, audiocpp_options_free);
-    audiocpp_session *raw_session = nullptr;
-    log_line("session backend=vulkan device=0 mem_saver=true");
-    if (audiocpp_session_create(raw_model, "clon", "offline", &backend, raw_session_options, &raw_session) != AUDIOCPP_OK || !raw_session) {
-        log_failure("Vulkan session creation failed");
-        std::snprintf(response, response_capacity, "Could not create Chatterbox session: %s", audiocpp_last_error());
-        return 5;
-    }
-    auto session = std::unique_ptr<audiocpp_session, decltype(&audiocpp_session_free)>(raw_session,
-                                                                                        audiocpp_session_free);
     audiocpp_request *raw_request = audiocpp_request_create();
     if (!raw_request) { std::snprintf(response, response_capacity, "Could not allocate a speech request."); return 6; }
     const auto request = std::unique_ptr<audiocpp_request, decltype(&audiocpp_request_free)>(raw_request,
@@ -250,9 +285,10 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
     }
     if (progress) progress("Generating speech with Chatterbox");
     audiocpp_result *raw_result = nullptr;
-    if (audiocpp_session_run(raw_session, raw_request, &raw_result) != AUDIOCPP_OK || !raw_result) {
+    if (audiocpp_session_run(g_session.get(), raw_request, &raw_result) != AUDIOCPP_OK || !raw_result) {
         log_failure("Vulkan generation failed");
         std::snprintf(response, response_capacity, "Chatterbox speech generation failed: %s", audiocpp_last_error());
+        release_engine();
         return 8;
     }
     const auto result = std::unique_ptr<audiocpp_result, decltype(&audiocpp_result_free)>(raw_result,
@@ -263,6 +299,11 @@ extern "C" int ps5_chatterbox_tts_generate(const char *root, const char *voice_i
     if (audiocpp_result_audio(raw_result, &samples, &frames, &sample_rate, &channels) != AUDIOCPP_OK ||
         !samples || !frames) {
         std::snprintf(response, response_capacity, "Chatterbox returned no speech audio.");
+        return 9;
+    }
+    if (sample_rate <= 0 || frames < static_cast<std::size_t>(sample_rate / 4)) {
+        log_line("invalid speech: decoder returned less than 250 ms of audio");
+        std::snprintf(response,response_capacity,"Chatterbox stopped before producing speech. Please try again.");
         return 9;
     }
     char output[160];

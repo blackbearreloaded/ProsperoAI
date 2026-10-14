@@ -1,0 +1,11 @@
+[prosperoai] T3 step=0 token=426 invalid_logits=8115
+[prosperoai] T3 step=1 token=926 invalid_logits=8160
+[prosperoai] T3 step=2 token=98 invalid_logits=8147
+[prosperoai] T3 step=3 token=824 invalid_logits=8163
+[prosperoai] chatterbox generated 368160 frames at 24000 Hz, 1 channel(s)
+[prosperoai] T3 step=0 token=2247 invalid_logits=8115
+[prosperoai] T3 step=1 token=5712 invalid_logits=8133
+[prosperoai] T3 step=2 token=35 invalid_logits=8169
+[prosperoai] T3 step=3 token=83 invalid_logits=8152
+[prosperoai] T3 step=317 token=6562 invalid_logits=8186
+[prosperoai] chatterbox generated 303840 frames at 24000 Hz, 1 channel(s)

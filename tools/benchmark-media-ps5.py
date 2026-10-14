@@ -21,6 +21,7 @@ parser.add_argument('--label', required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--artifacts', type=Path, required=True)
 parser.add_argument('--warm-repeats', type=int, default=3)
+parser.add_argument('--chatterbox-voice', default='cemo')
 parser.add_argument('--models', nargs='+', default=['sd-turbo-fp16', 'stable-audio-3-small-sfx-vulkan',
     'realistic-vision-v51-fp16', 'ace-step-1.5-turbo-q8-0', 'kokoro-82m-vulkan',
     'chatterbox-500m-q8-0'])
@@ -52,7 +53,7 @@ def request(path, body=None):
 
 
 benchmark_settings = {'context': '4k', 'thinking': False, 'kv': 'auto',
-                      'chatterbox_voice': 'cemo'}
+                      'chatterbox_voice': args.chatterbox_voice}
 ps5ctl_script = str(Path(__file__).with_name('ps5ctl.py'))
 
 
@@ -203,6 +204,7 @@ try:
                     assert record['output']['rate'] == 24000 and record['output']['channels'] == 1
                 if model == 'chatterbox-500m-q8-0':
                     assert record['output']['rate'] > 0 and record['output']['channels'] in (1, 2)
+                    assert record['output']['seconds'] >= 0.25, 'Chatterbox output is too short to contain the speech fixture.'
                 record['passed'] = True
                 save()
                 print('Completed', model, phase, round(elapsed, 3), record['output'], flush=True)

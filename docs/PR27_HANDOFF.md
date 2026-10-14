@@ -24,27 +24,47 @@ Build the shared runtime with `bash tools/build-vulkan-runtime.sh ps5`, then the
 Dependency sources and build outputs are intentionally ignored; fetch/build scripts must
 reconstruct them. The host runtime and PS5 runtime/app built successfully during this work.
 
-## Chatterbox next
+## Chatterbox and recording — current result
 
-The current adapter is `inference/adapters/media/chatterbox_ps5.cpp`, calling upstream
-audio.cpp with the existing `chatterbox-500m-q8-0` bundle. It now explicitly selects
-Vulkan device 0, keeps mem_saver enabled and logs the selected backend. This change is
-compiled only; it is not proven to fix generation. Previous CPU attempts aborted on
-192–256 MiB arena allocation. Earlier Vulkan attempts also failed; collect a fresh log
-and diagnose rather than assuming the backend switch is sufficient.
+The Vulkan adapter now reuses an engine session and releases it on model switches.
+Pinned audio.cpp preparation bounds graph/weight metadata arenas; S3 and HiFT allocation
+failures no longer occur in the latest runs. The voice catalog returns values rather than
+thread-local vector pointers, removing the observed HTTP-worker teardown crash.
+The original 20–40 ms failure occurs with Cemo, Alana and the valid custom reference.
+T3 decode imported only the used KV prefix, leaving the masked tail uninitialized.
+Zeroing the whole cache capacity before import changes Cemo to 15.34/12.66-second
+non-clipped WAVs and fixes the observed all-invalid decode logits. The custom cold run
+still failed, while its repeat generated 15.36 seconds. These short fixtures should not
+normally produce so much audio: the user confirmed the Cemo speech is unintelligible; EOS correctness remains unverified.
+Do not claim complete Chatterbox quality success. The adapter now rejects outputs under
+250 ms. See zero-kv-tail reports and token trace. Official reference reviewed:
+https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/tts.py and
+https://github.com/resemble-ai/chatterbox/blob/master/src/chatterbox/models/t3/t3.py.
+No documented setting change alone resolved the failure. An explicit F32 decode attention
+variant matching reference math compiled, but is not yet console verified.
+A saved console conversation `test-chatterbox-cemo-20261014-kv` contains both Cemo
+artifacts; live browser verification confirms two audio players.
 
-The latest signed app is under `build/vulkan-runtime/PPSA99023/`, SHA-256 of eboot.bin:
-`3699cd7344d178397f6a3bf4448b97426cfde4ec68d5eaca067dc744011ec8e7`.
-It has not been deployed. ELF dependency/header checks passed. The app also contains the
-experimental static ORT entry point, but no ONNX Chatterbox adapter calls it. ORT is CPU
-only on this port; the user requires GPU inference. The older ONNX checklist is research,
-not evidence of a working replacement.
+Native DualSense capture and web capture/save are implemented. The user confirmed PS5
+recording works. The native voice picker has visible glyph explanations and L3 delete
+with confirmation for own/imported samples. Browser capture requires HTTPS/localhost;
+on LAN HTTP, the web recorder can use the PS5 microphone through the app API.
+Physical persistent output storage is `/data/prosperoai/work/{image,audio,voice}`;
+`/download0/ProsperoAI/...` remains the sandbox/HTTP alias.
 
-Restore console connectivity, check agent procs and ShadowMount registration/mount state,
-stop the verified test title, confirm mounted:false, upload the folder with ftp put-dir,
-launch and confirm the process before polling port 11434. Use the app HTTP API directly.
-Require two successful Chatterbox outputs, WAV validation, memory behavior and a text
-round-trip. Save generated media under work/voice on the console.
+Web runtime control initialization is fixed, including Chatterbox voice switching.
+Settings requests are serialized. Model selection sends `prepare:false`; first typing
+prepares once, and submission waits for preparation. Deleting the current conversation
+opens an empty chat instead of returning to welcome. Both headers show actual backend
+residency through `/api/models/memory`; native workspace replaces "Choose model" with
+the loaded model name. Live API verifies web preparation, switch/unload and deferred
+selection. Native drawing reads the same runtime snapshot. Browser integration and host API,
+recording, history and preparation tests pass.
+
+`tools/ps5ctl.py` reads an ignored mode-600 `.env.ps5.local` (template `.env.ps5.example`).
+All resident service ELFs, SHA manifests and licenses are in `tools/payloads/`;
+`doctor` checks them and `service restore` restores missing listeners. P5 Manager is
+optional. See updated AGENTS.md and BUILDING.md.
 
 ## Remaining failures and limitations
 
@@ -64,11 +84,9 @@ round-trip. Save generated media under work/voice on the console.
   Chatterbox before claiming that every catalog model works. The smoke reports include
   failures; do not treat all JSON files as passing evidence.
 
-## External blocker
+## Console state
 
-The last checks returned No route to host/timeouts on payload, FTP and control services.
-The persistent goal is blocked awaiting console connectivity. No reboot was performed.
-The last confirmed running title was PPSA99023, PID 187. A control command expects
-`agent kill <TITLE-ID>`, not a PID; its attempted title kill was not confirmed. Recheck
-process/mount state before updating files. All source, benchmark reports and small generated
-media artifacts are saved in this handoff branch. No production title changes are authorized.
+Connectivity was restored after the user's reboot. FTP/control/klog/shell are available.
+The authorized folder-backed slot is PPSA99023. The latest app build label is
+`pr27-memory-zero-kv`; main PPSA99004 was not changed and no reboot was requested.
+No commits or pushes were made. Recheck process/mount state before subsequent deployment.

@@ -49,7 +49,8 @@ enum DialogAction
     kDeleteConversation,
     kDeleteModel,
     kCloseApp,
-    kCancelDownload
+    kCancelDownload,
+    kDeleteVoice
 };
 } // namespace
 
@@ -434,15 +435,82 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
         !chat_keyboard_open_ && !dialog_.is_open() && !app_.busy())
         take_update_offer(feedback);
 
+    if (!voice_recording_open_ && voice_recorder_.state() == VoiceRecorder::State::Recording)
+    {
+        voice_recording_open_ = true;
+        voice_recording_remote_ = true;
+        voice_recording_feedback_.clear();
+    }
+    else if (voice_recording_remote_ && voice_recorder_.state() == VoiceRecorder::State::Idle)
+    {
+        voice_recording_open_ = false;
+        voice_recording_remote_ = false;
+    }
     if (boot_ > 0.6f || keyboard_pending_)
     {
         // Nothing is in reach yet.
     }
     else if (update_ui_ != UpdateUi::hidden)
         update_modal(input, dt, feedback);
+    else if (voice_recording_open_)
+    {
+        const auto state = voice_recorder_.state();
+        if (input.is_pressed(Action::back))
+        {
+            if (!app_.busy()) { voice_recorder_.discard(); voice_recording_open_ = false; }
+        }
+        else if (!app_.busy() && input.is_pressed(Action::confirm))
+        {
+            if (state == VoiceRecorder::State::Recording) voice_recorder_.stop();
+            else if (state == VoiceRecorder::State::Ready)
+            {
+                if (voice_recorder_.save())
+                {
+                    auto preferences = app_.state().preferences;
+                    const int index = prospero_voice::runtime_voice_index(true, "custom");
+                    if (index >= 0) preferences.chatterbox_voice = static_cast<unsigned>(index);
+                    app_.set_preferences(std::move(preferences));
+                    voice_recorder_.discard(); voice_recording_open_ = false;
+                    kokoro_voice_picker_open_ = false; refresh_sessions();
+                    toasts_.push(ui::StatusKind::success, "Voice saved", "My voice is selected for Chatterbox.");
+                }
+                else voice_recording_feedback_ = voice_recorder_.error();
+            }
+            else { voice_recording_feedback_.clear(); voice_recorder_.start(); }
+        }
+        else if (!app_.busy() && state == VoiceRecorder::State::Ready && input.is_pressed(Action::west))
+        {
+            if (!voice_recorder_.preview() || !app_.play_audio(VoiceRecorder::preview_path))
+                voice_recording_feedback_ = "Could not play the voice sample.";
+        }
+        else if (!app_.busy() && state != VoiceRecorder::State::Recording && input.is_pressed(Action::north))
+        {
+            voice_recording_feedback_.clear(); voice_recorder_.start();
+        }
+    }
     else if (kokoro_voice_picker_open_)
     {
-        if (input.nav == Direction::up || input.nav == Direction::down)
+        if (voice_picker_chatterbox_ && input.is_pressed(Action::l3) && !app_.busy())
+        {
+            const auto selected=prospero_voice::runtime_voice(true,static_cast<unsigned>(kokoro_voice_picker_focus_));
+            if (selected && prospero_voice::chatterbox_voice_deletable(*selected))
+            {
+                voice_delete_id_=selected->id;
+                kokoro_voice_picker_open_=false;
+                open_dialog(kDeleteVoice,-1,"Delete " + selected->name + "?",
+                    "This voice sample will be removed from this console. You can record or upload it again.",
+                    "Delete",true,feedback,"Cancel");
+            }
+            else toasts_.push(ui::StatusKind::info,"Built-in voice","Only your own and imported samples can be deleted.");
+        }
+        else if (voice_picker_chatterbox_ && input.is_pressed(Action::north) && !app_.busy())
+        {
+            voice_recording_open_ = true;
+            voice_recording_remote_ = false;
+            voice_recording_feedback_.clear();
+            feedback.play(audio::Cue::modal_open);
+        }
+        else if (input.nav == Direction::up || input.nav == Direction::down)
         {
             const int count = static_cast<int>(prospero_voice::runtime_voices(voice_picker_chatterbox_).size());
             kokoro_voice_picker_focus_ =
@@ -491,7 +559,10 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
     }
     else if (dialog_.is_open())
     {
-        if (dialog_.handle(input, feedback) == ui::Event::activated && dialog_.choice() == 1)
+        const auto event=dialog_.handle(input,feedback);
+        if (dialog_action_==kDeleteVoice && (event==ui::Event::cancelled || (event==ui::Event::activated && dialog_.choice()!=1)))
+            kokoro_voice_picker_open_=true;
+        if (event == ui::Event::activated && dialog_.choice() == 1)
         {
             bool accepted = false;
             if (dialog_action_ == kUseModel)
@@ -520,6 +591,24 @@ void NativeUI::Impl::update(const InputFrame &input, float dt, ui::Feedback &fee
                 accepted = quit_ = !app_.busy() && !app_.state().unsaved;
             else if (dialog_action_ == kCancelDownload)
                 accepted = cancel_pending_ = prospero_model_download::cancel();
+            else if (dialog_action_ == kDeleteVoice)
+            {
+                auto preferences=app_.state().preferences;
+                const auto current=prospero_voice::runtime_voice(true,preferences.chatterbox_voice);
+                accepted=prospero_voice::delete_chatterbox_voice(voice_delete_id_);
+                if (accepted)
+                {
+                    const std::string next=current && current->id!=voice_delete_id_ ? current->id : "cemo";
+                    const int index=prospero_voice::runtime_voice_index(true,next);
+                    preferences.chatterbox_voice=static_cast<unsigned>(std::max(0,index));
+                    app_.set_preferences(std::move(preferences));
+                    kokoro_voice_picker_focus_=static_cast<int>(app_.state().preferences.chatterbox_voice);
+                    refresh_sessions();
+                    toasts_.push(ui::StatusKind::success,"Voice sample deleted","Your conversations remain on this console.");
+                }
+                else toasts_.push(ui::StatusKind::warning,"Voice not deleted","The sample is missing or could not be removed.");
+                kokoro_voice_picker_open_=true;
+            }
             if (!accepted)
                 feedback.play(audio::Cue::error);
         }
@@ -1102,8 +1191,10 @@ void NativeUI::Impl::refresh_sessions()
     workspace_model_indices_.clear();
     workspace_voice_row_ = -1;
     ui::ListItem first;
-    first.title = "Choose model";
-    first.subtitle = state.selected_model >= 0
+    char loaded_id[256]{},loaded_name[256]{};
+    const bool model_loaded=gpt_runtime_loaded_model(loaded_id,sizeof(loaded_id),loaded_name,sizeof(loaded_name));
+    first.title = model_loaded ? (loaded_name[0] ? loaded_name : loaded_id) : "Choose model";
+    first.subtitle = model_loaded ? "Loaded in memory · Change model" : state.selected_model >= 0
                          ? std::string(state.ready ? "Loaded in memory · " : "Selected · ") +
                                state.models[static_cast<std::size_t>(state.selected_model)].name
                          : "Select one to load it into memory";
@@ -1582,6 +1673,7 @@ void NativeUI::Impl::upload_visible_image()
 
 void NativeUI::Impl::release()
 {
+    voice_recorder_.discard();
     for (const auto &[path, texture] : images_)
         glDeleteTextures(1, &texture.id);
     images_.clear();
@@ -1656,7 +1748,7 @@ void NativeUI::Impl::draw(UiFrame &frame) const
         auto &popup = frame.overlay;
         popup.rounded_rect({0, 0, gfx::kVirtualWidth, gfx::kVirtualHeight}, 0,
                            Color::rgb(0x000000, palette_.day ? 0.45f : 0.72f));
-        const Rect panel{530, 270, 860, 540};
+        const Rect panel{490, 220, 940, 640};
         popup.shadow({panel.x, panel.y + 14, panel.w, panel.h}, 24, 50, Color::rgb(0x000000, 0.4f));
         popup.bordered_rect(panel, 24, palette_.panel.with_alpha(1.0f / palette_.panel.a), 1,
                             palette_.line);
@@ -1665,9 +1757,10 @@ void NativeUI::Impl::draw(UiFrame &frame) const
         text(popup, "Choose a voice", panel.x + 42, panel.y + 101, 34, palette_.ink, true);
         const auto voice_list = prospero_voice::runtime_voices(voice_picker_chatterbox_);
         const int voice_count = static_cast<int>(voice_list.size());
-        for (int i = 0; i < voice_count; ++i)
+        const int first_voice = std::min(std::max(0,kokoro_voice_picker_focus_-2),std::max(0,voice_count-5));
+        for (int i = first_voice; i < std::min(voice_count,first_voice+5); ++i)
         {
-            const float y = panel.y + 140 + static_cast<float>(i) * 70;
+            const float y = panel.y + 140 + static_cast<float>(i-first_voice) * 70;
             const Rect row{panel.x + 28, y, panel.w - 56, 60};
             if (i == kokoro_voice_picker_focus_)
                 popup.rounded_rect(row, 12, palette_.accent.with_alpha(0.22f));
@@ -1678,8 +1771,58 @@ void NativeUI::Impl::draw(UiFrame &frame) const
             text(popup, voice.locale, row.x + row.w - 20, row.y + 22, 21, palette_.muted, false,
                  gfx::Align::right);
         }
-        text(popup, "↑  ↓  Select     ✕  Confirm     ○  Cancel", 960, panel.y + panel.h - 28, 18,
-             palette_.muted, false, gfx::Align::center);
+        popup.line(panel.x+28,panel.y+panel.h-88,panel.x+panel.w-28,panel.y+panel.h-88,1,palette_.line);
+        ui::Hint hints[5]{{ui::Button::dpad,"Select"},{ui::Button::cross,"Use voice"},
+                          {ui::Button::triangle,"Record"},{ui::Button::left_stick,"L3 Delete"},{ui::Button::circle,"Back"}};
+        if (!voice_picker_chatterbox_) hints[2] = hints[4];
+        const int count = voice_picker_chatterbox_ ? 5 : 3;
+        auto glyphs = palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
+        glyphs.label = palette_.ink;
+        ui::HintLayout layout;
+        layout.size=30; layout.text_size=21; layout.cy=panel.y+panel.h-43; layout.item_gap=26;
+        const float width = ui::measure_hints(fonts_,hints,count,layout);
+        ui::draw_hints(popup,fonts_,glyphs,hints,count,panel.cx()-width/2,false,layout);
+    }
+    if (voice_recording_open_)
+    {
+        frame.glass = true;
+        auto &popup = frame.overlay;
+        popup.rounded_rect({0,0,gfx::kVirtualWidth,gfx::kVirtualHeight},0,Color::rgb(0x000000,0.72f));
+        const Rect panel{530,270,860,540};
+        popup.bordered_rect(panel,24,palette_.panel.with_alpha(1.0f/palette_.panel.a),1,palette_.line);
+        label(popup,"MY VOICE",panel.x+42,panel.y+52,palette_.accent);
+        const auto state = voice_recorder_.state();
+        text(popup,state == VoiceRecorder::State::Recording ? "Recording your voice…" :
+             state == VoiceRecorder::State::Ready ? "Listen, then save your voice" : "Record a voice sample",
+             panel.x+42,panel.y+110,32,palette_.ink,true);
+        text(popup,"Speak clearly for up to five seconds.",panel.x+42,panel.y+175,24,palette_.ink);
+        text(popup,"Uses your PS5 input device. Unmute the DualSense microphone.",panel.x+42,panel.y+218,21,palette_.muted);
+        const float progress = std::min(1.0f,voice_recorder_.seconds()/5.0f);
+        popup.rounded_rect({panel.x+42,panel.y+270,776,14},7,palette_.line);
+        if (progress > 0) popup.rounded_rect({panel.x+42,panel.y+270,776*progress,14},7,palette_.accent);
+        char duration[80]; std::snprintf(duration,sizeof(duration),"%.1f / 5.0 seconds",voice_recorder_.seconds());
+        text(popup,duration,panel.x+42,panel.y+320,24,palette_.ink);
+        const std::string message = state == VoiceRecorder::State::Failed ? voice_recorder_.error() : voice_recording_feedback_;
+        text(popup,message,panel.x+42,panel.y+380,20,palette_.warn);
+        popup.line(panel.x+28,panel.y+panel.h-76,panel.x+panel.w-28,panel.y+panel.h-76,1,palette_.line);
+        if (app_.busy()) text(popup,"Playing your sample…",960,panel.y+panel.h-34,21,palette_.muted,false,gfx::Align::center);
+        else
+        {
+            ui::Hint hints[4]; int count=0;
+            hints[count++]={ui::Button::cross,state == VoiceRecorder::State::Recording ? "Stop" :
+                state == VoiceRecorder::State::Ready ? "Save and use" : "Start recording"};
+            if (state == VoiceRecorder::State::Ready)
+            {
+                hints[count++]={ui::Button::square,"Listen"};
+                hints[count++]={ui::Button::triangle,"Record again"};
+            }
+            hints[count++]={ui::Button::circle,"Cancel"};
+            auto glyphs=palette_.day ? ui::GlyphStyle::light() : ui::GlyphStyle::dark();
+            glyphs.label=palette_.ink;
+            ui::HintLayout layout; layout.size=28; layout.text_size=20; layout.cy=panel.y+panel.h-34; layout.item_gap=22;
+            const float width=ui::measure_hints(fonts_,hints,count,layout);
+            ui::draw_hints(popup,fonts_,glyphs,hints,count,panel.cx()-width/2,false,layout);
+        }
     }
     draw_update_notes(overlay);
     draw_update(overlay);
@@ -1711,13 +1854,13 @@ void NativeUI::Impl::draw_header(ui::Canvas &canvas) const
                        : state.selected_model >= 0 && state.ready       ? palette_.good
                        : state.selected_model < 0 && !state.initialized ? palette_.muted
                                                                         : palette_.bad;
-    std::string status = state.selected_model >= 0
-                             ? std::string(state.ready ? "Loaded · " : "Selected · ") +
-                                   fit(current_name(), 19, 250)
-                             : std::string();
-    if (!status.empty())
-        status += "  \xC2\xB7  ";
-    status += activity_text();
+    std::string status = activity_text();
+    char loaded_id[256]{}, loaded_name[256]{};
+    const bool loaded = gpt_runtime_loaded_model(loaded_id,sizeof(loaded_id),loaded_name,sizeof(loaded_name));
+    const std::string memory = loaded ? "Memory: " + fit(loaded_name[0] ? loaded_name : loaded_id,19,330)
+                                      : "Memory: no model loaded";
+    const float memory_width = fonts_.regular.measure(memory,19);
+    text(list,memory,kRight-memory_width,126,19,loaded ? palette_.good : palette_.muted);
     const float width = chip_width(status, true);
     chip(list, kRight, 90, status, tone, true, true);
     if (busy && !reduced_motion())
@@ -1729,6 +1872,7 @@ void NativeUI::Impl::draw_header(ui::Canvas &canvas) const
 void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
 {
     list.line(kLeft, kFooterRule, kRight, kFooterRule, 1, palette_.line);
+    if (kokoro_voice_picker_open_ || voice_recording_open_) return;
     const auto &state = app_.state();
     ui::Hint hints[8];
     int count = 0;

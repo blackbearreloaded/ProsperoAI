@@ -55,6 +55,14 @@ async function refreshModels(){
         updateModelChip();
     }catch(error){$('status').textContent='PS5 · Disconnected';$('feedback').textContent=error.message;}
 }
+let memoryRefreshBusy=false;
+async function refreshMemoryModel(){
+ if(memoryRefreshBusy||document.visibilityState==='hidden')return;
+ memoryRefreshBusy=true;
+ try{const response=await api('/api/models/memory'),state=await response.json();$('memory-model').textContent=state.loaded?`Memory: ${state.name||state.id}`:'Memory: no model loaded';$('memory-model').title=$('memory-model').textContent;if(!state.loaded)preparedModel='';}
+ catch{$('memory-model').textContent='Memory: unavailable';}
+ finally{memoryRefreshBusy=false;}
+}
 async function refreshSelectedModel(){try{const response=await api('/api/models/selection');const selection=await response.json();selectedModel=models.some(model=>model.id===selection.id)?selection.id:'';modelChooser.value=workspaceModelValue();renderModels();}catch{}}
 function renderModels(){
     const list=$('model-list');list.replaceChildren();
@@ -134,7 +142,19 @@ async function pollDownloads(){
     }catch(error){$('download-status').textContent=error.message;}
 }
 async function startModelDownload(index){$('download-status').textContent='Starting verified download…';try{await api('/api/models/download',{method:'POST',body:JSON.stringify({index})});await pollDownloads();}catch(error){$('download-status').textContent=error.message;}}
-async function chooseInstalledModel(id,beginConversation=false){try{if(beginConversation||!current||(current.model&&current.model!==id))newConversation();const loadStatus=$('model-load-status');loadStatus.textContent='Loading model into memory…';modelChooser.disabled=true;await api('/api/models/selection',{method:'POST',body:JSON.stringify({id})});selectedModel=id;currentModelChosen=true;modelChooser.value=id;const chosen=models.find(model=>model.id===id);current.model=id;current.modelName=chosen?.name||id;current.purpose=chosen?.purpose||'text-to-text';current.updatedAt=Date.now();loadStatus.textContent=`${current.modelName} selected for this conversation.`;openChat();renderModels();renderHistory();if(conversations.includes(current))void persistConversation(current);}catch(error){modelChooser.value='';$('model-load-status').textContent=error.message;}finally{modelChooser.disabled=false;}}
+let preparedModel='',preparation=null,submitting=false;
+async function prepareConversationModel(){
+  const id=current?.model;
+  if(!currentModelChosen||!id)return;
+  if(preparedModel===id)return;
+  if(preparation){await preparation;return prepareConversationModel();}
+  $('model-load-status').textContent='Preparing model…';
+  modelChooser.disabled=true;
+  preparation=(async()=>{const response=await api('/api/models/selection',{method:'POST',body:JSON.stringify({id,prepare:true})});if(!response.ok)throw new Error('The selected model could not be prepared.');preparedModel=id;})();
+  try{await preparation;$('model-load-status').textContent='Model ready.';void refreshMemoryModel();}
+  finally{preparation=null;modelChooser.disabled=false;}
+}
+async function chooseInstalledModel(id,beginConversation=false){try{if(beginConversation||!current||(current.model&&current.model!==id))newConversation();const loadStatus=$('model-load-status');loadStatus.textContent='Selecting model…';modelChooser.disabled=true;const response=await api('/api/models/selection',{method:'POST',body:JSON.stringify({id,prepare:false})});if(!response.ok)throw new Error('The model could not be selected.');preparedModel='';selectedModel=id;currentModelChosen=true;modelChooser.value=id;const chosen=models.find(model=>model.id===id);current.model=id;current.modelName=chosen?.name||id;current.purpose=chosen?.purpose||'text-to-text';current.updatedAt=Date.now();loadStatus.textContent=`${current.modelName} selected for this conversation.`;openChat();renderModels();renderHistory();if(conversations.includes(current))void persistConversation(current);}catch(error){modelChooser.value='';$('model-load-status').textContent=error.message;}finally{modelChooser.disabled=false;}}
 $('search').oninput=renderModels;$('model-dialog').addEventListener('close',()=>{if($('model-dialog').returnValue==='use')void chooseInstalledModel(pendingModel,true);});
 modelChooser.onchange=()=>{if(modelChooser.value)void chooseInstalledModel(modelChooser.value);};
 function renderHistory(){
@@ -209,11 +229,11 @@ $('delete-dialog').addEventListener('close',async()=>{
     catch(error){$('feedback').textContent=`Could not delete this conversation on the console: ${error.message}`;return;}
     conversations=conversations.filter(conversation=>conversation.id!==pendingDelete);
     save('prospero-conversations',conversations.slice(0,50));
-    if(current?.id===pendingDelete)showWelcome();
+    if(current?.id===pendingDelete)newConversation();
     renderHistory();
 });
 function updateModelChip(){const chip=$('model-chip'),model=models.find(item=>item.id===current?.model),name=current?.modelName||model?.name||current?.model||'';chip.textContent=name?`Model: ${name}`:'Choose a model';chip.title=name?`This conversation uses ${name}`:'Choose a model for this conversation';chip.hidden=false;}
-function openChat(){page('workspace');$('welcome').hidden=true;$('chat').hidden=false;$('chat-title').textContent=current?.title||'A little room for big ideas.';updateModelChip();modelChooser.value=workspaceModelValue();$('model-load-status').textContent=currentModelChosen?`${current.modelName||current.model} is selected for this conversation.`:current?.model?'Choose this conversation’s model to load it into memory.':selectedModel?`${models.find(item=>item.id===selectedModel)?.name||selectedModel} is loaded. Choose it to use it in this conversation.`:'Choose a model to load it into memory.';const model=models.find(item=>item.id===(current?.model||selectedModel)),tts=currentModelChosen&&(current?.purpose==='text-to-speech'||model?.purpose==='text-to-speech');$('workspace-voice-group').hidden=!tts;if(tts){populateWorkspaceVoicePicker(model?.id||current?.model||selectedModel);const chatterbox=String(model?.id||current?.model||selectedModel).includes('chatterbox');$('chatterbox-upload-label').hidden=!chatterbox;void runtimeSettings();if(chatterbox)void refreshCustomChatterboxVoice();}}
+function openChat(){page('workspace');$('welcome').hidden=true;$('chat').hidden=false;$('chat-title').textContent=current?.title||'A little room for big ideas.';updateModelChip();modelChooser.value=workspaceModelValue();$('model-load-status').textContent=currentModelChosen?`${current.modelName||current.model} is selected for this conversation.`:current?.model?'Choose this conversation’s model, then start typing to load it.':selectedModel?`${models.find(item=>item.id===selectedModel)?.name||selectedModel} is available. Choose it to use it in this conversation.`:'Choose a model, then start typing to load it.';const model=models.find(item=>item.id===(current?.model||selectedModel)),tts=currentModelChosen&&(current?.purpose==='text-to-speech'||model?.purpose==='text-to-speech');$('workspace-voice-group').hidden=!tts;if(tts){populateWorkspaceVoicePicker(model?.id||current?.model||selectedModel);const chatterbox=String(model?.id||current?.model||selectedModel).includes('chatterbox');$('chatterbox-upload-label').hidden=!chatterbox;void runtimeSettings();if(chatterbox)void refreshCustomChatterboxVoice();}}
 $('history-kind').onchange=renderHistory;
 $('history-search').oninput=renderHistory;
 function newConversation(){
@@ -221,7 +241,7 @@ function newConversation(){
     currentModelChosen=false;current={id:globalThis.crypto?.randomUUID?.()||String(Date.now()),title:'New conversation',model:'',modelName:'',purpose:'other',messages:[],updatedAt:Date.now()};
     openChat();renderMessages();renderHistory();$('prompt').focus();
 }
-function startKind(kind){if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}newConversation();modelChooser.focus();$('model-load-status').textContent=`Choose a ${kindNames[kind].toLowerCase()} model to load it into memory.`;}
+function startKind(kind){if(controller){$('feedback').textContent='Stop the current response before starting a new conversation.';return;}newConversation();modelChooser.focus();$('model-load-status').textContent=`Choose a ${kindNames[kind].toLowerCase()} model, then start typing to load it.`;}
 function closeHistory(){$('chat').classList.remove('show-history');$('history-toggle').setAttribute('aria-expanded','false');}
 $('start').onclick=()=>startKind(0);for(const [kind,id] of ['converse','imagine','compose','speak'].entries())$(id).onclick=()=>startKind(kind);$('new').onclick=()=>{newConversation();closeHistory();};$('history-close').onclick=closeHistory;$('history-toggle').onclick=()=>{$('chat').classList.toggle('show-history');$('history-toggle').setAttribute('aria-expanded',String($('chat').classList.contains('show-history')));};
 function extractMedia(text){const paths=[...text.matchAll(/\/download0\/[^\s]+\.(?:png|tga|wav)/g)];if(!paths.length)return null;const match=paths.find(item=>item[0].startsWith('/download0/ProsperoAI/sessions/')||item[0].startsWith('/download0/ProsperoAI/work/image/'))||paths[0],path=match[0],kind=path.endsWith('.wav')?'audio':'image';return{path,kind,before:text.slice(0,match.index)};}
@@ -232,15 +252,15 @@ function appendMedia(el,media){api(media.path).then(r=>r.blob()).then(blob=>{if(
 function addMessage(message){const el=document.createElement('div');el.className=`message ${message.role==='user'?'user':'assistant'}`;const media=message.role!=='user'&&extractMedia(message.content||'');if(media){el.textContent=media.before.replace(/[\r\n]+$/,'');appendMedia(el,media);}else el.textContent=message.content||'';$('messages').append(el);return el;}
 function showGenerationStats(el,usage,isText,fallbackSeconds){const rate=Number(usage?.tokens_per_second),seconds=Number(usage?.generation_time_ms)/1000||fallbackSeconds;if(isText&&Number.isFinite(rate)&&rate>0){const meta=document.createElement('div');meta.className='message-metrics';meta.textContent=`${rate.toFixed(1)} tok/s · ${seconds.toFixed(1)} s`;el.append(meta);}else if(!isText&&Number.isFinite(seconds)&&seconds>0){const meta=document.createElement('div');meta.className='message-metrics';meta.textContent=`Generated in ${seconds.toFixed(1)} s`;el.append(meta);}}
 function renderMessages(){$('messages').replaceChildren();for(const message of current?.messages||[])addMessage(message);$('messages').scrollTop=$('messages').scrollHeight;}
-$('prompt').oninput=()=>{$('prompt').style.height='auto';$('prompt').style.height=Math.min(180,$('prompt').scrollHeight)+'px';};$('prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&matchMedia('(min-width:701px)').matches){e.preventDefault();$('composer').requestSubmit();}};
-$('composer').onsubmit=async e=>{e.preventDefault();if(controller){controller.abort();return;}const text=$('prompt').value.trim();if(!text)return;if(!current)newConversation();if(!currentModelChosen){if(!modelChooser.value){$('feedback').textContent='Choose a model for this conversation before sending.';modelChooser.focus();return;}await chooseInstalledModel(modelChooser.value);if(!currentModelChosen)return;}const conversation=current;if(!conversations.includes(conversation))conversations.unshift(conversation);conversation.messages.push({role:'user',content:text});if(conversation.messages.length===1)conversation.title=text.slice(0,70);conversation.updatedAt=Date.now();$('prompt').value='';$('prompt').style.height='auto';openChat();renderHistory();addMessage(conversation.messages.at(-1));const answer={role:'assistant',content:''};const el=addMessage(answer);controller=new AbortController();$('send').textContent='■';$('send').setAttribute('aria-label','Stop response');$('prompt').disabled=true;$('feedback').textContent='Thinking…';const start=performance.now();const selectedModel=models.find(model=>model.id===conversation.model);const isTextModel=!selectedModel?.purpose||modelKind(selectedModel)===0;let usage=null,received=false;try{await persistConversation(conversation);const response=await api('/v1/chat/completions',{method:'POST',signal:controller.signal,body:JSON.stringify({model:conversation.model,messages:conversation.messages,stream:isTextModel,stream_options:isTextModel?{include_usage:true}:undefined,temperature:preferences.temperature})});if(!response.headers.get('Content-Type')?.includes('text/event-stream')){
+$('prompt').oninput=()=>{if($('prompt').value.trim()&&currentModelChosen)void prepareConversationModel().catch(error=>{$('feedback').textContent=error.message;});$('prompt').style.height='auto';$('prompt').style.height=Math.min(180,$('prompt').scrollHeight)+'px';};$('prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&matchMedia('(min-width:701px)').matches){e.preventDefault();$('composer').requestSubmit();}};
+$('composer').onsubmit=async e=>{e.preventDefault();if(controller){controller.abort();return;}const text=$('prompt').value.trim();if(!text)return;if(!current)newConversation();if(!currentModelChosen){if(!modelChooser.value){$('feedback').textContent='Choose a model for this conversation before sending.';modelChooser.focus();return;}await chooseInstalledModel(modelChooser.value);if(!currentModelChosen)return;}if(submitting)return;submitting=true;const conversation=current;try{await prepareConversationModel();}catch(error){$('feedback').textContent=error.message;return;}finally{submitting=false;}if(current!==conversation)return;if(!conversations.includes(conversation))conversations.unshift(conversation);conversation.messages.push({role:'user',content:text});if(conversation.messages.length===1)conversation.title=text.slice(0,70);conversation.updatedAt=Date.now();$('prompt').value='';$('prompt').style.height='auto';openChat();renderHistory();addMessage(conversation.messages.at(-1));const answer={role:'assistant',content:''};const el=addMessage(answer);controller=new AbortController();$('send').textContent='■';$('send').setAttribute('aria-label','Stop response');$('prompt').disabled=true;$('feedback').textContent='Thinking…';const start=performance.now();const selectedModel=models.find(model=>model.id===conversation.model);const isTextModel=!selectedModel?.purpose||modelKind(selectedModel)===0;let usage=null,received=false;try{await persistConversation(conversation);const response=await api('/v1/chat/completions',{method:'POST',signal:controller.signal,body:JSON.stringify({model:conversation.model,messages:conversation.messages,stream:isTextModel,stream_options:isTextModel?{include_usage:true}:undefined,temperature:preferences.temperature})});if(!response.headers.get('Content-Type')?.includes('text/event-stream')){
     const result=await response.json();usage=result.usage||null;answer.content=result.choices?.[0]?.message?.content||'';received=Boolean(answer.content);const media=extractMedia(answer.content);if(media){el.textContent=media.before.replace(/[\r\n]+$/,'');appendMedia(el,media);}else el.textContent=answer.content;
 }else{
 const reader=response.body.getReader(),decoder=new TextDecoder();let pending='';const event=block=>{const data=block.split('\n').filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trim()).join('\n');if(!data||data==='[DONE]')return;const part=JSON.parse(data);if(part.error)throw Error(part.error.message||'The response could not be completed.');if(part.usage)usage=part.usage;const token=part.choices?.[0]?.delta?.content;if(typeof token==='string'){received=true;answer.content+=token;el.textContent=answer.content;const log=$('messages');if(log.scrollHeight-log.scrollTop-log.clientHeight<180)log.scrollTop=log.scrollHeight;}};while(true){const {value,done}=await reader.read();pending+=decoder.decode(value||new Uint8Array(),{stream:!done}).replace(/\r\n/g,'\n');let split;while((split=pending.indexOf('\n\n'))>=0){event(pending.slice(0,split));pending=pending.slice(split+2);}if(done){if(pending.trim())event(pending);break;}}}
 if(!received)throw Error('The model returned an empty response.');showGenerationStats(el,usage,isTextModel,(performance.now()-start)/1000);$('feedback').textContent=`Completed · ${((performance.now()-start)/1000).toFixed(1)}s`;}catch(error){$('feedback').textContent=error.name==='AbortError'?'Response stopped.':error.message;if(!received)el.remove();}finally{if(answer.content)conversation.messages.push(answer);conversation.updatedAt=Date.now();save('prospero-conversations',conversations.slice(0,50));controller=null;$('send').textContent='↑';$('send').setAttribute('aria-label','Send message');$('prompt').disabled=false;renderHistory();void persistConversation(conversation);}};
 $('access').onclick=()=>{$('key-error').textContent='';$('key-dialog').showModal();};$('key-dialog').addEventListener('close',()=>{if($('key-dialog').returnValue==='connect'){key=$('key').value.trim();try{sessionStorage.setItem('prospero-key',key);}catch{}$('key').value='';refreshModels();}});
 renderHistory();refreshModels();pollDownloads();
-void syncConversations();setInterval(syncConversations,4000);setInterval(refreshSelectedModel,4000);
+void syncConversations();setInterval(syncConversations,4000);setInterval(refreshSelectedModel,4000);void refreshMemoryModel();setInterval(refreshMemoryModel,2000);
 
 let audioContext;function sound(){if(!preferences.sounds)return;try{audioContext??=new (window.AudioContext||window.webkitAudioContext)();const osc=audioContext.createOscillator(),gain=audioContext.createGain();osc.type='sine';osc.frequency.value=620;gain.gain.setValueAtTime(preferences.volume*0.08,audioContext.currentTime);gain.gain.exponentialRampToValueAtTime(0.0001,audioContext.currentTime+0.09);osc.connect(gain);gain.connect(audioContext.destination);osc.start();osc.stop(audioContext.currentTime+0.1);}catch{}}
 document.addEventListener('click',e=>{if(e.target.closest('button'))sound();});
@@ -248,7 +268,9 @@ for(const button of document.querySelectorAll('[data-category]'))button.onclick=
 $('preview-send').onclick=()=>{newConversation();$('prompt').value='Tell me a story.';$('prompt').focus();};
 
 let savedKokoroVoice='af_heart',savedChatterboxVoice='cemo',customChatterboxVoiceAvailable=false;
-async function runtimeSettings(change) {
+let runtimeSettingsQueue=Promise.resolve();
+function runtimeSettings(change){const result=runtimeSettingsQueue.then(()=>applyRuntimeSettings(change));runtimeSettingsQueue=result.catch(()=>{});return result;}
+async function applyRuntimeSettings(change) {
   const controls = ['runtime-context','length','runtime-thinking','runtime-idle-unload','kokoro-voice','workspace-voice'].map($).filter(Boolean);
   controls.forEach(el => el.disabled = true);
   try {
@@ -275,10 +297,10 @@ async function runtimeSettings(change) {
   }
   finally { controls.forEach(el => el.disabled = false); }
 }
+const memoryGroup=document.createElement('div');memoryGroup.className='model-memory-settings';const memoryHeading=document.createElement('h2');memoryHeading.textContent='Model memory';const memoryDescription=document.createElement('p');memoryDescription.className='muted';memoryDescription.textContent='Release the active model after it has been idle.';const idleLabel=document.createElement('label');idleLabel.htmlFor='runtime-idle-unload';idleLabel.textContent='Unload model after';const idleSelect=document.createElement('select');idleSelect.id='runtime-idle-unload';for(const [value,label] of [[1,'1 minute'],[2,'2 minutes'],[5,'5 minutes'],[10,'10 minutes'],[30,'30 minutes'],[60,'60 minutes']]){const option=document.createElement('option');option.value=String(value);option.textContent=label;idleSelect.append(option);}idleLabel.append(idleSelect);memoryGroup.append(memoryHeading,memoryDescription,idleLabel);$('runtime-feedback').before(memoryGroup);
 for (const [id,key] of [['runtime-context','context'],['length','output_limit'],['runtime-thinking','thinking'],['runtime-idle-unload','idle_unload_minutes']]) {
   $(id).onchange = () => runtimeSettings({[key]:['thinking'].includes(key) ? $(id).checked : ['idle_unload_minutes','output_limit'].includes(key) ? Number($(id).value) : $(id).value});
 }
-const memoryGroup=document.createElement('div');memoryGroup.className='model-memory-settings';const memoryHeading=document.createElement('h2');memoryHeading.textContent='Model memory';const memoryDescription=document.createElement('p');memoryDescription.className='muted';memoryDescription.textContent='Release the active model after it has been idle.';const idleLabel=document.createElement('label');idleLabel.htmlFor='runtime-idle-unload';idleLabel.textContent='Unload model after';const idleSelect=document.createElement('select');idleSelect.id='runtime-idle-unload';for(const [value,label] of [[1,'1 minute'],[2,'2 minutes'],[5,'5 minutes'],[10,'10 minutes'],[30,'30 minutes'],[60,'60 minutes']]){const option=document.createElement('option');option.value=String(value);option.textContent=label;idleSelect.append(option);}idleLabel.append(idleSelect);memoryGroup.append(memoryHeading,memoryDescription,idleLabel);$('runtime-feedback').before(memoryGroup);
 const fallbackKokoroVoices=[['af_heart','Heart · en-US'],['af_bella','Bella · en-US'],['af_nicole','Nicole · en-US'],['af_sarah','Sarah · en-US'],['am_adam','Adam · en-US']];
 const kokoroCatalog=window.prosperoVoiceCatalog?.kokoro;
 const kokoroVoices=Array.isArray(kokoroCatalog)&&kokoroCatalog.length?kokoroCatalog.map(voice=>[voice.id,`${voice.name} · ${voice.locale}`]):fallbackKokoroVoices;
@@ -293,6 +315,7 @@ function populateWorkspaceVoicePicker(modelId){
   for(const [value,label] of entries){const option=document.createElement('option');option.value=value;option.textContent=label;if(value==='custom'&&!customChatterboxVoiceAvailable){option.textContent='My voice · upload a sample';option.disabled=true;}select.append(option);}
   $('workspace-voice-label').textContent=chatterbox?'Chatterbox voice':'Kokoro voice';
   $('chatterbox-upload-label').hidden=!chatterbox;
+  $('chatterbox-record-controls').hidden=!chatterbox;
   select.value=chatterbox?savedChatterboxVoice:savedKokoroVoice;
   if(![...select.options].some(option=>option.value===select.value))select.selectedIndex=0;
   select.onchange=()=>runtimeSettings(chatterbox?{chatterbox_voice:select.value}:{kokoro_voice:select.value});
@@ -303,15 +326,7 @@ $('chatterbox-voice-upload').onchange=async()=>{
   $('workspace-voice-feedback').textContent='Preparing a five-second voice sample…';
   try{
     if(file.size>20*1024*1024)throw Error('Choose an audio sample smaller than 20 MB.');
-    const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(!AudioContextClass)throw Error('Audio conversion is unavailable in this browser.');
-    const context=new AudioContextClass();let decoded;
-    try{decoded=await context.decodeAudioData(await file.arrayBuffer());}finally{await context.close();}
-    const sourceFrames=Math.min(decoded.length,Math.floor(decoded.sampleRate*5)),frames=Math.floor(sourceFrames*16000/decoded.sampleRate);
-    if(frames<16000)throw Error('Choose a voice clip at least one second long.');
-    const pcm=new ArrayBuffer(44+frames*2),view=new DataView(pcm);const put=(offset,value)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));};
-    put(0,'RIFF');view.setUint32(4,36+frames*2,true);put(8,'WAVE');put(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,16000,true);view.setUint32(28,32000,true);view.setUint16(32,2,true);view.setUint16(34,16,true);put(36,'data');view.setUint32(40,frames*2,true);
-    const channels=Array.from({length:decoded.numberOfChannels},(_,i)=>decoded.getChannelData(i));
-    for(let i=0;i<frames;i++){const pos=i*decoded.sampleRate/16000,left=Math.floor(pos),frac=pos-left;let sample=0;for(const channel of channels){const a=channel[Math.min(left,sourceFrames-1)]||0,b=channel[Math.min(left+1,sourceFrames-1)]||0;sample+=(a+(b-a)*frac)/channels.length;}const value=Math.max(-1,Math.min(1,sample));view.setInt16(44+i*2,value<0?value*32768:value*32767,true);}
+    const pcm=await window.prosperoVoiceRecording.convertVoiceSample(await file.arrayBuffer());
     if(pcm.byteLength>200000)throw Error('That voice sample is too large after conversion.');
     const response=await api('/api/voices/chatterbox/custom',{method:'POST',headers:{'Content-Type':'audio/wav'},body:pcm});
     if(!response.ok)throw Error('The console could not save this voice sample.');
@@ -322,3 +337,67 @@ $('chatterbox-voice-upload').onchange=async()=>{
 };
 document.querySelector('[data-page="settings"]').addEventListener('click', () => runtimeSettings());
 void runtimeSettings();
+
+let recordedVoicePcm=null, recordedVoiceUrl='', voiceRecordSaving=false, nativeVoiceReady=false, nativeRecordToken=0, nativeRecordTimer=null, nativeRecording=false;
+const voiceRecordDialog=$('voice-record-dialog');
+function clearRecordedVoice(){
+  recordedVoicePcm=null;nativeVoiceReady=false;$('voice-record-save').disabled=true;
+  $('voice-record-preview').pause();$('voice-record-preview').removeAttribute('src');$('voice-record-preview').hidden=true;
+  if(recordedVoiceUrl)URL.revokeObjectURL(recordedVoiceUrl);recordedVoiceUrl='';
+}
+const voiceRecorder=window.prosperoVoiceRecording.createVoiceRecorder({
+  onStatus:message=>$('voice-record-status').textContent=message,
+  onProgress:seconds=>$('voice-record-progress').value=seconds,
+  onRecording:active=>{$('voice-record-source').disabled=active;$('voice-record-start').disabled=active;$('voice-record-stop').hidden=!active;},
+  onReady:pcm=>{clearRecordedVoice();if(!pcm)return;recordedVoicePcm=pcm;recordedVoiceUrl=URL.createObjectURL(new Blob([pcm],{type:'audio/wav'}));$('voice-record-preview').src=recordedVoiceUrl;$('voice-record-preview').hidden=false;$('voice-record-save').disabled=false;$('voice-record-start').textContent='Record again';}
+});
+async function nativeVoiceAction(action){
+  const response=await api('/api/voices/chatterbox/recording',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+  const status=await response.json();if(!response.ok)throw Error(status.error||'The PS5 microphone could not start.');return status;
+}
+async function pollNativeVoice(attempt){
+  try{
+    const response=await api('/api/voices/chatterbox/recording');if(!response.ok)throw Error('The PS5 microphone could not be checked.');
+    const status=await response.json();if(attempt!==nativeRecordToken)return;
+    $('voice-record-progress').value=status.seconds;
+    if(status.state==='recording'){nativeRecordTimer=setTimeout(()=>pollNativeVoice(attempt),250);return;}
+    nativeRecording=false;$('voice-record-start').disabled=false;$('voice-record-source').disabled=false;$('voice-record-stop').hidden=true;
+    if(status.state!=='ready')throw Error(status.error||'The recording was cancelled.');
+    const audio=await api(status.preview);if(!audio.ok)throw Error('The recorded sample could not be loaded.');
+    const blob=await audio.blob();if(attempt!==nativeRecordToken)return;
+    clearRecordedVoice();nativeVoiceReady=true;recordedVoiceUrl=URL.createObjectURL(blob);
+    $('voice-record-preview').src=recordedVoiceUrl;$('voice-record-preview').hidden=false;$('voice-record-save').disabled=false;
+    $('voice-record-start').textContent='Record again';$('voice-record-status').textContent='Listen to your sample, then choose Save and use.';
+  }catch(error){if(attempt!==nativeRecordToken)return;nativeRecording=false;$('voice-record-start').disabled=false;$('voice-record-source').disabled=false;$('voice-record-stop').hidden=true;$('voice-record-status').textContent=error.message;}
+}
+$('voice-record-source').value=window.isSecureContext?'browser':'ps5';
+$('voice-record-open').onclick=()=>{$('voice-record-status').textContent='Ready to record. Unmute the selected microphone before starting.';voiceRecordDialog.showModal();};
+$('voice-record-start').onclick=async()=>{
+  if($('voice-record-source').value==='browser'){voiceRecorder.start();return;}
+  voiceRecorder.cancel();clearRecordedVoice();const attempt=++nativeRecordToken;clearTimeout(nativeRecordTimer);
+  nativeRecording=true;$('voice-record-start').disabled=true;$('voice-record-source').disabled=true;$('voice-record-stop').hidden=false;
+  $('voice-record-status').textContent='Recording with the PS5 input device — speak clearly. Unmute the DualSense microphone.';
+  try{await nativeVoiceAction('start');if(attempt!==nativeRecordToken){await api('/api/voices/chatterbox/recording',{method:'DELETE'});return;}pollNativeVoice(attempt);}
+  catch(error){if(attempt===nativeRecordToken){nativeRecording=false;$('voice-record-start').disabled=false;$('voice-record-source').disabled=false;$('voice-record-stop').hidden=true;$('voice-record-status').textContent=error.message;}}
+};
+$('voice-record-stop').onclick=async()=>{if(nativeRecording){try{await nativeVoiceAction('stop');}catch(error){$('voice-record-status').textContent=error.message;}}else voiceRecorder.stop();};
+$('voice-record-cancel').onclick=()=>{if(!voiceRecordSaving)voiceRecordDialog.close();};
+voiceRecordDialog.oncancel=event=>{if(voiceRecordSaving)event.preventDefault();};
+voiceRecordDialog.onclose=()=>{
+  const cancelNative=nativeRecording||nativeVoiceReady;nativeRecordToken++;clearTimeout(nativeRecordTimer);nativeRecording=false;
+  if(cancelNative)void api('/api/voices/chatterbox/recording',{method:'DELETE'}).catch(()=>{});
+  voiceRecorder.cancel();clearRecordedVoice();$('voice-record-progress').value=0;$('voice-record-start').textContent='Start recording';$('voice-record-source').disabled=false;
+};
+window.addEventListener('pagehide',()=>{nativeRecordToken++;clearTimeout(nativeRecordTimer);if(nativeRecording||nativeVoiceReady)void api('/api/voices/chatterbox/recording',{method:'DELETE',keepalive:true}).catch(()=>{});voiceRecorder.cancel();clearRecordedVoice();});
+$('voice-record-save').onclick=async()=>{
+  if((!recordedVoicePcm&&!nativeVoiceReady)||voiceRecordSaving)return;
+  voiceRecordSaving=true;for(const id of ['voice-record-save','voice-record-start','voice-record-cancel'])$(id).disabled=true;
+  try{
+    if(nativeVoiceReady){await nativeVoiceAction('save');nativeVoiceReady=false;}
+    else {const response=await api('/api/voices/chatterbox/custom',{method:'POST',headers:{'Content-Type':'audio/wav'},body:recordedVoicePcm});if(!response.ok)throw Error('The console could not save this voice sample.');}
+    customChatterboxVoiceAvailable=true;await runtimeSettings({chatterbox_voice:'custom'});
+    populateWorkspaceVoicePicker(current?.model||selectedModel);$('workspace-voice-feedback').textContent='Voice saved on this console. My voice is selected.';
+    voiceRecordDialog.close();
+  }catch(error){$('voice-record-status').textContent=error.message;}
+  finally{voiceRecordSaving=false;$('voice-record-save').disabled=!recordedVoicePcm&&!nativeVoiceReady;$('voice-record-start').disabled=false;$('voice-record-cancel').disabled=false;}
+};

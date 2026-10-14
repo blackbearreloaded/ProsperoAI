@@ -115,18 +115,85 @@ The clang static libraries (`clangBasic`, `clangAST`, ...) are built from the LL
 `build-radv.sh release`. The output is
 `.deps/mihawk-vulkan-review/.deps/native/radv-release/lib/libvulkan_radeon.ps5.a`.
 
-## Deploying to a console
+## Console environment and services
 
-The console needs a homebrew FTP server listening on `FTP_PORT` (the tested setup uses port 2120).
+Copy `.env.ps5.example` to `.env.ps5.local` and fill `PS5_HOST` with the console address
+and `PROSPERO_TEST_TITLE` with the designated test title. The local file is ignored by Git.
+Never use `PPSA99004` as a test slot. The console address has no code fallback.
 
 ```bash
-export PS5_HOST=<PS5-IP> FTP_PORT=2120 USE_CCACHE=0
-bash tools/deploy.sh
+cp .env.ps5.example .env.ps5.local
+# Edit .env.ps5.local; keep real addresses in this local file only.
+source tools/ps5-env.sh
+python3 tools/ps5ctl.py doctor
+python3 tools/ps5ctl.py status
 ```
 
-Development deployment uploads the app folder. Use a separate test title for console work and
-stop it before updating files. Registration is separate from the files in `/data/homebrew`;
-deleting files alone does not remove a registered title.
+`source tools/ps5-env.sh` exports the settings for builds, benchmarks and other commands
+in the current shell. `ps5ctl.py` automatically reads the same local file, with explicit
+environment variables taking precedence. `PS5_ENV_FILE` can select a different local
+configuration file. `doctor` performs no network calls and checks the bundled payloads'
+ELF headers, byte counts and SHA-256 hashes. `PS5_HOST` is required for console commands;
+`PROSPERO_TEST_TITLE` is required for test-build and benchmark workflows.
+
+P5 Manager is **optional**. Direct console commands, deployments and backend HTTP tests
+work without it. Set `P5_MANAGER` to its URL on the development computer only when using
+Remote Play. There is no assumed Manager address. For screenshots, also set `P5_SESSION`
+to the active Remote Play session ID. For a locally installed Manager, the URL may be
+`http://127.0.0.1:3001`; it is not the PS5 app server on port 11434.
+
+The default service ports in the example are payload 9021, FTP 2120, control 9111,
+ShadowMount 10101, kernel log 3232 and shell 2323. `PS5_FTP_PORT` configures `ps5ctl.py`;
+`FTP_PORT` configures the older deployment scripts. Custom ports must match the services
+actually configured on the console; setting a client variable does not change a payload's
+listening port.
+
+After a reboot, the loader must already be available. Restore only missing services:
+
+```bash
+python3 tools/ps5ctl.py service restore
+python3 tools/ps5ctl.py agent procs
+python3 tools/ps5ctl.py shadow info "$PROSPERO_TEST_TITLE"
+python3 tools/ps5ctl.py klog --seconds 5
+```
+
+The repository bundles zftpd, ps5vkctl, klogsrv and shsrv in `tools/payloads/`, with pinned
+hashes, source links and licenses. No `/tmp`, other checkout or console-side payload file
+is needed. Individual services can be restored with `service ftp`, `service agent`,
+`service klog` or `service shell`. See [payload provenance and rebuilds](../tools/payloads/README.md).
+A listener proves that a service is available, not that the application backend is running.
+
+## Deploying a test build
+
+Build the test folder using the sourced environment:
+
+```bash
+PROSPERO_APP_TITLE="$PROSPERO_TEST_TITLE" bash tools/build-vulkan-native.sh
+```
+
+Before updating a registered folder title, stop it and verify it is unmounted. `agent kill`
+expects a title ID, not a PID. Wait until ShadowMount reports `mounted:false`; do not upload
+while mounted. Then upload and launch:
+
+```bash
+python3 tools/ps5ctl.py agent kill "$PROSPERO_TEST_TITLE"
+python3 tools/ps5ctl.py agent procs
+python3 tools/ps5ctl.py shadow info "$PROSPERO_TEST_TITLE"
+# Continue only after mounted:false:
+python3 tools/ps5ctl.py ftp put-dir "build/vulkan-runtime/$PROSPERO_TEST_TITLE"   "/data/homebrew/$PROSPERO_TEST_TITLE"
+python3 tools/ps5ctl.py agent launch "$PROSPERO_TEST_TITLE"
+python3 tools/ps5ctl.py agent procs
+# Confirm the title appears before polling its backend:
+curl --fail "http://$PS5_HOST:11434/api/settings/runtime"
+```
+
+`ftp put-dir` applies executable mode 755, including eboot and PRX files. First registration
+still uses the configured ShadowMount installation workflow. A launch can complete before
+HTTP startup; retry the runtime endpoint while the title remains present. If it vanishes,
+capture klog and recheck processes. Do not interpret a failed connection to a stopped title
+as a model result. Backend generation/media checks use this direct HTTP API; Remote Play
+is needed only for visual UI verification. Read a screenshot before every automated Cross
+press. Never reboot the console or overwrite the production title without separate approval.
 
 ## Status
 

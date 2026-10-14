@@ -1101,3 +1101,48 @@ bounded residency move to the subsequent draft PR.
   Full reports: `performance/2026-10-13/pr29-ps5-base-profile.json`,
   `pr29-ps5pro-profile-on-ps5.json`, `pr29-ps5-base-profile-after.json`, and
   `pr29-ps5-profile-comparison.json`.
+
+
+## 2026-10-14 — PR27 recording, web fixes and allocation investigation
+
+Added DualSense/web voice recording, native glyph controls and confirmed L3 deletion for
+own/imported voices. User confirmed console capture works. Browser integration validates
+capture/save, Chatterbox voice changes and deferred model selection with one preparation
+on first typing. History tests confirm deleting the active chat opens a fresh chat.
+Host HTTP API tests: 22 pass; console tool tests: 5 pass. Native app builds and loader ELF
+validation pass. Deployed `pr27-web-lazy-load` to stopped/unmounted PPSA99023; process
+PID 161 and direct app API verified. Live voice setting changes and deferred selection
+pass; original voice restored. Main title unchanged, no agent-initiated reboot.
+
+S3/HiFT/T3 metadata arenas are bounded by pinned source preparation. Engine session reuse
+and replacing thread-local catalog storage eliminate observed allocation/teardown errors
+in latest runs. Speech quality still fails: Cemo 20 ms silence, custom 40 ms output.
+The custom reference is valid 5-second 16 kHz mono speech. Structural WAV success is not
+speech success; the custom report now explicitly records quality failure. T3 early EOS
+requires further diagnosis. Full model matrix remains unverified.
+
+
+### 2026-10-14 — backend memory indicator and T3 KV initialization
+
+Added actual backend load/release notifications and `/api/models/memory`. Web polls the
+state below PS5 status, native reads it in the persistent upper-right header, and the
+native workspace uses the loaded name instead of "Choose model". Live checks confirm
+prepare from web, switch/unload and deferred selection. HTTP API tests now 23 pass;
+router residency and browser integration pass. PPSA99023 runs `pr27-memory-zero-kv`,
+PID 173. Main title untouched.
+
+Official Chatterbox Python generation and T3 source were reviewed. Matching default
+sampling parameters did not provide a setting-only fix. T3 runner copied only the
+active KV prefix, leaving masked tail values uninitialized. Guarded preparation now
+zeros the full cache capacity on import. Cemo generates 15.34/12.66-second non-clipped
+WAVs; custom cold fails, repeat generates15.36 seconds. Speech intelligibility and EOS
+correctness remain unverified; long WAVs from a short fixture are suspicious. Short
+outputs under250 ms are rejected. Evidence is in the dated zero-kv reports/token trace.
+
+
+### 2026-10-14 — listener confirmation
+
+Saved Cemo tests to shared conversation `test-chatterbox-cemo-20261014-kv`; live browser
+verified two playable audio references. The user confirmed speech is unintelligible.
+Chatterbox remains a failed quality gate despite longer non-clipped WAVs. Explicit F32
+decode attention compiled as a diagnostic; console verification remains pending.
