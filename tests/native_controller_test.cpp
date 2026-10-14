@@ -308,7 +308,8 @@ int main(int argc, char **argv)
         prospero::App app;
         assert(app.initialize());
         settle(app);
-        assert(app.state().selected_model == 499);
+        // A remembered model is not prepared automatically; the user selects it per session.
+        assert(app.state().selected_model == -1 && !app.state().ready);
         assert(app.state().preferences.reduced_motion && app.state().preferences.accent == 2);
         assert(app.state().preferences.context_length == 32768);
         assert(app.state().preferences.kv_cache == 0 && app.state().preferences.thinking);

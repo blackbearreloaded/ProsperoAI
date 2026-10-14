@@ -96,5 +96,5 @@ class MiniCPM5Tests(unittest.TestCase):
         self.assertNotIn('kokoro-82m-fp16', [model['id'] for model in models])
         self.assertEqual(models[5]['id'], 'minicpm5-2b-q8-0.gguf')
         header = (ROOT/'include/model_presets.hpp').read_text()
-        self.assertLess(header.index('"mistral-7b-instruct'), header.index('"minicpm5-2b'))
-        self.assertLess(header.index('"qwen3.5-9b'), header.index('"minicpm5-2b'))
+        self.assertLess(header.index('"Mistral-7B-Instruct'), header.index('"minicpm5-2b'))
+        self.assertLess(header.index('"qwen3.8-9b'), header.index('"minicpm5-2b'))
