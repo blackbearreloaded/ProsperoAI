@@ -88,7 +88,11 @@ providers:
 - a per-provider byte ceiling (256 KiB) aborts a body that will not end;
 - parsers keep only the fields of at most `maximum` results, never the body;
 - the cache lives on `/download0`, not in RAM;
-- no GPU or Vulkan allocation anywhere in this module.
+- no GPU or Vulkan allocation anywhere in this module, which is enforced rather
+  than asserted: the module's sources carry no graphics call or header, and its
+  six compiled console objects import no graphics symbol — only libc, the C++
+  runtime and `prospero_https_*`. A test fails if that ever changes, so video
+  memory cannot move because of a search.
 
 ### Fan-out and scoring
 
@@ -167,7 +171,11 @@ Done on 2026-10-15, on test title PPSA99023 (FW 12.70):
 4. Console: `/api/fetch` turned a documentation page into 3783 bytes of text in
    0.4 s.
 5. Console memory: 582.2 MiB resident before and 582.2 MiB after eight
-   full-scope searches, which is 328 provider requests. No growth.
+   full-scope searches, which is 328 provider requests. No growth. That figure
+   is the process's resident memory; video memory is covered by the import
+   check above rather than by a measurement, since a module that cannot call the
+   GPU cannot allocate from it. A GPU-side reading taken during a search is
+   still worth having and needs the console.
 6. Console cache: a repeated query answered from the cache in 0.003 s, and it
    still answered from the cache in 0.005 s after the title was stopped and
    launched again, so the file survives a restart.

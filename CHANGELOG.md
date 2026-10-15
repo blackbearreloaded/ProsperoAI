@@ -19,7 +19,8 @@
   app, so repeating a query answers in milliseconds and does not ask the sites again.
 - Search no longer allocates the model downloader's 4 MB receive buffer: it borrows about
   64 KB per provider and releases it with the request. Resident memory was unchanged across
-  328 provider requests. The HTTP client gained request headers, a per-session user agent,
+  328 provider requests, and the search module imports no graphics symbol at all, so a
+  search cannot take video memory from a loaded model. The HTTP client gained request headers, a per-session user agent,
   cookies, compressed transfers, POST and a caller-chosen buffer size.
 - Replaced the single DuckDuckGo HTML route, which answers HTTP 202 with a throttle page
   after a few queries; that page is now recognised and reported as rate limiting.
