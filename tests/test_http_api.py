@@ -88,6 +88,49 @@ class HttpApiTests(unittest.TestCase):
         header, body = self.request('/api/search', body={'query': 'ProsperoAI', 'limit': 3})
         self.assertIn('502 Bad Gateway', header)
         self.assertIn('PS5 build only', json.loads(body)['error']['message'])
+        # Even a failed search says which providers were asked, so a caller can tell
+        # throttling from an empty index.
+        self.assertTrue(json.loads(body)['providers'])
+
+    def test_search_scopes_round_trip_and_select_providers(self):
+        # What the Settings checkboxes send is this bitmask, in the engine's scope
+        # order: bit 0 web, bit 1 code, bit 3 reference.
+        settings = json.loads(self.request('/api/settings/runtime')[1])
+        self.assertEqual(settings['search_scopes'], 511)
+        self.request('/api/settings/runtime', body={'web_search': True, 'search_scopes': 0b1011})
+        self.assertEqual(json.loads(self.request('/api/settings/runtime')[1])['search_scopes'], 0b1011)
+        for invalid in ({'search_scopes': 0}, {'search_scopes': 512}, {'search_scopes': -1},
+                        {'search_scopes': '11'}):
+            self.assertIn('400 Bad Request', self.request('/api/settings/runtime', body=invalid)[0])
+        self.assertEqual(json.loads(self.request('/api/settings/runtime')[1])['search_scopes'], 0b1011)
+
+        # A request may narrow the search further, and only the enabled scopes are asked.
+        asked = json.loads(self.request('/api/search', body={'query': 'ProsperoAI',
+                                                             'scopes': ['web', 'code']})[1])
+        sources = {provider['id'].split('.')[0] for provider in asked['providers']}
+        self.assertEqual(sources, {'web', 'code'})
+        # A scope switched off in Settings is not asked even when the caller names it.
+        asked = json.loads(self.request('/api/search', body={'query': 'ProsperoAI',
+                                                             'scopes': ['web', 'video']})[1])
+        self.assertEqual({provider['id'].split('.')[0] for provider in asked['providers']}, {'web'})
+        header, _ = self.request('/api/search', body={'query': 'ProsperoAI', 'scopes': ['video']})
+        self.assertIn('400 Bad Request', header)
+        header, _ = self.request('/api/search', body={'query': 'ProsperoAI', 'scopes': ['nonsense']})
+        self.assertIn('400 Bad Request', header)
+        self.request('/api/settings/runtime', body={'search_scopes': 511, 'web_search': False})
+
+    def test_fetch_route_validates_its_address(self):
+        self.request('/api/settings/runtime', body={'web_search': True})
+        for invalid in ({'url': 'ftp://example.org'}, {'url': 'not-a-url'}, {},
+                        {'url': 'https://example.org', 'limit': 10},
+                        {'url': 'https://example.org', 'limit': 999999}):
+            header, _ = self.request('/api/fetch', body=invalid)
+            self.assertIn('400 Bad Request', header)
+        header, body = self.request('/api/fetch', body={'url': 'https://example.org'})
+        self.assertIn('502 Bad Gateway', header)
+        self.assertIn('console build', json.loads(body)['error']['message'])
+        self.request('/api/settings/runtime', body={'web_search': False})
+        self.assertIn('409 Conflict', self.request('/api/fetch', body={'url': 'https://example.org'})[0])
     def test_chatterbox_language_is_selectable_and_validated(self):
         config = Path(self.scratch.name) / 'runtime.cfg'
         config.write_text('version=2\n')

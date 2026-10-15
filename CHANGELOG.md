@@ -13,6 +13,8 @@
   OpenCode gained the same tool, and the bridge accepts search scopes.
 - Settings now has a checkbox per group of sites, so a search can be narrowed to the groups
   worth asking, and **Test search** reports how many providers answered.
+- `POST /api/fetch` now answers 400 for an address it cannot read, keeping 502 for a page
+  that was asked for and failed.
 - Search results are cached on the console for a day and the cache survives a restart of the
   app, so repeating a query answers in milliseconds and does not ask the sites again.
 - Search no longer allocates the model downloader's 4 MB receive buffer: it borrows about

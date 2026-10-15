@@ -1213,6 +1213,16 @@ void handle_fetch(const NetApi &api, int sock, const char *body)
     }
     std::string text, error;
     const auto url = request["url"].get<std::string>();
+    /* An address that cannot be read is the caller's mistake, not a gateway
+     * failure; 502 is kept for a page that was actually asked for and failed. */
+    const bool addressed = (url.rfind("https://", 0) == 0 || url.rfind("http://", 0) == 0) &&
+                           url.size() <= 2048 && url.find_first_of("\r\n\t <>\"") == std::string::npos;
+    if (!addressed)
+    {
+        openai_error(api, sock, "400 Bad Request", "invalid_fetch_url",
+                     "Only http and https addresses of at most 2048 characters can be read.");
+        return;
+    }
     if (!prospero_search::fetch_page(url, settings.web_search_timeout_seconds, limit, &text, &error))
     {
         openai_error(api, sock, "502 Bad Gateway", "fetch_failed", error.c_str());

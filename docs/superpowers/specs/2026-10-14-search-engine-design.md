@@ -179,7 +179,18 @@ Done on 2026-10-15, on test title PPSA99023 (FW 12.70):
 8. With `HOST_CXX=clang++-18 HOST_CC=clang-18`, all 80 host tests pass. The
    default `clang++` on that host is llvm-14 without
    `libclang_rt.asan-x86_64.a`, so the sanitized harnesses cannot link.
-9. Not verified on hardware: the per-scope checkboxes and the web `/fetch`
+9. Host, against the console's own `http_server.cpp` through the API harness:
+   the `search_scopes` round trip and its rejections (0, 512, -1, a string), a
+   request narrowing the scopes it asks, a scope switched off in Settings not
+   being asked even when the caller names it, an unknown scope refused, and
+   `/api/fetch` separating an unreadable address (400) from a page that failed
+   (502). 29 API tests pass.
+10. Host: the MCP bridge answers a full `tools/call` round trip for both tools
+    against a stub console, passes the scopes through unchanged, and refuses an
+    unknown scope, a non-http address and an unknown tool without contacting the
+    console at all.
+11. Not verified on hardware: the per-scope checkboxes and the web `/fetch`
    command, because the console stopped answering on its payload port before
    that build was deployed; and the native chat commands have not been driven
-   through the console UI, which needs Remote Play.
+   through the console UI, which needs Remote Play. The app folder was rebuilt
+    so the artifact matches these sources and is ready to deploy.
