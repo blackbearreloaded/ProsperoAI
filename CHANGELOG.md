@@ -9,8 +9,10 @@
   first, and each provider's outcome is reported so throttling is distinguishable from an
   empty index.
 - Added `/fetch <url>` and `POST /api/fetch`, which read one page as bounded plain text so a
-  model can follow a result. The MCP bridge for OpenCode gained the same tool and accepts
-  search scopes.
+  model can follow a result. The command works in both conversations, the MCP bridge for
+  OpenCode gained the same tool, and the bridge accepts search scopes.
+- Settings now has a checkbox per group of sites, so a search can be narrowed to the groups
+  worth asking, and **Test search** reports how many providers answered.
 - Search results are cached on the console for a day and the cache survives a restart of the
   app, so repeating a query answers in milliseconds and does not ask the sites again.
 - Search no longer allocates the model downloader's 4 MB receive buffer: it borrows about

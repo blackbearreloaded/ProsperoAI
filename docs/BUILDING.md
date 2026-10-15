@@ -22,8 +22,16 @@ make app         # build dist/PPSA99004 and dist/PPSA99004.zip
 | `make deploy PS5_HOST=<address>` | Build and FTP-deploy to `/data/homebrew/PPSA99004` |
 | `make undeploy PS5_HOST=<address>` | Remove this title from `/data/homebrew` |
 | `make test` | Host integration tests of the tooling |
+| `HOST_CXX=clang++-18 HOST_CC=clang-18 make test` | The same, when the default `clang++` has no sanitizer runtime |
 | `make lint` | Format, static-analysis and metadata checks |
 | `make clean` / `make distclean` | Remove `build/` and `dist/` (`distclean` also removes `.deps/`) |
+
+Several test harnesses build with `-fsanitize=address,undefined`. They use `HOST_CXX` and
+`HOST_CC` when set, and `clang++` otherwise; if that default clang has no
+`libclang_rt.asan-x86_64.a` the link fails with "cannot find", which is a missing runtime
+package and not a test failure. Point both variables at a toolchain that has it. The
+browser-interface tests under `tests/*.mjs` run through `tests/test_web_ui.py` and need
+`node`.
 
 Useful variables: `USE_CCACHE=0` (ccache is optional), `FTP_PORT` (default `2121`), and
 `DEPLOY_DRY_RUN=1` (print the folder-deploy plan without sending it).

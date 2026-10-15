@@ -56,9 +56,12 @@ controlled tasks, not broad coding-quality benchmarks.
 
 ### Use the built-in search
 
-Enable **Web search** in web UI Settings and use **Test search**. The PS5 app can
-then search from its built-in conversation with `/search your query` and read one
-result with `/fetch <url>`; the same commands work in the web UI.
+Enable **Web search** in web UI Settings and use **Test search**, which reports how
+many providers answered. Settings also carries a checkbox per group of sites, so a
+search can be narrowed to, say, code hosting and question sites; fewer groups means
+a faster search. The PS5 app searches from its built-in conversation with
+`/search your query` and reads one result with `/fetch <url>`, and both commands
+work in the web conversation too.
 The app sends the search from the console and passes titles, snippets and source
 URLs to the model, each marked with the provider that found it. Search results
 are treated as untrusted input.

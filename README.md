@@ -267,7 +267,8 @@ ask it to.
 With **Web search** switched on in Settings, `/search <query>` in a conversation asks many
 sites at once from the console itself and hands the answers to the model as sources to cite.
 Nine groups of providers are available: the general web, code hosting, question sites,
-reference works, package registries, papers, video, music and images. A result carries the
+reference works, package registries, papers, video, music and images, each with its own
+checkbox in Settings so a search can be narrowed. A result carries the
 address it came from and which provider found it, and a page several providers agree on is
 ranked first.
 

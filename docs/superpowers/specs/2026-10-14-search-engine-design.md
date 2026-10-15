@@ -171,7 +171,15 @@ Done on 2026-10-15, on test title PPSA99023 (FW 12.70):
 6. Console cache: a repeated query answered from the cache in 0.003 s, and it
    still answered from the cache in 0.005 s after the title was stopped and
    launched again, so the file survives a restart.
-7. Not yet verified: the native chat `/search` and `/fetch` commands compile and
-   are wired, but they have not been driven through the console UI; and the web
-   UI has no control for per-scope toggles yet, only the HTTP field
-   `search_scopes`.
+7. Host: `tests/test_web_ui.py` now runs the 25 browser-interface tests through
+   `node --test`, which previously existed but were never run by `make test`.
+   Three cover the scope checkboxes and the bitmask they send; five cover the
+   `/search` and `/fetch` commands in the web conversation, including what the
+   model is shown and what is refused before the console is asked.
+8. With `HOST_CXX=clang++-18 HOST_CC=clang-18`, all 80 host tests pass. The
+   default `clang++` on that host is llvm-14 without
+   `libclang_rt.asan-x86_64.a`, so the sanitized harnesses cannot link.
+9. Not verified on hardware: the per-scope checkboxes and the web `/fetch`
+   command, because the console stopped answering on its payload port before
+   that build was deployed; and the native chat commands have not been driven
+   through the console UI, which needs Remote Play.

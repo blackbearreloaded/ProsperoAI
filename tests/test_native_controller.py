@@ -60,11 +60,21 @@ class NativeController(unittest.TestCase):
                             "-Wall", "-Wextra", "-Werror", "-DPROSPERO_HOST",
                             f'-DPROSPERO_SETTINGS_PATH="{directory / "settings.cfg"}"',
                             "-I" + str(ROOT / "include"),
+                            "-I" + str(ROOT / "search-engine/include"),
+                            "-I" + str(ROOT / "search-engine/src"),
                             "-I" + str(kit),
                             str(ROOT / "tests/native_controller_test.cpp"),
                             str(ROOT / "src/native_app.cpp"),
                             str(ROOT / "src/debug_log.cpp"),
                             str(ROOT / "src/media_preview.cpp"),
+                            # The conversation understands /search and /fetch, so it
+                            # links the search module; on the host it has no network.
+                            str(ROOT / "search-engine/src/query.cpp"),
+                            str(ROOT / "search-engine/src/providers.cpp"),
+                            str(ROOT / "search-engine/src/scan.cpp"),
+                            str(ROOT / "search-engine/src/cache.cpp"),
+                            str(ROOT / "search-engine/src/search.cpp"),
+                            str(ROOT / "search-engine/src/transport.cpp"),
                             str(kit / "gfx/font.cpp"),
                             "-o", str(binary)], check=True)
             subprocess.run([str(binary), str(fonts / "inter-regular.huifont"),
