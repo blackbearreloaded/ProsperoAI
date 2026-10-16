@@ -55,6 +55,8 @@ constexpr Key kKeys[] = {
     {"options", hui::Action::menu, hui::Direction::none},
     {"l1", hui::Action::page_prev, hui::Direction::none},
     {"r1", hui::Action::page_next, hui::Direction::none},
+    {"l2", hui::Action::jump_prev, hui::Direction::none},
+    {"r2", hui::Action::jump_next, hui::Direction::none},
     {"up", hui::Action::up, hui::Direction::up},
     {"down", hui::Action::down, hui::Direction::down},
     {"left", hui::Action::left, hui::Direction::left},

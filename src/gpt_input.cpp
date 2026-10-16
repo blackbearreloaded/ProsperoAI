@@ -56,6 +56,9 @@ static unsigned queue_read;
 static unsigned queue_write;
 static uint32_t button_state;
 static int analog_key = -1;
+/* The D-pad direction held down, which steps again like the stick. */
+static int dpad_key = -1;
+static uint64_t dpad_repeat_at;
 static uint64_t analog_repeat_at;
 static int scroll_key = -1;
 static uint64_t scroll_repeat_at;
@@ -92,7 +95,7 @@ static int right_stick_direction(uint8_t y)
     return y < STICK_LOW ? GPT_INPUT_SCROLL_UP : y > STICK_HIGH ? GPT_INPUT_SCROLL_DOWN : -1;
 }
 
-static void queue_push(gpt_input_key_t key, bool pressed, char text = '\0')
+static void queue_push(gpt_input_key_t key, bool pressed, char text = '\0', bool repeat = false)
 {
     const unsigned next = (queue_write + 1U) % INPUT_QUEUE_SIZE;
     if (next == queue_read)
@@ -100,7 +103,7 @@ static void queue_push(gpt_input_key_t key, bool pressed, char text = '\0')
         /* ponytail: bounded input; discard the oldest event instead of allocating. */
         queue_read = (queue_read + 1U) % INPUT_QUEUE_SIZE;
     }
-    queue[queue_write] = {key, pressed, text};
+    queue[queue_write] = {key, pressed, text, repeat};
     queue_write = next;
 }
 
@@ -257,7 +260,19 @@ static void process_sample(const unsigned char *sample)
     {
         if ((changed & buttons[i].button) != 0)
         {
-            queue_push(buttons[i].key, (current & buttons[i].button) != 0);
+            const bool down = (current & buttons[i].button) != 0;
+            queue_push(buttons[i].key, down);
+            const int key = static_cast<int>(buttons[i].key);
+            if (key >= GPT_INPUT_UP && key <= GPT_INPUT_RIGHT)
+            {
+                if (down)
+                {
+                    dpad_key = key;
+                    dpad_repeat_at = monotonic_milliseconds() + STICK_REPEAT_DELAY_MS;
+                }
+                else if (dpad_key == key)
+                    dpad_key = -1;
+            }
         }
     }
     button_state = current;
@@ -335,6 +350,7 @@ bool gpt_input_init(void)
     button_state = 0;
     analog_key = -1;
     analog_repeat_at = 0;
+    dpad_key = -1;
     scroll_key = -1;
     scroll_repeat_at = 0;
     keyboard_scroll_key = -1;
@@ -353,8 +369,13 @@ void gpt_input_poll(void)
     const uint64_t now = monotonic_milliseconds();
     if (analog_key >= 0 && now >= analog_repeat_at)
     {
-        queue_push((gpt_input_key_t)analog_key, true);
+        queue_push((gpt_input_key_t)analog_key, true, '\0', true);
         analog_repeat_at = now + STICK_REPEAT_MS;
+    }
+    if (dpad_key >= 0 && now >= dpad_repeat_at)
+    {
+        queue_push((gpt_input_key_t)dpad_key, true, '\0', true);
+        dpad_repeat_at = now + STICK_REPEAT_MS;
     }
     if (scroll_key >= 0 && now >= scroll_repeat_at)
     {
@@ -416,6 +437,7 @@ void gpt_input_shutdown(void)
     button_state = 0;
     analog_key = -1;
     analog_repeat_at = 0;
+    dpad_key = -1;
     scroll_key = -1;
     scroll_repeat_at = 0;
     keyboard_scroll_key = -1;

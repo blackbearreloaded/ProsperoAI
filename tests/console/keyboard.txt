@@ -1,0 +1,27 @@
+# ProsperoAI - The on-screen keyboard's shortcuts: L2 to symbols and back to letters, R2 Done.
+# Opens the model search in Models; the pictures show each layout. Holding a direction
+# can only be checked with a controller in the hand.
+limit 200
+until started 90
+wait 3
+press r1
+wait 1
+press square
+wait 1
+shot 01-letters
+press l2
+wait 1
+shot 02-symbols
+press l2
+wait 1
+shot 03-letters-again
+press right
+press right
+press cross
+wait 1
+shot 04-typed
+press r2
+wait 1
+status
+shot 05-done
+quit 20

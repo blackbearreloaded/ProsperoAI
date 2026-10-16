@@ -197,7 +197,7 @@ The same script plays against the PC stand-ins with
 | `updates on` | This run asks the catalog for a newer version, as a launch without a script does; without it no update question interrupts a test |
 | `wait <seconds>` | Lets time pass |
 | `until started\|idle\|ready\|update [seconds]` | Waits for the catalogue, for the worker to be idle, for an idle worker with a prepared model, or for the update question to be on screen |
-| `press cross\|circle\|square\|triangle\|options\|l1\|r1\|up\|down\|left\|right` | One press |
+| `press cross\|circle\|square\|triangle\|options\|l1\|r1\|l2\|r2\|up\|down\|left\|right` | One press |
 | `type <text>` | USB-keyboard typing, a character a frame |
 | `backspace [count]`, `submit`, `scroll <pixels>` | Backspace, Enter, and the right stick |
 | `expect model <part of its id>\|answer\|image\|audio` | Notes whether that model is active and ready, or the last answer is of that kind (a text answer with `<unk>` in it is not one); an unmet one fails the run, which goes on |

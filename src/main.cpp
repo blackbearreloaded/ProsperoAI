@@ -32,6 +32,7 @@ extern "C" int sceKernelUsleep(std::uint32_t microseconds);
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 void prospero_setup_sdl_memory();
@@ -103,7 +104,11 @@ void input_event(const gpt_input_event_t &event, hui::InputFrame &input, prosper
         constexpr Direction directions[] = {Direction::up, Direction::down, Direction::left,
                                             Direction::right};
         if (event.key >= GPT_INPUT_UP)
+        {
             input.nav = directions[event.key - GPT_INPUT_UP];
+            // A held direction steps again; the keyboard stops it at its edge.
+            input.nav_repeat = event.repeat;
+        }
     }
     else if (event.key == GPT_INPUT_L2 || event.key == GPT_INPUT_R2)
         input.pressed |=
@@ -302,6 +307,18 @@ int main()
         while (gpt_input_next(&event))
             if (!intercepted)
                 input_event(event, input, ui, feedback);
+        // What is held down, for controls that act while a button is held (backspace).
+        if (!intercepted)
+        {
+            constexpr std::pair<gpt_input_key_t, hui::Action> kHeld[] = {
+                {GPT_INPUT_CROSS, hui::Action::confirm}, {GPT_INPUT_CIRCLE, hui::Action::back},
+                {GPT_INPUT_SQUARE, hui::Action::west},   {GPT_INPUT_TRIANGLE, hui::Action::north},
+                {GPT_INPUT_L1, hui::Action::page_prev},  {GPT_INPUT_R1, hui::Action::page_next},
+                {GPT_INPUT_L2, hui::Action::jump_prev},  {GPT_INPUT_R2, hui::Action::jump_next}};
+            for (const auto &[key, action] : kHeld)
+                if (gpt_input_pressed(key))
+                    input.held |= hui::action_bit(action);
+        }
         gpt_ime_poll();
         script.update(elapsed, app, ui, input, feedback);
         ui.update(input, dt, feedback);

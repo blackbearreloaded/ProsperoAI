@@ -6,7 +6,8 @@
 
 #include <stdbool.h>
 
-enum gpt_input_key_t {
+enum gpt_input_key_t
+{
     GPT_INPUT_CROSS,
     GPT_INPUT_CIRCLE,
     GPT_INPUT_SQUARE,
@@ -29,14 +30,16 @@ enum gpt_input_key_t {
     GPT_INPUT_COUNT
 };
 
-struct gpt_input_event_t {
+struct gpt_input_event_t
+{
     gpt_input_key_t key;
     bool pressed;
     char text;
+    bool repeat; /* a held direction stepping again */
 };
 
 bool gpt_input_init(void);
 void gpt_input_poll(void);
-bool gpt_input_next(gpt_input_event_t * event);
+bool gpt_input_next(gpt_input_event_t *event);
 bool gpt_input_pressed(gpt_input_key_t key);
 void gpt_input_shutdown(void);

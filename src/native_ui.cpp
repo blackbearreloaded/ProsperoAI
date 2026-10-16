@@ -121,8 +121,13 @@ NativeUI::Impl::Impl(NativeUI &owner, App &app, FontSet &font_set, gfx::Renderer
     search_.style.max_rows = 0;
     search_.set_bounds({kLeft, 392, 612, 60});
     search_.set_placeholder("Search your models");
+    // Square deletes, Triangle is space, L1 is shift, L2 switches between letters and
+    // symbols, R2 is Done (Send in a conversation). R2 was also the kit's symbols key, so one
+    // press did both and there was no way back to letters.
     keyboard_.style.bindings = ui::KeyboardBindings::standard();
     keyboard_.style.bindings.space = Action::north;
+    keyboard_.style.bindings.shift = Action::page_prev;
+    keyboard_.style.bindings.layout = Action::jump_prev;
     keyboard_.style.bindings.done = Action::jump_next;
     keyboard_.style.max_length = 1023;
     keyboard_.set_bounds({360, 596, 1200, 310});
@@ -2058,6 +2063,7 @@ void NativeUI::Impl::draw_footer(gfx::DrawList &list) const
     {
         hints[count++] = {ui::Button::cross, "Type"};
         hints[count++] = {ui::Button::triangle, "Space"};
+        hints[count++] = {ui::Button::l2, "Symbols"};
         hints[count++] = {ui::Button::r2, chat_keyboard_open_ ? "Send" : "Done"};
         hints[count++] = {ui::Button::circle, "Back"};
     }

@@ -352,7 +352,7 @@ larger contexts, authentication and detailed compatibility notes.
 | Square | Start a new conversation in Workspace; search in Models |
 | L2 / R2 in Models | Previous / next model category |
 | Triangle | Insert Space while typing; otherwise retry, delete a focused conversation, or play saved audio; in Models, cancel the running download |
-| R2 while typing | Done; send from Workspace |
+| While typing | Square deletes (hold to repeat), Triangle is Space, L1 is Shift, L2 switches between letters and symbols, R2 is Done (Send in a conversation); a held direction keeps moving |
 | Options | Ask to close the app, once nothing is running and the conversation is saved |
 | Right stick | Scroll through the current conversation |
 | Physical USB keyboard | Type in the prompt field or the model search; Enter sends; Tab is R1 and Shift+Tab is L1 |

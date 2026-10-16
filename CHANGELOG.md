@@ -24,6 +24,10 @@
   cookies, compressed transfers, POST and a caller-chosen buffer size.
 - Replaced the single DuckDuckGo HTML route, which answers HTTP 202 with a throttle page
   after a few queries; that page is now recognised and reported as rate limiting.
+- On-screen keyboard: a held direction keeps moving, and a held Square keeps deleting. L2
+  switches between letters and symbols and L1 is Shift; R2 is only Done (Send in a
+  conversation). R2 used to switch to symbols and press Done at once, with no way back to
+  letters.
 
 ## 01.006.000
 
