@@ -60,6 +60,7 @@ class NativeController(unittest.TestCase):
                             "-Wall", "-Wextra", "-Werror", "-DPROSPERO_HOST",
                             f'-DPROSPERO_SETTINGS_PATH="{directory / "settings.cfg"}"',
                             "-I" + str(ROOT / "include"),
+                            "-I" + str(ROOT / ".deps/llama.cpp/vendor"),
                             "-I" + str(ROOT / "search-engine/include"),
                             "-I" + str(ROOT / "search-engine/src"),
                             "-I" + str(kit),
