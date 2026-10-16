@@ -52,6 +52,23 @@ class HttpApiTests(unittest.TestCase):
         head, data = wire.split(b"\r\n\r\n", 1)
         return head.decode(), data.decode()
 
+    def test_audio_lyrics_round_trip_and_persistence(self):
+        config = Path(self.scratch.name) / 'runtime.cfg'
+        config.write_text('version=2\ntokens=192\n')
+        lyrics = '[verse]\nCântă, cântă, inima mea\n[chorus]\nPiesa-ntreaga e a ta\n'
+        header, body = self.request('/api/settings/runtime', body={'audio_lyrics': lyrics})
+        self.assertIn('200 OK', header)
+        self.assertEqual(json.loads(body)['audio_lyrics'], lyrics)
+        lines = config.read_text().splitlines()
+        self.assertTrue(any(line.startswith('audio_lyrics_b64=') for line in lines))
+        self.assertEqual(json.loads(self.request('/api/settings/runtime')[1])['audio_lyrics'], lyrics)
+        header, body = self.request('/api/settings/runtime', body={'audio_lyrics': ''})
+        self.assertIn('200 OK', header)
+        self.assertEqual(json.loads(body)['audio_lyrics'], '')
+        self.assertFalse(any(line.startswith('audio_lyrics_b64=') for line in config.read_text().splitlines()))
+        for invalid in ({'audio_lyrics': 5}, {'audio_lyrics': 'x' * 4097}):
+            self.assertIn('400 Bad Request', self.request('/api/settings/runtime', body=invalid)[0])
+
     def test_runtime_settings_round_trip(self):
         config = Path(self.scratch.name) / 'runtime.cfg'
         config.write_text('version=2\nstyle=2\ntokens=192\ntheme=1\n')

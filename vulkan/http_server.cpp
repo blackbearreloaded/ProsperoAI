@@ -1011,6 +1011,11 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                 const auto seed = it.value().get<std::uint64_t>();
                 if (prospero_settings::valid_seed(seed)) { p.audio_seed = static_cast<unsigned>(seed); valid = true; }
             }
+            else if (it.key() == "audio_lyrics" && it.value().is_string())
+            {
+                const auto lyrics = it.value().get<std::string>();
+                if (prospero_settings::valid_audio_lyrics(lyrics)) { p.audio_lyrics = lyrics; valid = true; }
+            }
             else if (it.key() == "sd_seed" && it.value().is_number_unsigned())
             {
                 const auto seed = it.value().get<std::uint64_t>();
@@ -1071,6 +1076,7 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                        {"idle_unload_minutes", p.idle_unload_minutes},
                        {"audio_duration_sec", p.audio_duration_sec},
                        {"audio_seed", p.audio_seed},
+                       {"audio_lyrics", p.audio_lyrics},
                        {"sd_seed", p.sd_seed},
                        {"sd_width", p.sd_width},
                        {"sd_height", p.sd_height},
