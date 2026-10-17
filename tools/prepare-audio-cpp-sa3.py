@@ -125,6 +125,25 @@ def include_ace_step_dependencies(path: Path) -> None:
     path.write_text(source)
 
 
+def include_yue2_dependencies(path: Path) -> None:
+    """Restore the shared causal-decoder runtime the YuE2 AR model links against."""
+    source = path.read_text()
+    required = (
+        ("src/framework/modules/transformers/causal_decoder.cpp",
+         "    src/framework/modules/transformers/decoder.cpp\n"),
+        ("src/framework/modules/transformers/causal_decoder_runtime.cpp",
+         "    src/framework/modules/transformers/causal_decoder.cpp\n"),
+    )
+    for entry, anchor in required:
+        line = f"    {entry}\n"
+        if line in source:
+            continue
+        if source.count(anchor) != 1:
+            raise SystemExit(f"{path}: cannot restore YuE2 dependency {entry}")
+        source = source.replace(anchor, anchor + line, 1)
+    path.write_text(source)
+
+
 def reuse_parent_ggml(path: Path) -> None:
     """Reuse the parent runtime's upstream GGML target when added as a subproject."""
     replace_once(
@@ -415,6 +434,7 @@ def main() -> None:
     omit_cmake_sources(cmake)
     include_sa3_dependencies(cmake)
     include_ace_step_dependencies(cmake)
+    include_yue2_dependencies(cmake)
     reuse_parent_ggml(cmake)
     if not ggml_has_api(ggml_source, "ggml_round_bf16"):
         adapt_ace_step_ggml_round(source)

@@ -436,16 +436,129 @@
     "repository": "audio-cpp/audio.cpp-gguf",
     "revision": "f861648c0c1f4da9f18e9a0ce5e217b0679bb2f5",
     "files": [
-      {"source": "Chatterbox-GGUF/chatterbox-q8_0.gguf", "path": "chatterbox-q8_0.gguf", "size": 2088393668, "sha256": "d586dd1aa59613cab8046176fb7ca5ba191c02a9b10ffa5b0d892ed22b470656"},
-      {"source": "tokenizer.json", "path": "tokenizer.json", "size": 25470, "sha256": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5", "repository": "ResembleAI/chatterbox", "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"},
-      {"source": "grapheme_mtl_merged_expanded_v1.json", "path": "grapheme_mtl_merged_expanded_v1.json", "size": 69989, "sha256": "69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf", "repository": "ResembleAI/chatterbox", "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"},
-      {"source": "Cangjie5_TC.json", "path": "Cangjie5_TC.json", "size": 1920163, "sha256": "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c", "repository": "ResembleAI/chatterbox", "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"},
-      {"source": "conds.pt", "path": "conds.pt", "size": 107374, "sha256": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e", "repository": "ResembleAI/chatterbox", "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"},
-      {"source": "webui/native/demo_voices/demo_1_man.wav", "path": "voices/chatterbox/demo_1_man.wav", "size": 905294, "sha256": "3e5321095813b09c6b108e9b12dfd988155020b35602ef074498aa0fa771fd39", "repository": "github:0xShug0/audio.cpp", "revision": "886076fc89c09b9902592aa4bfbd12922d4a9e26"},
-      {"source": "voices/alana_jordan.flac", "path": "voices/chatterbox/alana_jordan.flac", "size": 305301, "sha256": "6f4e1266cc39c2b426894bdfcddac5c23a9086b4dcd8fb06320fe3865009538e", "repository": "github:CoisLR/TTS-Reference-Voices", "revision": "f6be3bc580483c1027e4a66a887ca8510566ae40"},
-      {"source": "voices/alan_davis_drake.flac", "path": "voices/chatterbox/alan_davis_drake.flac", "size": 227727, "sha256": "7f7c5358f7f38700bdaf6f640e03fae44962fcb6f5c7f8b5d439eb34b219d8d8", "repository": "github:CoisLR/TTS-Reference-Voices", "revision": "f6be3bc580483c1027e4a66a887ca8510566ae40"},
-      {"source": "voices/ruth_golding.flac", "path": "voices/chatterbox/ruth_golding.flac", "size": 295300, "sha256": "f381a6ea1e26bcd24f30a61946ec8056cc34eea6bfdbcaad72efd2f72ebd2405", "repository": "github:CoisLR/TTS-Reference-Voices", "revision": "f6be3bc580483c1027e4a66a887ca8510566ae40"},
-      {"source": "voices/phil_chenevert.flac", "path": "voices/chatterbox/phil_chenevert.flac", "size": 296237, "sha256": "2c66f024ceee942fec277f9700d07abcffcd5dbccb81e714eb48d95505f117da", "repository": "github:CoisLR/TTS-Reference-Voices", "revision": "f6be3bc580483c1027e4a66a887ca8510566ae40"}
+      {
+        "source": "Chatterbox-GGUF/chatterbox-q8_0.gguf",
+        "path": "chatterbox-q8_0.gguf",
+        "size": 2088393668,
+        "sha256": "d586dd1aa59613cab8046176fb7ca5ba191c02a9b10ffa5b0d892ed22b470656"
+      },
+      {
+        "source": "tokenizer.json",
+        "path": "tokenizer.json",
+        "size": 25470,
+        "sha256": "d71e3a44eabb1784df9a68e9f95b251ecbf1a7af6a9f50835856b2ca9d8c14a5",
+        "repository": "ResembleAI/chatterbox",
+        "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"
+      },
+      {
+        "source": "grapheme_mtl_merged_expanded_v1.json",
+        "path": "grapheme_mtl_merged_expanded_v1.json",
+        "size": 69989,
+        "sha256": "69632f47220a788a52ce2661d096453c5655e9bf25289d89a8d832c46ee07dbf",
+        "repository": "ResembleAI/chatterbox",
+        "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"
+      },
+      {
+        "source": "Cangjie5_TC.json",
+        "path": "Cangjie5_TC.json",
+        "size": 1920163,
+        "sha256": "7073fd9de919443ae88e0bd2449917a65fe54898a4413ed1edcc4b67f28bce8c",
+        "repository": "ResembleAI/chatterbox",
+        "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"
+      },
+      {
+        "source": "conds.pt",
+        "path": "conds.pt",
+        "size": 107374,
+        "sha256": "6552d70568833628ba019c6b03459e77fe71ca197d5c560cef9411bee9d87f4e",
+        "repository": "ResembleAI/chatterbox",
+        "revision": "5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"
+      },
+      {
+        "source": "webui/native/demo_voices/demo_1_man.wav",
+        "path": "voices/chatterbox/demo_1_man.wav",
+        "size": 905294,
+        "sha256": "3e5321095813b09c6b108e9b12dfd988155020b35602ef074498aa0fa771fd39",
+        "repository": "github:0xShug0/audio.cpp",
+        "revision": "886076fc89c09b9902592aa4bfbd12922d4a9e26"
+      },
+      {
+        "source": "voices/alana_jordan.flac",
+        "path": "voices/chatterbox/alana_jordan.flac",
+        "size": 305301,
+        "sha256": "6f4e1266cc39c2b426894bdfcddac5c23a9086b4dcd8fb06320fe3865009538e",
+        "repository": "github:CoisLR/TTS-Reference-Voices",
+        "revision": "f6be3bc580483c1027e4a66a887ca8510566ae40"
+      },
+      {
+        "source": "voices/alan_davis_drake.flac",
+        "path": "voices/chatterbox/alan_davis_drake.flac",
+        "size": 227727,
+        "sha256": "7f7c5358f7f38700bdaf6f640e03fae44962fcb6f5c7f8b5d439eb34b219d8d8",
+        "repository": "github:CoisLR/TTS-Reference-Voices",
+        "revision": "f6be3bc580483c1027e4a66a887ca8510566ae40"
+      },
+      {
+        "source": "voices/ruth_golding.flac",
+        "path": "voices/chatterbox/ruth_golding.flac",
+        "size": 295300,
+        "sha256": "f381a6ea1e26bcd24f30a61946ec8056cc34eea6bfdbcaad72efd2f72ebd2405",
+        "repository": "github:CoisLR/TTS-Reference-Voices",
+        "revision": "f6be3bc580483c1027e4a66a887ca8510566ae40"
+      },
+      {
+        "source": "voices/phil_chenevert.flac",
+        "path": "voices/chatterbox/phil_chenevert.flac",
+        "size": 296237,
+        "sha256": "2c66f024ceee942fec277f9700d07abcffcd5dbccb81e714eb48d95505f117da",
+        "repository": "github:CoisLR/TTS-Reference-Voices",
+        "revision": "f6be3bc580483c1027e4a66a887ca8510566ae40"
+      }
+    ]
+  },
+  {
+    "id": "yue2-3b-q8-0",
+    "name": "YuE2 3B Q8_0 (Vulkan)",
+    "kind": 2,
+    "repository": "ngquocvinh/YuE2-3B-GGUF",
+    "revision": "9711e46e444185449185914dfb8694e6ce4069c9",
+    "files": [
+      {
+        "source": "yue2-3b-q8_0.gguf",
+        "path": "yue2-3b-q8_0.gguf",
+        "size": 4264194240,
+        "sha256": "9694dbcdf67c31875eb78abbe94cc30169465ed7f259af98df96b84d999cba1c"
+      },
+      {
+        "source": "yue2-vae-f16.gguf",
+        "path": "yue2-vae-f16.gguf",
+        "size": 265226496,
+        "sha256": "81e05a79e78ce5cb8deb1d87e17b73e5d205b440be2bd510ae62acf37b300ddb"
+      },
+      {
+        "source": "sidecars/yue2-model-config.json",
+        "path": "sidecars/yue2-model-config.json",
+        "size": 959,
+        "sha256": "ad3477bbef890bf98ae196c1e4b44779494a6231c4ab66f32708eabadf265329"
+      },
+      {
+        "source": "sidecars/yue2-generation-config.json",
+        "path": "sidecars/yue2-generation-config.json",
+        "size": 466,
+        "sha256": "203830cebde6e3644eb291925362990d198e66c3b6006cd11f1aaa21904bcc61"
+      },
+      {
+        "source": "sidecars/yue2-vae-config.json",
+        "path": "sidecars/yue2-vae-config.json",
+        "size": 1378,
+        "sha256": "f0191bb9694009956de44e0c361a6f1334760be4c8f848e599bde242a54a0970"
+      },
+      {
+        "source": "sidecars/yue2-qwen.tiktoken",
+        "path": "sidecars/yue2-qwen.tiktoken",
+        "size": 2561218,
+        "sha256": "b2b1b8dfb5cc5f024bafc373121c6aba3f66f9a5a0269e243470a1de16a33186"
+      }
     ]
   }
 ]

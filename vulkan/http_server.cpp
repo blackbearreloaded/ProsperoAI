@@ -28,6 +28,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <unistd.h>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
@@ -44,6 +45,7 @@
 #include <mutex>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -408,6 +410,9 @@ bool serve_ui_asset(const NetApi &api, int sock, const char *path)
         {"/app.js", "app.js", "text/javascript; charset=utf-8"},
         {"/voice-catalog.js", "voice-catalog.js", "text/javascript; charset=utf-8"},
         {"/voice-recording.js", "voice-recording.js", "text/javascript; charset=utf-8"},
+        {"/music", "music.html", "text/html; charset=utf-8"},
+        {"/music.css", "music.css", "text/css; charset=utf-8"},
+        {"/music.js", "music.js", "text/javascript; charset=utf-8"},
         {"/fonts/Inter-Regular.ttf", "fonts/Inter-Regular.ttf", "font/ttf"},
         {"/fonts/Inter-SemiBold.ttf", "fonts/Inter-SemiBold.ttf", "font/ttf"},
         {"/fonts/Montserrat-Medium.ttf", "fonts/Montserrat-Medium.ttf", "font/ttf"},
@@ -1011,6 +1016,56 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                 const auto seed = it.value().get<std::uint64_t>();
                 if (prospero_settings::valid_seed(seed)) { p.audio_seed = static_cast<unsigned>(seed); valid = true; }
             }
+            else if (it.key() == "audio_lyrics" && it.value().is_string())
+            {
+                const auto lyrics = it.value().get<std::string>();
+                if (prospero_settings::valid_audio_lyrics(lyrics)) { p.audio_lyrics = lyrics; valid = true; }
+            }
+            else if (it.key() == "audio_options" && it.value().is_string())
+            {
+                const auto raw_options = it.value().get<std::string>();
+                // Tolerate stale clients: drop abc_file= pointing at a missing
+                // file instead of failing the whole generation in the engine.
+                // When nothing is missing the raw string passes through untouched.
+                std::string options = raw_options;
+                {
+                    bool any_missing = false;
+                    std::size_t scan = 0;
+                    while (scan < raw_options.size() && !any_missing)
+                    {
+                        const std::size_t eol = raw_options.find('\n', scan);
+                        const std::size_t end = (eol == std::string::npos) ? raw_options.size() : eol;
+                        if (raw_options.compare(scan, 9, "abc_file=") == 0 && end > scan + 9)
+                        {
+                            const std::string file(raw_options, scan + 9, end - scan - 9);
+                            if (::access(file.c_str(), F_OK) != 0) any_missing = true;
+                        }
+                        scan = (eol == std::string::npos) ? raw_options.size() : eol + 1;
+                    }
+                    if (any_missing)
+                    {
+                        options.clear();
+                        std::size_t pos = 0;
+                        while (pos < raw_options.size())
+                        {
+                            const std::size_t eol = raw_options.find('\n', pos);
+                            const std::size_t end = (eol == std::string::npos) ? raw_options.size() : eol;
+                            const std::string line = raw_options.substr(pos, end - pos);
+                            pos = (eol == std::string::npos) ? raw_options.size() : eol + 1;
+                            if (line.rfind("abc_file=", 0) == 0 &&
+                                ::access(line.c_str() + 9, F_OK) != 0)
+                            {
+                                std::fprintf(stderr, "[music] abc_file missing, ignored: %s\n",
+                                             line.c_str() + 9);
+                                continue;
+                            }
+                            options += line;
+                            if (pos < raw_options.size()) options += '\n';
+                        }
+                    }
+                }
+                if (prospero_settings::valid_audio_options(options)) { p.audio_options = options; valid = true; }
+            }
             else if (it.key() == "sd_seed" && it.value().is_number_unsigned())
             {
                 const auto seed = it.value().get<std::uint64_t>();
@@ -1071,6 +1126,8 @@ void handle_runtime_settings(const NetApi &api, int sock, const char *body = nul
                        {"idle_unload_minutes", p.idle_unload_minutes},
                        {"audio_duration_sec", p.audio_duration_sec},
                        {"audio_seed", p.audio_seed},
+                       {"audio_lyrics", p.audio_lyrics},
+                       {"audio_options", p.audio_options},
                        {"sd_seed", p.sd_seed},
                        {"sd_width", p.sd_width},
                        {"sd_height", p.sd_height},
@@ -1709,6 +1766,189 @@ bool handle_conversations(const NetApi &api, int sock, const char *method, const
     return true;
 }
 
+#if defined(PS5_LLAMA_VULKAN) && defined(PROSPERO_UI_VULKAN)
+// Music Studio: list generated audio + ABC files under work/audio, newest first.
+void handle_music_files(const NetApi &api, int sock)
+{
+    const char *dir = "/download0/ProsperoAI/work/audio";
+    nlohmann::json files = nlohmann::json::array();
+    if (DIR *dir_handle = opendir(dir))
+    {
+        std::vector<std::pair<long long, nlohmann::json>> rows;
+        while (struct dirent *entry = readdir(dir_handle))
+        {
+            const char *name = entry->d_name;
+            const std::size_t name_length = std::strlen(name);
+            if (name_length <= 4 || name_length > 96 ||
+                std::strcmp(name + name_length - 4, ".wav") != 0 &&
+                std::strcmp(name + name_length - 4, ".mp3") != 0 &&
+                std::strcmp(name + name_length - 4, ".abc") != 0)
+                continue;
+            const std::string full = std::string(dir) + "/" + name;
+            struct stat st{};
+            if (stat(full.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+                continue;
+            rows.push_back({static_cast<long long>(st.st_mtime),
+                            nlohmann::json{{"name", name},
+                                           {"size", static_cast<long long>(st.st_size)},
+                                           {"mtime", static_cast<long long>(st.st_mtime)}}});
+        }
+        closedir(dir_handle);
+        std::sort(rows.begin(), rows.end(),
+                  [](const std::pair<long long, nlohmann::json> &a,
+                     const std::pair<long long, nlohmann::json> &b) { return a.first > b.first; });
+        for (auto &row : rows)
+        {
+            files.push_back(std::move(row.second));
+            if (files.size() >= 50)
+                break;
+        }
+    }
+    send_json(api, sock, nlohmann::json{{"files", std::move(files)}}.dump().c_str());
+}
+
+// Music Studio: persist an ABC score typed in the web editor.
+void handle_music_abc(const NetApi &api, int sock, const char *body)
+{
+    const auto reject = [&api, sock](const char *reason) {
+        openai_error(api, sock, "400 Bad Request", "invalid_abc", reason);
+    };
+    const auto j = body != nullptr && *body != '\0'
+                       ? nlohmann::json::parse(body, nullptr, false)
+                       : nlohmann::json();
+    if (!j.is_object() || !j.contains("name") || !j["name"].is_string() ||
+        !j.contains("content") || !j["content"].is_string())
+    {
+        reject("Expected {name, content}.");
+        return;
+    }
+    const std::string name = j["name"].get<std::string>();
+    const std::string content = j["content"].get<std::string>();
+    if (name.size() < 5 || name.size() > 96 || content.size() > 256 * 1024 ||
+        name.find("..") != std::string::npos ||
+        name.compare(name.size() - 4, 4, ".abc") != 0)
+    {
+        reject("Name must be a plain *.abc file within bounds.");
+        return;
+    }
+    for (const char c : name)
+    {
+        const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                             (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+        if (!allowed)
+        {
+            reject("Name has forbidden characters.");
+            return;
+        }
+    }
+    const std::string path = std::string("/download0/ProsperoAI/work/audio/") + name;
+    FILE *file = std::fopen(path.c_str(), "wb");
+    if (!file)
+    {
+        openai_error(api, sock, "500 Internal Server Error", "abc_write_failed", path.c_str());
+        return;
+    }
+    std::fwrite(content.data(), 1, content.size(), file);
+    std::fclose(file);
+    send_json(api, sock, nlohmann::json{{"ok", true}, {"path", path}}.dump().c_str());
+}
+
+// Music Studio: delete a listed file (wav/mp3/abc) from work/audio by name.
+void handle_music_delete(const NetApi &api, int sock, const char *body)
+{
+    const auto j = body != nullptr && *body != '\0'
+                       ? nlohmann::json::parse(body, nullptr, false)
+                       : nlohmann::json();
+    if (!j.is_object() || !j.contains("name") || !j["name"].is_string())
+    {
+        openai_error(api, sock, "400 Bad Request", "invalid_name", "Expected {name}.");
+        return;
+    }
+    const std::string name = j["name"].get<std::string>();
+    if (name.size() < 5 || name.size() > 96 || name.find("..") != std::string::npos ||
+        (name.compare(name.size() - 4, 4, ".abc") != 0 &&
+         name.compare(name.size() - 4, 4, ".wav") != 0 &&
+         name.compare(name.size() - 4, 4, ".mp3") != 0))
+    {
+        openai_error(api, sock, "400 Bad Request", "invalid_name",
+                     "Name must be a plain *.wav, *.mp3 or *.abc file.");
+        return;
+    }
+    for (const char c : name)
+    {
+        const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                             (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+        if (!allowed)
+        {
+            openai_error(api, sock, "400 Bad Request", "invalid_name", "Name has forbidden characters.");
+            return;
+        }
+    }
+    const std::string path = std::string("/download0/ProsperoAI/work/audio/") + name;
+    if (std::remove(path.c_str()) != 0)
+    {
+        openai_error(api, sock, "404 Not Found", "delete_failed", path.c_str());
+        return;
+    }
+    send_json(api, sock, nlohmann::json{{"ok", true}, {"deleted", name}}.dump().c_str());
+}
+
+// Music Studio: rename a file inside work/audio (e.g. stamp a friendly track name).
+void handle_music_rename(const NetApi &api, int sock, const char *body)
+{
+    const auto j = body != nullptr && *body != '\0'
+                       ? nlohmann::json::parse(body, nullptr, false)
+                       : nlohmann::json();
+    if (!j.is_object() || !j.contains("src") || !j["src"].is_string() ||
+        !j.contains("dst") || !j["dst"].is_string())
+    {
+        openai_error(api, sock, "400 Bad Request", "invalid_name", "Expected {src, dst}.");
+        return;
+    }
+    const std::string src = j["src"].get<std::string>();
+    const std::string dst = j["dst"].get<std::string>();
+    const auto bad = [](const std::string &name)
+    {
+        if (name.size() < 5 || name.size() > 96 || name.find("..") != std::string::npos ||
+            (name.compare(name.size() - 4, 4, ".abc") != 0 &&
+             name.compare(name.size() - 4, 4, ".wav") != 0 &&
+             name.compare(name.size() - 4, 4, ".mp3") != 0))
+            return true;
+        for (const char c : name)
+        {
+            const bool allowed = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                                 (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+            if (!allowed) return true;
+        }
+        return false;
+    };
+    if (bad(src) || bad(dst))
+    {
+        openai_error(api, sock, "400 Bad Request", "invalid_name",
+                     "Names must be plain *.wav, *.mp3 or *.abc file names.");
+        return;
+    }
+    const std::string from = std::string("/download0/ProsperoAI/work/audio/") + src;
+    const std::string to = std::string("/download0/ProsperoAI/work/audio/") + dst;
+    if (::access(from.c_str(), F_OK) != 0)
+    {
+        openai_error(api, sock, "404 Not Found", "rename_failed", from.c_str());
+        return;
+    }
+    if (::access(to.c_str(), F_OK) == 0)
+    {
+        openai_error(api, sock, "409 Conflict", "dst_exists", dst.c_str());
+        return;
+    }
+    if (std::rename(from.c_str(), to.c_str()) != 0)
+    {
+        openai_error(api, sock, "404 Not Found", "rename_failed", from.c_str());
+        return;
+    }
+    send_json(api, sock, nlohmann::json{{"ok", true}, {"renamed", dst}}.dump().c_str());
+}
+#endif
+
 void handle_connection(const NetApi &api, int sock)
 {
     auto storage = std::make_unique<char[]>(kRequestCapacity);
@@ -1788,6 +2028,14 @@ void handle_connection(const NetApi &api, int sock)
         handle_model_download_action(api, sock, body, true);
     else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/models/download") == 0)
         handle_model_download_action(api, sock, body, false);
+    else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/api/music/files") == 0)
+        handle_music_files(api, sock);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/music/abc") == 0)
+        handle_music_abc(api, sock, body);
+    else if (std::strcmp(method, "POST") == 0 && std::strcmp(path, "/api/music/rename") == 0)
+        handle_music_rename(api, sock, body);
+    else if (std::strcmp(method, "DELETE") == 0 && std::strcmp(path, "/api/music/file") == 0)
+        handle_music_delete(api, sock, body);
 #endif
     else if (std::strcmp(method, "GET") == 0 && std::strcmp(path, "/") == 0)
         send_status(api, sock, "200 OK", "text/html; charset=utf-8", kChatPage);
